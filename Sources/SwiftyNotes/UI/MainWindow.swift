@@ -54,23 +54,6 @@ final class MainWindow {
     private lazy var togglePreviewAction = SimpleAction(name: "toggle-preview") { [weak self] in
         self?.togglePreviewVisibility()
     }
-    private lazy var sortNewestAction = SimpleAction(name: "sort-newest") { [weak self] in
-        self?.setSortMode(.newestFirst)
-    }
-    private lazy var sortOldestAction = SimpleAction(name: "sort-oldest") { [weak self] in
-        self?.setSortMode(.oldestFirst)
-    }
-    private lazy var sortTitleAction = SimpleAction(name: "sort-title") { [weak self] in
-        self?.setSortMode(.title)
-    }
-    private lazy var noteContextCopyIDAction = SimpleAction(name: "context-copy-note-id") { [weak self] in
-        self?.copySelectedNoteID()
-        self?.dismissNoteContextMenu()
-    }
-    private lazy var noteContextDeleteAction = SimpleAction(name: "context-delete-note") { [weak self] in
-        self?.dismissNoteContextMenu()
-        self?.presentDeleteConfirmationForSelectedNote()
-    }
 
     private var displayedNotes: [Note] = []
     private var directorySnapshot = NotesDirectorySnapshot()
@@ -79,8 +62,13 @@ final class MainWindow {
     private var externalReloadDeferred = false
     private var suppressEditorChange = false
     private var isRestoringPreviewPaneLayout = false
-    private let noteContextActionGroup = SimpleActionGroup()
-    private var noteContextMenu: PopoverMenu?
+    private var noteContextMenu: Popover?
+    private var noteContextHandlers: [String: @MainActor () -> Void] = [:]
+    private var noteContextDeferredAction: (@MainActor () -> Void)?
+    private var activeFileDialog: FileDialog?
+    private var overflowMenuSectionTitles: [String] = []
+    private var noteContextMenuLabels: [String] = []
+    private var lastCopiedNoteID: String?
 
     init(
         application: Application,
@@ -131,6 +119,7 @@ final class MainWindow {
         menuButton.hasFrame = false
 
         sidebar.searchEntry.text = state.searchQuery
+        sidebar.setSortMode(state.sortMode)
 
         let header = HeaderBar()
         header.titleWidget = headerTitle
@@ -177,6 +166,15 @@ final class MainWindow {
             self.state.setSearchQuery(self.sidebar.searchEntry.text)
             self.refreshSidebar()
             self.persistWorkspaceState()
+        }
+
+        sidebar.sortDropDown.onSelectedChanged { [weak self] in
+            guard let self else { return }
+            let index = self.sidebar.sortDropDown.selected
+            guard NotesSortMode.allCases.indices.contains(index) else { return }
+            let sortMode = NotesSortMode.allCases[index]
+            guard sortMode != self.state.sortMode else { return }
+            self.setSortMode(sortMode)
         }
 
         previewToggle.onClicked { [weak self] in
@@ -407,7 +405,8 @@ final class MainWindow {
             notes: displayedNotes,
             selectedID: state.selectedNoteID,
             totalCount: state.notes.count,
-            searchQuery: state.searchQuery
+            searchQuery: state.searchQuery,
+            sortMode: state.sortMode
         )
         for (index, note) in displayedNotes.enumerated() {
             guard let row = sidebar.list.rowAt(index) else { continue }
@@ -452,39 +451,20 @@ final class MainWindow {
         window.addAction(reloadAction)
         window.addAction(saveAction)
         window.addAction(togglePreviewAction)
-        window.addAction(sortNewestAction)
-        window.addAction(sortOldestAction)
-        window.addAction(sortTitleAction)
-        noteContextActionGroup.addAction(noteContextCopyIDAction)
-        noteContextActionGroup.addAction(noteContextDeleteAction)
-        window.insertActionGroup("notecontext", noteContextActionGroup)
-
-        let noteSection = GMenuRef()
-        noteSection.append("Copy note ID", action: "win.copy-note-id")
-        noteSection.append("Rename note…", action: "win.rename-note")
-        noteSection.append("Duplicate note", action: "win.duplicate-note")
-        noteSection.append("Export note…", action: "win.export-note")
-        noteSection.append("Delete note", action: "win.delete-note")
 
         let librarySection = GMenuRef()
         librarySection.append("Import markdown…", action: "win.import-note")
         librarySection.append("Reload from disk", action: "win.reload-notes")
         librarySection.append("Open notes folder", action: "win.open-notes-folder")
 
-        let sortSection = GMenuRef()
-        sortSection.append("Sort by newest", action: "win.sort-newest")
-        sortSection.append("Sort by oldest", action: "win.sort-oldest")
-        sortSection.append("Sort by title", action: "win.sort-title")
-
         let viewSection = GMenuRef()
         viewSection.append("Save now", action: "win.save-note")
         viewSection.append("Toggle preview", action: "win.toggle-preview")
 
         let menu = GMenuRef()
-        menu.appendSection("Note", section: noteSection)
         menu.appendSection("Library", section: librarySection)
-        menu.appendSection("Sort", section: sortSection)
         menu.appendSection("View", section: viewSection)
+        overflowMenuSectionTitles = ["Library", "View"]
         menuButton.setMenuModel(menu)
         updateActionAvailability()
     }
@@ -671,6 +651,7 @@ final class MainWindow {
     }
 
     private func presentNoteContextMenu(forNoteID noteID: UUID, x: Int, y: Int) {
+        noteContextDeferredAction = nil
         dismissNoteContextMenu()
         guard let rowIndex = displayedNotes.firstIndex(where: { $0.id == noteID }),
               let row = sidebar.list.rowAt(rowIndex),
@@ -678,20 +659,22 @@ final class MainWindow {
             return
         }
 
-        let menu = GMenuRef()
-        menu.append("Copy note ID", action: "notecontext.context-copy-note-id")
-        menu.append("Delete…", action: "notecontext.context-delete-note")
-
-        let popover = PopoverMenu(model: menu)
+        let popover = Popover()
         popover.hasArrow = true
         popover.position = .bottom
+        popover.autohide = true
+        popover.child = makeNoteContextPopoverContent()
         popover.onClosed { [weak self, weak popover] in
             guard let self, let popover else { return }
+            if popover.parent != nil {
+                popover.unparent()
+            }
             if self.noteContextMenu === popover {
                 self.noteContextMenu = nil
             }
-            if popover.parent != nil {
-                popover.unparent()
+            if let deferredAction = self.noteContextDeferredAction {
+                self.noteContextDeferredAction = nil
+                MainContext.idle(deferredAction)
             }
         }
         guard popover.present(from: row, x: x, y: y) else { return }
@@ -701,10 +684,101 @@ final class MainWindow {
     private func dismissNoteContextMenu() {
         guard let noteContextMenu else { return }
         self.noteContextMenu = nil
+        noteContextHandlers = [:]
+        noteContextMenuLabels = []
         noteContextMenu.popdown()
-        if noteContextMenu.parent != nil {
-            noteContextMenu.unparent()
+    }
+
+    private func runAfterNoteContextMenuClosure(_ action: @escaping @MainActor () -> Void) {
+        guard noteContextMenu != nil else {
+            action()
+            return
         }
+        noteContextDeferredAction = action
+        dismissNoteContextMenu()
+    }
+
+    private func makeNoteContextPopoverContent() -> Widget {
+        noteContextMenuLabels = [
+            "Rename note…",
+            "Duplicate note",
+            "Export note…",
+            "Copy note ID",
+            "Delete…"
+        ]
+
+        let content = Box(orientation: .vertical, spacing: 2)
+        content.setMargins(4)
+
+        let renameAction: @MainActor () -> Void = { [weak self] in
+            self?.presentRenameDialogForSelectedNote()
+        }
+        let duplicateAction: @MainActor () -> Void = { [weak self] in
+            self?.duplicateSelectedNote()
+        }
+        let exportAction: @MainActor () -> Void = { [weak self] in
+            self?.exportSelectedNote()
+        }
+        let copyIDAction: @MainActor () -> Void = { [weak self] in
+            self?.copySelectedNoteID()
+        }
+        let deleteAction: @MainActor () -> Void = { [weak self] in
+            self?.presentDeleteConfirmationForSelectedNote()
+        }
+
+        let renameButton = makeNoteContextButton(label: "Rename note…") { [weak self] in
+            self?.runAfterNoteContextMenuClosure(renameAction)
+        }
+        let duplicateButton = makeNoteContextButton(label: "Duplicate note") { [weak self] in
+            self?.runAfterNoteContextMenuClosure(duplicateAction)
+        }
+        let exportButton = makeNoteContextButton(label: "Export note…") { [weak self] in
+            self?.runAfterNoteContextMenuClosure(exportAction)
+        }
+        let copyIDButton = makeNoteContextButton(label: "Copy note ID") { [weak self] in
+            self?.runAfterNoteContextMenuClosure(copyIDAction)
+        }
+        let deleteButton = makeNoteContextButton(label: "Delete…", destructive: true) { [weak self] in
+            self?.runAfterNoteContextMenuClosure(deleteAction)
+        }
+
+        [renameButton, duplicateButton, exportButton, copyIDButton, deleteButton].forEach(content.append)
+        noteContextHandlers = [
+            "Rename note…": renameAction,
+            "Duplicate note": duplicateAction,
+            "Export note…": exportAction,
+            "Copy note ID": copyIDAction,
+            "Delete…": deleteAction
+        ]
+        return content
+    }
+
+    private func makeNoteContextButton(
+        label: String,
+        destructive: Bool = false,
+        handler: @escaping @MainActor () -> Void
+    ) -> Button {
+        let button = Button()
+        button.addCSSClass(.flat)
+        button.hasFrame = false
+        button.hexpand = true
+        button.halign = .fill
+
+        let title = Label(label)
+        title.xalign = 0
+        title.hexpand = true
+
+        let row = Box(orientation: .horizontal, spacing: 0)
+        row.hexpand = true
+        row.halign = .fill
+        row.append(title)
+        button.child = row
+
+        if destructive {
+            button.addCSSClass(.destructiveAction)
+        }
+        button.onClicked(handler)
+        return button
     }
 
     private func copySelectedNoteID() {
@@ -713,6 +787,7 @@ final class MainWindow {
     }
 
     private func copyNoteID(_ note: Note) {
+        lastCopiedNoteID = note.stableID
         window.clipboard.setText(note.stableID)
         toastOverlay.showToast("Copied note ID")
     }
@@ -720,26 +795,38 @@ final class MainWindow {
     private func importNote() {
         let dialog = FileDialog()
         dialog.title = "Import Markdown"
+        dialog.modal = true
         dialog.acceptLabel = "Import"
         dialog.setFilters([
             FileFilter(name: "Markdown", suffixes: ["md", "markdown", "txt"]),
             FileFilter(name: "All files", patterns: ["*"])
         ])
-        Task { @MainActor [weak self] in
+        activeFileDialog = dialog
+        dialog.openThrowing(parent: window.root ?? window) { [weak self] result in
             guard let self else { return }
-            guard let path = await dialog.open(parent: self.window) else { return }
-            do {
-                self.clearSearchIfNeeded()
-                let note = try self.repository.importNote(from: URL(fileURLWithPath: path))
-                self.state.upsert(note)
-                self.refreshDirectorySnapshot()
-                self.renderSelection()
-                self.persistWorkspaceState()
-                self.toastOverlay.showToast("Imported \(note.title)")
-            } catch {
+            self.activeFileDialog = nil
+            switch result {
+            case .success(nil):
+                return
+            case let .success(path?):
+                do {
+                    self.clearSearchIfNeeded()
+                    let note = try self.repository.importNote(from: URL(fileURLWithPath: path))
+                    self.state.upsert(note)
+                    self.refreshDirectorySnapshot()
+                    self.renderSelection()
+                    self.persistWorkspaceState()
+                    self.toastOverlay.showToast("Imported \(note.title)")
+                } catch {
+                    self.presentError(
+                        heading: "Could not import note",
+                        body: error.localizedDescription
+                    )
+                }
+            case let .failure(error):
                 self.presentError(
-                    heading: "Could not import note",
-                    body: error.localizedDescription
+                    heading: "Could not open import dialog",
+                    body: error.message
                 )
             }
         }
@@ -749,18 +836,34 @@ final class MainWindow {
         guard let selected = state.selectedNote else { return }
         let dialog = FileDialog()
         dialog.title = "Export Note"
+        dialog.modal = true
         dialog.acceptLabel = "Export"
         dialog.initialName = selected.suggestedExportFilename
-        Task { @MainActor [weak self] in
+        dialog.setFilters([
+            FileFilter(name: "Markdown", suffixes: ["md", "markdown", "txt"]),
+            FileFilter(name: "All files", patterns: ["*"])
+        ])
+        activeFileDialog = dialog
+        dialog.saveThrowing(parent: window.root ?? window) { [weak self] result in
             guard let self else { return }
-            guard let path = await dialog.save(parent: self.window) else { return }
-            do {
-                try self.repository.export(note: selected, to: URL(fileURLWithPath: path))
-                self.toastOverlay.showToast("Exported \(selected.title)")
-            } catch {
+            self.activeFileDialog = nil
+            switch result {
+            case .success(nil):
+                return
+            case let .success(path?):
+                do {
+                    try self.repository.export(note: selected, to: URL(fileURLWithPath: path))
+                    self.toastOverlay.showToast("Exported \(selected.title)")
+                } catch {
+                    self.presentError(
+                        heading: "Could not export note",
+                        body: error.localizedDescription
+                    )
+                }
+            case let .failure(error):
                 self.presentError(
-                    heading: "Could not export note",
-                    body: error.localizedDescription
+                    heading: "Could not open export dialog",
+                    body: error.message
                 )
             }
         }
@@ -943,6 +1046,14 @@ final class MainWindow {
         displayedNotes.count
     }
 
+    var debugDisplayedNoteTitles: [String] {
+        displayedNotes.map(\.title)
+    }
+
+    var debugDisplayedNoteStableIDs: [String] {
+        displayedNotes.map(\.stableID)
+    }
+
     func debugOpenContextMenuForDisplayedNote(at index: Int) {
         guard displayedNotes.indices.contains(index) else { return }
         let note = displayedNotes[index]
@@ -957,6 +1068,43 @@ final class MainWindow {
 
     var debugHasContextMenu: Bool {
         noteContextMenu != nil
+    }
+
+    var debugOverflowMenuSectionTitles: [String] {
+        overflowMenuSectionTitles
+    }
+
+    var debugNoteContextMenuLabels: [String] {
+        noteContextMenuLabels
+    }
+
+    var debugSortMode: NotesSortMode {
+        state.sortMode
+    }
+
+    var debugSidebarSortSelection: Int {
+        sidebar.sortDropDown.selected
+    }
+
+    func debugSelectSidebarSort(at index: Int) {
+        guard NotesSortMode.allCases.indices.contains(index) else { return }
+        sidebar.sortDropDown.selected = index
+    }
+
+    @discardableResult
+    func debugInvokeContextMenuAction(label: String) -> Bool {
+        guard let handler = noteContextHandlers[label] else { return false }
+        dismissNoteContextMenu()
+        handler()
+        return true
+    }
+
+    func debugSelectedNoteStableID() -> String? {
+        state.selectedNote?.stableID
+    }
+
+    var debugLastCopiedNoteID: String? {
+        lastCopiedNoteID
     }
 
     func debugPollForExternalChanges() {

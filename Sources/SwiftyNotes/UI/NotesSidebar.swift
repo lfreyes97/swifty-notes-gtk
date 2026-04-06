@@ -7,8 +7,10 @@ struct NotesSidebar {
     let list: ListBox
     let titleLabel: Label
     let searchEntry: SearchEntry
+    let sortDropDown: DropDown
 
     private let emptyLabel: Label
+    private static let sortModes = NotesSortMode.allCases
 
     init() {
         list = ListBox()
@@ -27,6 +29,9 @@ struct NotesSidebar {
         searchEntry.placeholderText = "Search notes"
         searchEntry.searchDelay = 120
 
+        sortDropDown = DropDown(strings: Self.sortModes.map(\.displayName))
+        sortDropDown.selected = Self.sortIndex(for: .newestFirst)
+
         emptyLabel = Label("No notes yet.")
         emptyLabel.wrap = true
         emptyLabel.xalign = 0
@@ -35,9 +40,18 @@ struct NotesSidebar {
         let header = HeaderBar()
         header.titleWidget = titleLabel
 
+        let sortLabel = Label("Sort")
+        sortLabel.xalign = 0
+        sortLabel.addCSSClass(.dimLabel)
+
+        let sortRow = Box(orientation: .horizontal, spacing: 8)
+        sortRow.append(sortLabel)
+        sortRow.append(sortDropDown)
+
         let content = Box(orientation: .vertical, spacing: 12)
         content.setMargins(12)
         content.append(searchEntry)
+        content.append(sortRow)
         content.append(scroll)
         content.append(emptyLabel)
 
@@ -46,7 +60,8 @@ struct NotesSidebar {
         root.content = content
     }
 
-    func render(notes: [Note], selectedID: UUID?, totalCount: Int, searchQuery: String) {
+    func render(notes: [Note], selectedID: UUID?, totalCount: Int, searchQuery: String, sortMode: NotesSortMode) {
+        setSortMode(sortMode)
         list.removeAll()
         for (index, note) in notes.enumerated() {
             let row = ListBoxRow()
@@ -84,10 +99,21 @@ struct NotesSidebar {
         emptyLabel.visible = notes.isEmpty
     }
 
+    func setSortMode(_ sortMode: NotesSortMode) {
+        let selectedIndex = Self.sortIndex(for: sortMode)
+        if sortDropDown.selected != selectedIndex {
+            sortDropDown.selected = selectedIndex
+        }
+    }
+
     private static func displayDate(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
         formatter.timeStyle = .short
         return formatter.string(from: date)
+    }
+
+    private static func sortIndex(for mode: NotesSortMode) -> Int {
+        sortModes.firstIndex(of: mode) ?? 0
     }
 }

@@ -158,6 +158,32 @@ struct NotesRepositoryTests {
     }
 
     @Test
+    func duplicateNotesKeepDistinctStableIDsAndDeleteIndependently() throws {
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let repository = NotesRepository(notesDirectory: temp)
+        let original = try repository.createNote(initialContent: "# Original\n\nBody")
+        let duplicate = try repository.duplicate(note: original)
+
+        #expect(duplicate.id != original.id)
+        #expect(duplicate.stableID != original.stableID)
+        #expect(duplicate.filename != original.filename)
+        #expect(duplicate.content == original.content)
+
+        try repository.delete(note: original)
+        let afterDeletingOriginal = try repository.loadNotes()
+        #expect(afterDeletingOriginal.count == 1)
+        #expect(afterDeletingOriginal[0].id == duplicate.id)
+        #expect(afterDeletingOriginal[0].stableID == duplicate.stableID)
+        #expect(afterDeletingOriginal[0].content == original.content)
+
+        try repository.delete(note: duplicate)
+        let afterDeletingDuplicate = try repository.loadNotes()
+        #expect(afterDeletingDuplicate.isEmpty)
+    }
+
+    @Test
     func directorySnapshotChangesWhenContentChangesWithoutSizeChange() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
@@ -469,7 +495,7 @@ struct NotesRepositoryTests {
     }
 
     @Test @MainActor
-    func mainWindowContextMenuOpensForSelectedRowAfterSidebarRefresh() throws {
+    func mainWindowContextMenuActionsExecuteForSelectedRowAfterSidebarRefresh() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -490,12 +516,79 @@ struct NotesRepositoryTests {
         window.present()
         window.debugCreateNote()
         #expect(window.debugNotesCount == 2)
+        #expect(window.debugOverflowMenuSectionTitles == ["Library", "View"])
 
         window.debugOpenContextMenuForDisplayedNote(at: 1)
         #expect(window.debugHasContextMenu)
+        #expect(window.debugNoteContextMenuLabels == [
+            "Rename note…",
+            "Duplicate note",
+            "Export note…",
+            "Copy note ID",
+            "Delete…"
+        ])
 
-        window.debugDismissContextMenu()
+        let selectedStableID = window.debugSelectedNoteStableID()
+        #expect(selectedStableID != nil)
+        #expect(window.debugInvokeContextMenuAction(label: "Copy note ID"))
         #expect(!window.debugHasContextMenu)
+        #expect(window.debugLastCopiedNoteID == selectedStableID)
+
+        window.debugOpenContextMenuForDisplayedNote(at: 1)
+        #expect(window.debugHasContextMenu)
+        #expect(window.debugInvokeContextMenuAction(label: "Duplicate note"))
+        #expect(!window.debugHasContextMenu)
+        #expect(window.debugNotesCount == 3)
+        #expect(Set(window.debugDisplayedNoteStableIDs).count == window.debugDisplayedNoteStableIDs.count)
+    }
+
+    @Test @MainActor
+    func mainWindowSidebarSortDropdownReflectsAndChangesSortMode() throws {
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let repository = NotesRepository(notesDirectory: temp)
+        let alpha = Note(
+            id: UUID(),
+            filename: "alpha.md",
+            createdAt: Date(timeIntervalSince1970: 100),
+            updatedAt: Date(timeIntervalSince1970: 100),
+            content: "# Alpha\n"
+        )
+        let zeta = Note(
+            id: UUID(),
+            filename: "zeta.md",
+            createdAt: Date(timeIntervalSince1970: 200),
+            updatedAt: Date(timeIntervalSince1970: 200),
+            content: "# Zeta\n"
+        )
+        _ = try repository.save(note: alpha)
+        _ = try repository.save(note: zeta)
+
+        let app = Application(id: "io.github.makoni.SwiftyNotes.Tests.SortDropdown")
+        try app.register()
+
+        let window = MainWindow(
+            application: app,
+            state: AppState(),
+            stateStore: WorkspaceStateStore(
+                stateFileURL: temp.appendingPathComponent("workspace.json", isDirectory: false)
+            ),
+            repository: repository,
+            renderer: MarkdownRenderer(),
+            autosave: AutosaveCoordinator()
+        )
+
+        window.debugLoadInitialNotes()
+        #expect(window.debugSortMode == .newestFirst)
+        #expect(window.debugSidebarSortSelection == 0)
+        #expect(window.debugDisplayedNoteTitles == ["Zeta", "Alpha"])
+
+        window.debugSelectSidebarSort(at: 2)
+
+        #expect(window.debugSortMode == .title)
+        #expect(window.debugSidebarSortSelection == 2)
+        #expect(window.debugDisplayedNoteTitles == ["Alpha", "Zeta"])
     }
 }
 
