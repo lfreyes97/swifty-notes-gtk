@@ -270,7 +270,7 @@ final class MarkdownPreview {
             if index < items.count, items[index].depth > depth {
                 let nested = makeListLevel(items, index: &index, depth: items[index].depth)
                 nested.marginTop = 0
-                nested.marginBottom = 0
+                nested.marginBottom = 8
                 itemContainer.append(nested)
             }
 
