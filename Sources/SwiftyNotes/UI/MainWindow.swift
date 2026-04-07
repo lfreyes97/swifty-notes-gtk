@@ -52,6 +52,9 @@ final class MainWindow {
     private lazy var reloadAction = SimpleAction(name: "reload-notes") { [weak self] in
         self?.reloadFromDisk(announce: true)
     }
+    private lazy var aboutAction = SimpleAction(name: "about") { [weak self] in
+        self?.presentAboutDialog()
+    }
 
     private var displayedNotes: [Note] = []
     private var directorySnapshot = NotesDirectorySnapshot()
@@ -69,7 +72,9 @@ final class MainWindow {
     private var noteContextHandlers: [String: @MainActor () -> Void] = [:]
     private var noteContextDeferredAction: (@MainActor () -> Void)?
     private var activeFileDialog: FileDialog?
+    private var activeAboutDialog: AboutDialog?
     private var overflowMenuSectionTitles: [String] = []
+    private var overflowMenuItemsBySection: [String: [String]] = [:]
     private var noteContextMenuLabels: [String] = []
     private var lastCopiedNoteID: String?
 
@@ -497,15 +502,30 @@ final class MainWindow {
         window.addAction(importAction)
         window.addAction(openNotesFolderAction)
         window.addAction(reloadAction)
+        window.addAction(aboutAction)
 
         let librarySection = GMenuRef()
         librarySection.append("Import markdown…", action: "win.import-note")
         librarySection.append("Reload from disk", action: "win.reload-notes")
         librarySection.append("Open notes folder", action: "win.open-notes-folder")
 
+        let helpSection = GMenuRef()
+        helpSection.append("About Swifty Notes", action: "win.about")
+
         let menu = GMenuRef()
         menu.appendSection("Library", section: librarySection)
-        overflowMenuSectionTitles = ["Library"]
+        menu.appendSection("Help", section: helpSection)
+        overflowMenuSectionTitles = ["Library", "Help"]
+        overflowMenuItemsBySection = [
+            "Library": [
+                "Import markdown…",
+                "Reload from disk",
+                "Open notes folder"
+            ],
+            "Help": [
+                "About Swifty Notes"
+            ]
+        ]
         menuButton.setMenuModel(menu)
         updateActionAvailability()
     }
@@ -1091,6 +1111,28 @@ final class MainWindow {
         }
     }
 
+    private func presentAboutDialog() {
+        let about = AboutDialog(
+            appName: "Swifty Notes",
+            version: "Development",
+            developer: "makoni",
+            appIcon: "io.github.makoni.SwiftyNotes",
+            website: "https://github.com/makoni/swifty-notes-gtk",
+            issueUrl: "https://github.com/makoni/swifty-notes-gtk/issues",
+            copyright: "© 2026 makoni",
+            licenseType: .mit
+        )
+        about.comments = "A native GTK markdown notes app written in Swift using swift-adwaita."
+        about.supportUrl = "https://github.com/makoni/swifty-notes-gtk"
+        about.addLink("Source Code", url: "https://github.com/makoni/swifty-notes-gtk")
+        about.onClosed { [weak self, weak about] in
+            guard let self, let about, self.activeAboutDialog === about else { return }
+            self.activeAboutDialog = nil
+        }
+        activeAboutDialog = about
+        about.present(menuButton.root ?? window)
+    }
+
     private func reloadFromDisk(announce: Bool, forceDiscardingUnsavedChanges: Bool = false) {
         if editor.buffer.modified && !forceDiscardingUnsavedChanges {
             if !externalReloadDeferred {
@@ -1230,63 +1272,14 @@ final class MainWindow {
     }
 
     private static func openDirectoryInSystemFileManager(_ folderURL: URL) async throws {
-        do {
-            try await runDirectoryOpenCommand(
-                executablePath: "/usr/bin/gio",
-                arguments: ["open", folderURL.path()]
-            )
-            return
-        } catch let gioError {
-            do {
-                try await runDirectoryOpenCommand(
-                    executablePath: "/usr/bin/xdg-open",
-                    arguments: [folderURL.path()]
-                )
-            } catch let xdgOpenError {
-                throw DirectoryOpenFailure(
-                    message: [
-                        gioError.localizedDescription,
-                        xdgOpenError.localizedDescription
-                    ]
-                    .filter { !$0.isEmpty }
-                    .joined(separator: "\n")
-                )
-            }
-        }
-    }
-
-    private static func runDirectoryOpenCommand(
-        executablePath: String,
-        arguments: [String]
-    ) async throws {
-        try await Task.detached(priority: .userInitiated) {
-            guard FileManager.default.isExecutableFile(atPath: executablePath) else {
-                throw DirectoryOpenFailure(message: "\(executablePath) is not available.")
-            }
-
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: executablePath)
-            process.arguments = arguments
-
-            let stdout = Pipe()
-            let stderr = Pipe()
-            process.standardOutput = stdout
-            process.standardError = stderr
-
-            try process.run()
-            process.waitUntilExit()
-            guard process.terminationStatus == 0 else {
-                let errorData = stderr.fileHandleForReading.readDataToEndOfFile()
-                let outputData = stdout.fileHandleForReading.readDataToEndOfFile()
-                let message = [
-                    String(data: errorData, encoding: .utf8),
-                    String(data: outputData, encoding: .utf8)
-                ]
-                .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
-                .first(where: { !$0.isEmpty }) ?? "Exit status \(process.terminationStatus)."
-                throw DirectoryOpenFailure(message: message)
-            }
+        let uri = folderURL.standardizedFileURL.absoluteString
+        let launched = await Task { @MainActor in
+            let launcher = UriLauncher(uri: uri)
+            return await launcher.launch()
         }.value
+        guard launched else {
+            throw DirectoryOpenFailure(message: "No application could open \(folderURL.path).")
+        }
     }
 
     static func resolvedPreviewWidth(storedWidth: Int, availableWidth: Int) -> Int {
@@ -1408,6 +1401,10 @@ final class MainWindow {
         overflowMenuSectionTitles
     }
 
+    var debugOverflowMenuItemsBySection: [String: [String]] {
+        overflowMenuItemsBySection
+    }
+
     var debugToolbarTooltips: [String: String?] {
         [
             "sidebar": sidebarToggle.tooltipText,
@@ -1460,6 +1457,10 @@ final class MainWindow {
         pollForExternalChanges()
     }
 
+    func debugActivateOpenNotesFolderAction() {
+        g_action_activate(OpaquePointer(openNotesFolderAction.pointer), nil)
+    }
+
     func debugOpenNotesFolder() async {
         do {
             let folderURL = try ensureNotesDirectoryExists()
@@ -1470,6 +1471,39 @@ final class MainWindow {
                 body: error.localizedDescription
             )
         }
+    }
+
+    func debugActivateAboutAction() {
+        g_action_activate(OpaquePointer(aboutAction.pointer), nil)
+    }
+
+    var debugHasAboutDialog: Bool {
+        activeAboutDialog != nil
+    }
+
+    struct DebugAboutDialogSnapshot: Equatable {
+        let applicationName: String
+        let version: String
+        let developerName: String
+        let website: String
+        let issueURL: String
+        let comments: String
+    }
+
+    var debugAboutDialogSnapshot: DebugAboutDialogSnapshot? {
+        guard let activeAboutDialog else { return nil }
+        return .init(
+            applicationName: activeAboutDialog.applicationName,
+            version: activeAboutDialog.version,
+            developerName: activeAboutDialog.developerName,
+            website: activeAboutDialog.website,
+            issueURL: activeAboutDialog.issueUrl,
+            comments: activeAboutDialog.comments
+        )
+    }
+
+    func debugCloseAboutDialog() {
+        _ = activeAboutDialog?.close()
     }
 
     var debugPreferredPreviewWidth: Int {

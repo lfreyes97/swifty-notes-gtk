@@ -831,7 +831,17 @@ struct NotesRepositoryTests {
         window.present()
         window.debugCreateNote()
         #expect(window.debugNotesCount == 2)
-        #expect(window.debugOverflowMenuSectionTitles == ["Library"])
+        #expect(window.debugOverflowMenuSectionTitles == ["Library", "Help"])
+        #expect(window.debugOverflowMenuItemsBySection == [
+            "Library": [
+                "Import markdown…",
+                "Reload from disk",
+                "Open notes folder"
+            ],
+            "Help": [
+                "About Swifty Notes"
+            ]
+        ])
 
         window.debugOpenContextMenuForDisplayedNote(at: 1)
         #expect(window.debugHasContextMenu)
@@ -889,6 +899,73 @@ struct NotesRepositoryTests {
         var isDirectory: ObjCBool = false
         #expect(FileManager.default.fileExists(atPath: temp.path(), isDirectory: &isDirectory))
         #expect(isDirectory.boolValue)
+    }
+
+    @Test @MainActor
+    func mainWindowOpenNotesFolderMenuActionUsesInjectedDirectoryOpener() async throws {
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let app = Application(id: "io.github.makoni.SwiftyNotes.Tests.OpenNotesFolderAction")
+        try app.register()
+
+        let openedURL = URLRecorder()
+        let window = MainWindow(
+            application: app,
+            state: AppState(),
+            stateStore: WorkspaceStateStore(
+                stateFileURL: temp.appendingPathComponent("workspace.json", isDirectory: false)
+            ),
+            repository: NotesRepository(notesDirectory: temp),
+            renderer: MarkdownRenderer(),
+            autosave: AutosaveCoordinator(),
+            directoryOpener: { url in
+                await openedURL.set(url)
+            }
+        )
+
+        window.present()
+        window.debugActivateOpenNotesFolderAction()
+        try await Task.sleep(for: .milliseconds(30))
+
+        let recordedURL = await openedURL.snapshot()
+        #expect(recordedURL?.standardizedFileURL == temp.standardizedFileURL)
+    }
+
+    @Test @MainActor
+    func mainWindowAboutMenuActionPresentsAboutDialog() throws {
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let app = Application(id: "io.github.makoni.SwiftyNotes.Tests.AboutDialog")
+        try app.register()
+
+        let window = MainWindow(
+            application: app,
+            state: AppState(),
+            stateStore: WorkspaceStateStore(
+                stateFileURL: temp.appendingPathComponent("workspace.json", isDirectory: false)
+            ),
+            repository: NotesRepository(notesDirectory: temp),
+            renderer: MarkdownRenderer(),
+            autosave: AutosaveCoordinator()
+        )
+
+        window.present()
+        window.debugActivateAboutAction()
+
+        #expect(window.debugHasAboutDialog)
+        #expect(window.debugAboutDialogSnapshot == .init(
+            applicationName: "Swifty Notes",
+            version: "Development",
+            developerName: "makoni",
+            website: "https://github.com/makoni/swifty-notes-gtk",
+            issueURL: "https://github.com/makoni/swifty-notes-gtk/issues",
+            comments: "A native GTK markdown notes app written in Swift using swift-adwaita."
+        ))
+
+        window.debugCloseAboutDialog()
+        #expect(!window.debugHasAboutDialog)
     }
 
     @Test @MainActor
