@@ -932,6 +932,51 @@ struct NotesRepositoryTests {
         #expect(recordedURL?.standardizedFileURL == temp.standardizedFileURL)
     }
 
+    @Test
+    func openDirectoryInSystemFileManagerUsesDefaultURIHandlerFirst() async throws {
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let expectedURI = temp.standardizedFileURL.absoluteString
+
+        var launchedURIs: [String] = []
+        var fallbackURIs: [String] = []
+
+        try await MainWindow.openDirectoryInSystemFileManager(
+            temp,
+            launchDefaultForURI: { uri in
+                launchedURIs.append(uri)
+            },
+            fallbackOpenURI: { uri in
+                fallbackURIs.append(uri)
+            }
+        )
+
+        #expect(launchedURIs == [expectedURI])
+        #expect(fallbackURIs.isEmpty)
+    }
+
+    @Test
+    func openDirectoryInSystemFileManagerFallsBackToXDGOpenWhenDefaultHandlerFails() async throws {
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let expectedURI = temp.standardizedFileURL.absoluteString
+
+        var launchedURIs: [String] = []
+        var fallbackURIs: [String] = []
+
+        try await MainWindow.openDirectoryInSystemFileManager(
+            temp,
+            launchDefaultForURI: { uri in
+                launchedURIs.append(uri)
+                throw CocoaError(.fileNoSuchFile)
+            },
+            fallbackOpenURI: { uri in
+                fallbackURIs.append(uri)
+            }
+        )
+
+        #expect(launchedURIs == [expectedURI])
+        #expect(fallbackURIs == [expectedURI])
+    }
+
     @Test @MainActor
     func mainWindowAboutMenuActionPresentsAboutDialog() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -958,7 +1003,8 @@ struct NotesRepositoryTests {
         #expect(window.debugAboutDialogSnapshot == .init(
             applicationName: "Swifty Notes",
             version: "Development",
-            developerName: "makoni",
+            developerName: "Sergey Armodin",
+            copyright: "© 2026 Sergey Armodin",
             website: "https://github.com/makoni/swifty-notes-gtk",
             issueURL: "https://github.com/makoni/swifty-notes-gtk/issues",
             comments: "A native GTK markdown notes app written in Swift using swift-adwaita."

@@ -1083,8 +1083,18 @@ final class MainWindow {
     private func openNotesFolder() {
         do {
             let folderURL = try ensureNotesDirectoryExists()
-            Task { [weak self] in
-                await self?.openNotesFolder(at: folderURL)
+            let directoryOpener = self.directoryOpener
+            Task.detached(priority: .userInitiated) { [weak self] in
+                do {
+                    try await directoryOpener(folderURL)
+                } catch {
+                    await MainActor.run { [weak self] in
+                        self?.presentError(
+                            heading: "Could not open notes folder",
+                            body: error.localizedDescription
+                        )
+                    }
+                }
             }
         } catch {
             presentError(
@@ -1100,26 +1110,15 @@ final class MainWindow {
         return folderURL
     }
 
-    private func openNotesFolder(at folderURL: URL) async {
-        do {
-            try await directoryOpener(folderURL)
-        } catch {
-            presentError(
-                heading: "Could not open notes folder",
-                body: error.localizedDescription
-            )
-        }
-    }
-
     private func presentAboutDialog() {
         let about = AboutDialog(
             appName: "Swifty Notes",
             version: "Development",
-            developer: "makoni",
+            developer: "Sergey Armodin",
             appIcon: "io.github.makoni.SwiftyNotes",
             website: "https://github.com/makoni/swifty-notes-gtk",
             issueUrl: "https://github.com/makoni/swifty-notes-gtk/issues",
-            copyright: "© 2026 makoni",
+            copyright: "© 2026 Sergey Armodin",
             licenseType: .mit
         )
         about.comments = "A native GTK markdown notes app written in Swift using swift-adwaita."
@@ -1271,15 +1270,64 @@ final class MainWindow {
         }
     }
 
-    private static func openDirectoryInSystemFileManager(_ folderURL: URL) async throws {
+    nonisolated static func openDirectoryInSystemFileManager(_ folderURL: URL) async throws {
+        try await openDirectoryInSystemFileManager(
+            folderURL,
+            launchDefaultForURI: MainWindow.launchDefaultForURI,
+            fallbackOpenURI: MainWindow.fallbackOpenURI
+        )
+    }
+
+    nonisolated static func openDirectoryInSystemFileManager(
+        _ folderURL: URL,
+        launchDefaultForURI: (String) throws -> Void,
+        fallbackOpenURI: (String) throws -> Void
+    ) async throws {
         let uri = folderURL.standardizedFileURL.absoluteString
-        let launched = await Task { @MainActor in
-            let launcher = UriLauncher(uri: uri)
-            return await launcher.launch()
-        }.value
-        guard launched else {
-            throw DirectoryOpenFailure(message: "No application could open \(folderURL.path).")
+        do {
+            try launchDefaultForURI(uri)
+        } catch let primaryError {
+            do {
+                try fallbackOpenURI(uri)
+            } catch let fallbackError {
+                throw DirectoryOpenFailure(
+                    message: [
+                        primaryError.localizedDescription,
+                        fallbackError.localizedDescription
+                    ]
+                    .filter { !$0.isEmpty }
+                    .joined(separator: "\n")
+                )
+            }
         }
+    }
+
+    private nonisolated static func launchDefaultForURI(_ uri: String) throws {
+        var error: UnsafeMutablePointer<GError>?
+        let launched = g_app_info_launch_default_for_uri(uri, nil, &error)
+        defer {
+            if let error {
+                g_error_free(error)
+            }
+        }
+
+        guard launched != 0 else {
+            let message = error.map { String(cString: $0.pointee.message) }
+                ?? "No application could open \(uri)."
+            throw DirectoryOpenFailure(message: message)
+        }
+    }
+
+    private nonisolated static func fallbackOpenURI(_ uri: String) throws {
+        let executablePath = "/usr/bin/xdg-open"
+        guard FileManager.default.isExecutableFile(atPath: executablePath) else {
+            throw DirectoryOpenFailure(message: "\(executablePath) is not available.")
+        }
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: executablePath)
+        process.arguments = [uri]
+        try process.run()
     }
 
     static func resolvedPreviewWidth(storedWidth: Int, availableWidth: Int) -> Int {
@@ -1485,6 +1533,7 @@ final class MainWindow {
         let applicationName: String
         let version: String
         let developerName: String
+        let copyright: String
         let website: String
         let issueURL: String
         let comments: String
@@ -1496,6 +1545,7 @@ final class MainWindow {
             applicationName: activeAboutDialog.applicationName,
             version: activeAboutDialog.version,
             developerName: activeAboutDialog.developerName,
+            copyright: activeAboutDialog.copyright,
             website: activeAboutDialog.website,
             issueURL: activeAboutDialog.issueUrl,
             comments: activeAboutDialog.comments
