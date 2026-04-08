@@ -7,12 +7,14 @@ final class MainWindow {
 
     let state: AppState
     let stateStore: WorkspaceStateStore
-    let repository: NotesRepository
+    let appSettingsStore: AppSettingsStore
+    var appSettings: AppSettings
+    var repository: NotesRepository
     let renderer: MarkdownRenderer
     let autosave: AutosaveCoordinator
 
     let sidebar = NotesSidebar()
-    let editor = MarkdownEditor()
+    var editor = MarkdownEditor()
     let preview = MarkdownPreview()
     let headerTitle = WindowTitle(title: "Swifty Notes", subtitle: "Markdown notes")
     let sidebarToggle = Button(iconName: "sidebar-show-symbolic")
@@ -25,8 +27,9 @@ final class MainWindow {
     let splitView = OverlaySplitView()
     let editorPreviewPane = Paned(orientation: .horizontal)
     let editorScroll = ScrolledWindow()
-    let autosaveDelay: Duration
-    let directoryOpener: @Sendable (URL) async throws -> Void
+    let autosaveDelayOverride: Duration?
+    var autosaveDelay: Duration
+    let directoryOpener: (URL) throws -> Void
 
     lazy var renameAction = SimpleAction(name: "rename-note") { [weak self] in
         self?.presentRenameDialogForSelectedNote()
@@ -52,6 +55,9 @@ final class MainWindow {
     lazy var reloadAction = SimpleAction(name: "reload-notes") { [weak self] in
         self?.reloadFromDisk(announce: true)
     }
+    lazy var settingsAction = SimpleAction(name: "settings") { [weak self] in
+        self?.presentSettingsWindow()
+    }
     lazy var aboutAction = SimpleAction(name: "about") { [weak self] in
         self?.presentAboutDialog()
     }
@@ -74,11 +80,13 @@ final class MainWindow {
     var noteContextDeferredAction: (@MainActor () -> Void)?
     var activeFileDialog: FileDialog?
     var activeAboutDialog: AboutDialog?
+    var activeSettingsWindow: SettingsWindow?
     var overflowMenuSectionTitles: [String] = []
     var overflowMenuItemsBySection: [String: [String]] = [:]
     var noteContextMenuLabels: [String] = []
     var lastCopiedNoteID: String?
     var hasScheduledDebugLaunchEdit = false
+    var hasScheduledDebugSettingsOpen = false
 
     init(
         application: Application,
@@ -87,15 +95,20 @@ final class MainWindow {
         repository: NotesRepository,
         renderer: MarkdownRenderer,
         autosave: AutosaveCoordinator,
-        autosaveDelay: Duration = .seconds(2),
-        directoryOpener: @escaping @Sendable (URL) async throws -> Void = MainWindow.openDirectoryInSystemFileManager
+        appSettingsStore: AppSettingsStore = AppSettingsStore(),
+        appSettings: AppSettings = .default,
+        autosaveDelay: Duration? = nil,
+        directoryOpener: @escaping (URL) throws -> Void = MainWindow.openDirectoryInSystemFileManager
     ) {
         self.state = state
         self.stateStore = stateStore
+        self.appSettingsStore = appSettingsStore
+        self.appSettings = appSettings
         self.repository = repository
         self.renderer = renderer
         self.autosave = autosave
-        self.autosaveDelay = autosaveDelay
+        self.autosaveDelayOverride = autosaveDelay
+        self.autosaveDelay = autosaveDelay ?? .seconds(appSettings.autosaveDelaySeconds)
         self.directoryOpener = directoryOpener
 
         window = ApplicationWindow(application: application)
@@ -107,6 +120,7 @@ final class MainWindow {
         window.setDefaultSize(width: preferredSize.width, height: preferredSize.height)
 
         buildUI()
+        applyRuntimeSettings(appSettings, shouldRefreshPreview: false)
         preview.attach(to: window)
         configureActionsAndMenu()
         wireSignals()
@@ -118,6 +132,7 @@ final class MainWindow {
         loadInitialNotes()
         startExternalChangeMonitor()
         scheduleDebugLaunchEditIfRequested()
+        scheduleDebugSettingsOpenIfRequested()
         MainContext.idle { [weak self] in
             self?.refreshPreview()
             self?.restorePreviewPaneLayout()
@@ -319,8 +334,8 @@ final class MainWindow {
         }
     }
 
-    nonisolated static func openDirectoryInSystemFileManager(_ folderURL: URL) async throws {
-        try await openDirectoryInSystemFileManager(
+    nonisolated static func openDirectoryInSystemFileManager(_ folderURL: URL) throws {
+        try openDirectoryInSystemFileManager(
             folderURL,
             launchDefaultForURI: MainWindow.launchDefaultForURI,
             fallbackOpenURI: MainWindow.fallbackOpenURI
@@ -331,7 +346,7 @@ final class MainWindow {
         _ folderURL: URL,
         launchDefaultForURI: (String) throws -> Void,
         fallbackOpenURI: (String) throws -> Void
-    ) async throws {
+    ) throws {
         let uri = folderURL.standardizedFileURL.absoluteString
         do {
             try launchDefaultForURI(uri)

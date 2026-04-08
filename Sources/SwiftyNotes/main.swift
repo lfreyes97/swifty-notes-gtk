@@ -8,14 +8,20 @@ private final class AppController {
 
     func activate(app: Application) {
         let stateStore = WorkspaceStateStore()
+        let appSettingsStore = AppSettingsStore()
         let workspaceState = (try? stateStore.load()) ?? .default
+        let appSettings = (try? appSettingsStore.load()) ?? .default
         let window = MainWindow(
             application: app,
             state: AppState(persistedState: workspaceState),
             stateStore: stateStore,
-            repository: NotesRepository(),
+            repository: NotesRepository(
+                notesDirectory: appSettings.resolvedNotesDirectory()
+            ),
             renderer: MarkdownRenderer(),
-            autosave: AutosaveCoordinator()
+            autosave: AutosaveCoordinator(),
+            appSettingsStore: appSettingsStore,
+            appSettings: appSettings
         )
         window.window.onDestroy { [weak self] in
             self?.releaseMainWindow()

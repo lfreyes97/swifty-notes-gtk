@@ -92,6 +92,42 @@ struct UISmokeTests {
         )
         expectUIScriptSucceeded(result)
     }
+
+    @Test
+    func settingsWindowOpensUnderHeadlessWaylandAndShowsControls() throws {
+        let result = try runWaylandUIScript(
+            """
+            def wait_for_named_frame(name):
+                def locate():
+                    desktop = pyatspi.Registry.getDesktop(0)
+                    for index in range(desktop.childCount):
+                        app = desktop.getChildAtIndex(index)
+                        if (app.name or "") != "SwiftyNotes":
+                            continue
+                        if process_id(app) != TARGET_PID:
+                            continue
+                        for child_index in range(app.childCount):
+                            candidate = app.getChildAtIndex(child_index)
+                            if candidate.getRoleName() == "frame" and (candidate.name or "") == name:
+                                return candidate
+                    return None
+                return wait_until(locate, f"{name} frame appears")
+
+            settings_frame = wait_for_named_frame("Settings")
+            require_named(settings_frame, "Notes folder")
+            require_named(settings_frame, "Wrap long lines")
+            require_named(settings_frame, "Editor font size")
+            require_named(settings_frame, "Tab width")
+            require_named(settings_frame, "Indent style")
+            require_named(settings_frame, "Autosave delay")
+            require_named(settings_frame, "Appearance")
+            """,
+            environment: [
+                "SWIFTY_NOTES_DEBUG_OPEN_SETTINGS_ON_LAUNCH": "1"
+            ]
+        )
+        expectUIScriptSucceeded(result)
+    }
 }
 
 private struct UIScriptResult {
@@ -162,10 +198,12 @@ private func runWaylandUIScript(
     let runtimeDirectory = temp.appendingPathComponent("runtime", isDirectory: true)
     let xdgDataHome = temp.appendingPathComponent("xdg-data", isDirectory: true)
     let xdgStateHome = temp.appendingPathComponent("xdg-state", isDirectory: true)
+    let xdgConfigHome = temp.appendingPathComponent("xdg-config", isDirectory: true)
     let appID = "me.spaceinbox.SwiftyNotes.UITests.\(temp.lastPathComponent.lowercased())"
     try FileManager.default.createDirectory(at: runtimeDirectory, withIntermediateDirectories: true)
     try FileManager.default.createDirectory(at: xdgDataHome, withIntermediateDirectories: true)
     try FileManager.default.createDirectory(at: xdgStateHome, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: xdgConfigHome, withIntermediateDirectories: true)
     try prepare?(xdgDataHome, xdgStateHome)
 
     let script = """
@@ -177,7 +215,9 @@ private func runWaylandUIScript(
     export WAYLAND_DISPLAY="swifty-notes-test-wayland"
     export XDG_DATA_HOME="$XDG_DATA_HOME"
     export XDG_STATE_HOME="$XDG_STATE_HOME"
+    export XDG_CONFIG_HOME="$XDG_CONFIG_HOME"
     export NOTES_DIR="$XDG_DATA_HOME/me.spaceinbox.SwiftyNotes/notes"
+    export SETTINGS_FILE="$XDG_CONFIG_HOME/me.spaceinbox.SwiftyNotes/settings.json"
     export APP_STDERR_LOG="/tmp/swifty-ui-smoke.err"
     chmod 700 "$XDG_RUNTIME_DIR"
 
@@ -212,6 +252,17 @@ private func runWaylandUIScript(
     
     TARGET_PID = int(os.environ["APP_PID"])
     NOTES_DIR = os.environ["NOTES_DIR"]
+    SETTINGS_FILE = os.environ["SETTINGS_FILE"]
+
+    def process_id(node):
+        for attribute in ("get_process_id", "getProcessId"):
+            accessor = getattr(node, attribute, None)
+            if callable(accessor):
+                try:
+                    return int(accessor())
+                except Exception:
+                    pass
+        return None
 
     def walk(node):
         try:
@@ -247,16 +298,6 @@ private func runWaylandUIScript(
         raise AssertionError(description)
 
     def wait_for_frame():
-        def process_id(node):
-            for attribute in ("get_process_id", "getProcessId"):
-                accessor = getattr(node, attribute, None)
-                if callable(accessor):
-                    try:
-                        return int(accessor())
-                    except Exception:
-                        pass
-            return None
-
         def locate():
             desktop = pyatspi.Registry.getDesktop(0)
             for index in range(desktop.childCount):
@@ -300,7 +341,8 @@ private func runWaylandUIScript(
             "SWIFTY_NOTES_APP_ID": appID,
             "TEST_RUNTIME_DIR": runtimeDirectory.path(),
             "XDG_DATA_HOME": xdgDataHome.path(),
-            "XDG_STATE_HOME": xdgStateHome.path()
+            "XDG_STATE_HOME": xdgStateHome.path(),
+            "XDG_CONFIG_HOME": xdgConfigHome.path()
         ].merging(environment) { _, new in new }
     )
 }

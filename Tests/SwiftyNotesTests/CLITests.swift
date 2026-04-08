@@ -160,6 +160,43 @@ struct CLITests {
     }
 
     @Test
+    func cliExecutableUsesConfiguredNotesDirectoryFromSettings() throws {
+        let temp = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: temp) }
+        try FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
+
+        let xdgDataHome = temp.appendingPathComponent("xdg-data", isDirectory: true)
+        let xdgConfigHome = temp.appendingPathComponent("xdg-config", isDirectory: true)
+        let customNotesDirectory = temp.appendingPathComponent("custom-notes", isDirectory: true)
+        let settingsStore = AppSettingsStore(
+            settingsFileURL: xdgConfigHome
+                .appendingPathComponent("me.spaceinbox.SwiftyNotes", isDirectory: true)
+                .appendingPathComponent("settings.json", isDirectory: false)
+        )
+        try settingsStore.save(AppSettings(customNotesDirectoryPath: customNotesDirectory.path()))
+
+        let environment = [
+            "XDG_DATA_HOME": xdgDataHome.path(),
+            "XDG_CONFIG_HOME": xdgConfigHome.path()
+        ]
+
+        let createResult = try runCLIExecutable(
+            arguments: ["cli", "create", "--content", "# Configured Path\n\nBody"],
+            environment: environment
+        )
+        #expect(createResult.exitCode == 0)
+
+        let notes = try NotesRepository(notesDirectory: customNotesDirectory).loadNotes()
+        #expect(notes.count == 1)
+        #expect(notes.first?.title == "Configured Path")
+
+        let defaultDirectory = xdgDataHome
+            .appendingPathComponent("me.spaceinbox.SwiftyNotes", isDirectory: true)
+            .appendingPathComponent("notes", isDirectory: true)
+        #expect(!FileManager.default.fileExists(atPath: defaultDirectory.path()))
+    }
+
+    @Test
     func cliExecutableSurfacesHelpAndExitCodes() throws {
         let helpResult = try runCLIExecutable(arguments: ["cli", "help", "create"])
         #expect(helpResult.exitCode == 0)

@@ -30,6 +30,7 @@ struct MainWindowActionsTests {
         #expect(window.debugOverflowMenuSectionTitles == ["Library", "Help"])
         #expect(window.debugOverflowMenuItemsBySection == [
             "Library": [
+                "Settings",
                 "Import markdown…",
                 "Reload from disk",
                 "Open notes folder"
@@ -64,7 +65,249 @@ struct MainWindowActionsTests {
     }
 
     @Test @MainActor
-    func mainWindowOpenNotesFolderUsesInjectedDirectoryOpener() async throws {
+    func mainWindowSettingsActionPresentsSettingsWindow() throws {
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let app = Application(id: "me.spaceinbox.SwiftyNotes.Tests.SettingsWindow")
+        try app.register()
+
+        let originalScheme = StyleManager.default.colorScheme
+        defer { StyleManager.default.colorScheme = originalScheme }
+
+        let repository = NotesRepository(notesDirectory: temp)
+        let settingsStore = AppSettingsStore(
+            settingsFileURL: temp
+                .appendingPathComponent("config", isDirectory: true)
+                .appendingPathComponent("settings.json", isDirectory: false)
+        )
+        let window = MainWindow(
+            application: app,
+            state: AppState(),
+            stateStore: WorkspaceStateStore(
+                stateFileURL: temp.appendingPathComponent("workspace.json", isDirectory: false)
+            ),
+            repository: repository,
+            renderer: MarkdownRenderer(),
+            autosave: AutosaveCoordinator(),
+            appSettingsStore: settingsStore,
+            appSettings: AppSettings(
+                wrapsEditorLines: false,
+                editorFontSize: 18,
+                editorTabWidth: 2,
+                editorIndentStyle: .tabs,
+                autosaveDelaySeconds: 5,
+                appearanceMode: .dark
+            )
+        )
+
+        window.present()
+        window.debugActivateSettingsAction()
+
+        #expect(window.debugHasSettingsWindow)
+        #expect(window.debugSettingsWindowDefaultHeight == 546)
+        #expect(window.debugSettingsWindowSnapshot == .init(
+            notesDirectoryPath: temp.standardizedFileURL.path(),
+            wrapsEditorLines: false,
+            editorFontSize: 18,
+            editorTabWidth: 2,
+            editorIndentStyle: .tabs,
+            autosaveDelaySeconds: 5,
+            appearanceMode: .dark
+        ))
+    }
+
+    @Test @MainActor
+    func mainWindowChangingNotesDirectoryMovesNotesAndPersistsSetting() throws {
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let sourceDirectory = temp.appendingPathComponent("source-notes", isDirectory: true)
+        let destinationDirectory = temp.appendingPathComponent("destination-notes", isDirectory: true)
+        try FileManager.default.createDirectory(at: destinationDirectory, withIntermediateDirectories: true)
+
+        let repository = NotesRepository(notesDirectory: sourceDirectory)
+        _ = try repository.createNote(initialContent: "# Moved note\n\nBody")
+
+        let settingsStore = AppSettingsStore(
+            settingsFileURL: temp
+                .appendingPathComponent("config", isDirectory: true)
+                .appendingPathComponent("settings.json", isDirectory: false)
+        )
+        try settingsStore.save(AppSettings(customNotesDirectoryPath: sourceDirectory.path()))
+
+        let app = Application(id: "me.spaceinbox.SwiftyNotes.Tests.SettingsMove")
+        try app.register()
+
+        let window = MainWindow(
+            application: app,
+            state: AppState(),
+            stateStore: WorkspaceStateStore(
+                stateFileURL: temp.appendingPathComponent("workspace.json", isDirectory: false)
+            ),
+            repository: repository,
+            renderer: MarkdownRenderer(),
+            autosave: AutosaveCoordinator(),
+            appSettingsStore: settingsStore,
+            appSettings: AppSettings(customNotesDirectoryPath: sourceDirectory.path())
+        )
+
+        window.present()
+        try window.debugChangeNotesDirectory(to: destinationDirectory)
+
+        #expect(!FileManager.default.fileExists(atPath: sourceDirectory.path()))
+        let movedNotes = try NotesRepository(notesDirectory: destinationDirectory).loadNotes()
+        #expect(movedNotes.count == 1)
+        #expect(movedNotes.first?.title == "Moved note")
+        #expect(window.debugSelectedNoteContent?.contains("Moved note") == true)
+        #expect(try settingsStore.load().customNotesDirectoryURL?.standardizedFileURL == destinationDirectory.standardizedFileURL)
+    }
+
+    @Test @MainActor
+    func mainWindowSettingsWindowControlsApplyAndPersistPreferences() throws {
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let app = Application(id: "me.spaceinbox.SwiftyNotes.Tests.SettingsControls")
+        try app.register()
+
+        let originalScheme = StyleManager.default.colorScheme
+        defer { StyleManager.default.colorScheme = originalScheme }
+
+        let settingsFileURL = temp
+            .appendingPathComponent("config", isDirectory: true)
+            .appendingPathComponent("settings.json", isDirectory: false)
+        let settingsStore = AppSettingsStore(settingsFileURL: settingsFileURL)
+        let initialSettings = AppSettings(customNotesDirectoryPath: temp.path())
+        try settingsStore.save(initialSettings)
+        let window = MainWindow(
+            application: app,
+            state: AppState(),
+            stateStore: WorkspaceStateStore(
+                stateFileURL: temp.appendingPathComponent("workspace.json", isDirectory: false)
+            ),
+            repository: NotesRepository(notesDirectory: temp),
+            renderer: MarkdownRenderer(),
+            autosave: AutosaveCoordinator(),
+            appSettingsStore: settingsStore,
+            appSettings: initialSettings
+        )
+
+        window.present()
+        window.debugActivateSettingsAction()
+        #expect(window.debugHasSettingsWindow)
+
+        window.debugSettingsSetWrapLines(false)
+        window.debugSettingsSetFontSize(19)
+        window.debugSettingsSetTabWidth(6)
+        window.debugSettingsSetIndentStyle(.tabs)
+        window.debugSettingsSetAutosaveDelaySeconds(9)
+        window.debugSettingsSetAppearanceMode(.dark)
+
+        #expect(window.debugEditorWrapsLines == false)
+        #expect(window.debugEditorFontSize == 19)
+        #expect(window.debugEditorTabWidth == 6)
+        #expect(window.debugEditorInsertsSpacesInsteadOfTabs == false)
+        #expect(window.debugAutosaveDelaySeconds == 9)
+        #expect(window.debugAppearanceMode == .dark)
+        #expect(StyleManager.default.colorScheme == .forceDark)
+        #expect(window.debugSettingsWindowSnapshot == .init(
+            notesDirectoryPath: temp.standardizedFileURL.path(),
+            wrapsEditorLines: false,
+            editorFontSize: 19,
+            editorTabWidth: 6,
+            editorIndentStyle: .tabs,
+            autosaveDelaySeconds: 9,
+            appearanceMode: .dark
+        ))
+
+        let stored = try settingsStore.load()
+        #expect(stored.wrapsEditorLines == false)
+        #expect(stored.editorFontSize == 19)
+        #expect(stored.editorTabWidth == 6)
+        #expect(stored.editorIndentStyle == .tabs)
+        #expect(stored.autosaveDelaySeconds == 9)
+        #expect(stored.appearanceMode == .dark)
+
+        let relaunched = MainWindow(
+            application: app,
+            state: AppState(),
+            stateStore: WorkspaceStateStore(
+                stateFileURL: temp.appendingPathComponent("workspace-relaunch.json", isDirectory: false)
+            ),
+            repository: NotesRepository(notesDirectory: temp),
+            renderer: MarkdownRenderer(),
+            autosave: AutosaveCoordinator(),
+            appSettingsStore: settingsStore,
+            appSettings: stored
+        )
+        #expect(relaunched.debugEditorWrapsLines == false)
+        #expect(relaunched.debugEditorFontSize == 19)
+        #expect(relaunched.debugEditorTabWidth == 6)
+        #expect(relaunched.debugEditorInsertsSpacesInsteadOfTabs == false)
+        #expect(relaunched.debugAutosaveDelaySeconds == 9)
+        #expect(relaunched.debugAppearanceMode == .dark)
+    }
+
+    @Test @MainActor
+    func mainWindowUpdatingPreferencesPersistsAndAppliesThemAtRuntime() throws {
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let app = Application(id: "me.spaceinbox.SwiftyNotes.Tests.SettingsApply")
+        try app.register()
+
+        let originalScheme = StyleManager.default.colorScheme
+        defer { StyleManager.default.colorScheme = originalScheme }
+
+        let settingsFileURL = temp
+            .appendingPathComponent("config", isDirectory: true)
+            .appendingPathComponent("settings.json", isDirectory: false)
+        let settingsStore = AppSettingsStore(settingsFileURL: settingsFileURL)
+        let window = MainWindow(
+            application: app,
+            state: AppState(),
+            stateStore: WorkspaceStateStore(
+                stateFileURL: temp.appendingPathComponent("workspace.json", isDirectory: false)
+            ),
+            repository: NotesRepository(notesDirectory: temp),
+            renderer: MarkdownRenderer(),
+            autosave: AutosaveCoordinator(),
+            appSettingsStore: settingsStore,
+            appSettings: .default
+        )
+
+        window.present()
+        try window.debugUpdateAppSettings(AppSettings(
+            customNotesDirectoryPath: temp.path(),
+            wrapsEditorLines: false,
+            editorFontSize: 17,
+            editorTabWidth: 8,
+            editorIndentStyle: .tabs,
+            autosaveDelaySeconds: 7,
+            appearanceMode: .light
+        ))
+
+        #expect(window.debugEditorWrapsLines == false)
+        #expect(window.debugEditorFontSize == 17)
+        #expect(window.debugEditorTabWidth == 8)
+        #expect(window.debugEditorInsertsSpacesInsteadOfTabs == false)
+        #expect(window.debugAutosaveDelaySeconds == 7)
+        #expect(window.debugAppearanceMode == .light)
+        #expect(window.debugSettingsWindowSnapshot == nil)
+        #expect(StyleManager.default.colorScheme == .forceLight)
+
+        let stored = try settingsStore.load()
+        #expect(stored.wrapsEditorLines == false)
+        #expect(stored.editorFontSize == 17)
+        #expect(stored.editorTabWidth == 8)
+        #expect(stored.editorIndentStyle == .tabs)
+        #expect(stored.autosaveDelaySeconds == 7)
+        #expect(stored.appearanceMode == .light)
+    }
+
+    @Test @MainActor
+    func mainWindowOpenNotesFolderUsesInjectedDirectoryOpener() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -82,15 +325,14 @@ struct MainWindowActionsTests {
             renderer: MarkdownRenderer(),
             autosave: AutosaveCoordinator(),
             directoryOpener: { url in
-                await openedURL.set(url)
+                openedURL.set(url)
             }
         )
 
         window.debugLoadInitialNotes()
-        await window.debugOpenNotesFolder()
+        window.debugOpenNotesFolder()
 
-        let recordedURL = await openedURL.snapshot()
-        #expect(recordedURL?.standardizedFileURL == temp.standardizedFileURL)
+        #expect(openedURL.snapshot()?.standardizedFileURL == temp.standardizedFileURL)
 
         var isDirectory: ObjCBool = false
         #expect(FileManager.default.fileExists(atPath: temp.path(), isDirectory: &isDirectory))
@@ -98,7 +340,7 @@ struct MainWindowActionsTests {
     }
 
     @Test @MainActor
-    func mainWindowOpenNotesFolderMenuActionUsesInjectedDirectoryOpener() async throws {
+    func mainWindowOpenNotesFolderMenuActionUsesInjectedDirectoryOpener() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -116,27 +358,25 @@ struct MainWindowActionsTests {
             renderer: MarkdownRenderer(),
             autosave: AutosaveCoordinator(),
             directoryOpener: { url in
-                await openedURL.set(url)
+                openedURL.set(url)
             }
         )
 
         window.present()
         window.debugActivateOpenNotesFolderAction()
-        try await Task.sleep(for: .milliseconds(30))
 
-        let recordedURL = await openedURL.snapshot()
-        #expect(recordedURL?.standardizedFileURL == temp.standardizedFileURL)
+        #expect(openedURL.snapshot()?.standardizedFileURL == temp.standardizedFileURL)
     }
 
     @Test
-    func openDirectoryInSystemFileManagerUsesDefaultURIHandlerFirst() async throws {
+    func openDirectoryInSystemFileManagerUsesDefaultURIHandlerFirst() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         let expectedURI = temp.standardizedFileURL.absoluteString
 
         var launchedURIs: [String] = []
         var fallbackURIs: [String] = []
 
-        try await MainWindow.openDirectoryInSystemFileManager(
+        try MainWindow.openDirectoryInSystemFileManager(
             temp,
             launchDefaultForURI: { uri in
                 launchedURIs.append(uri)
@@ -151,14 +391,14 @@ struct MainWindowActionsTests {
     }
 
     @Test
-    func openDirectoryInSystemFileManagerFallsBackToXDGOpenWhenDefaultHandlerFails() async throws {
+    func openDirectoryInSystemFileManagerFallsBackToXDGOpenWhenDefaultHandlerFails() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         let expectedURI = temp.standardizedFileURL.absoluteString
 
         var launchedURIs: [String] = []
         var fallbackURIs: [String] = []
 
-        try await MainWindow.openDirectoryInSystemFileManager(
+        try MainWindow.openDirectoryInSystemFileManager(
             temp,
             launchDefaultForURI: { uri in
                 launchedURIs.append(uri)

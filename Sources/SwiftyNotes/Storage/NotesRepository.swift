@@ -49,6 +49,13 @@ public final class NotesRepository: @unchecked Sendable {
     }
 
     public static func defaultNotesDirectory() -> URL {
+        if let configuredDirectory = try? AppSettingsStore().load().customNotesDirectoryURL {
+            return configuredDirectory
+        }
+        return fallbackNotesDirectory()
+    }
+
+    public static func fallbackNotesDirectory() -> URL {
         let fm = FileManager.default
         let env = ProcessInfo.processInfo.environment
         let base: URL

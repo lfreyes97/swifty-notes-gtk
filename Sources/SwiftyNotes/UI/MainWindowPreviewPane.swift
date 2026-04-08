@@ -28,6 +28,20 @@ extension MainWindow {
         }
     }
 
+    func scheduleDebugSettingsOpenIfRequested() {
+        guard !hasScheduledDebugSettingsOpen else { return }
+        let shouldOpen = ProcessInfo.processInfo.environment["SWIFTY_NOTES_DEBUG_OPEN_SETTINGS_ON_LAUNCH"]
+            .map { ["1", "true", "yes"].contains($0.lowercased()) } ?? false
+        guard shouldOpen else { return }
+
+        hasScheduledDebugSettingsOpen = true
+        let delayMilliseconds = ProcessInfo.processInfo.environment["SWIFTY_NOTES_DEBUG_OPEN_SETTINGS_DELAY_MS"]
+            .flatMap(Int.init) ?? 500
+        MainContext.delay(ms: UInt32(max(delayMilliseconds, 0))) { [weak self] in
+            self?.presentSettingsWindow()
+        }
+    }
+
     func schedulePreviewRefresh(blocks: [RenderedBlock], baseDirectory: URL) {
         if let previewRefreshID {
             MainContext.cancel(sourceId: previewRefreshID)
@@ -124,9 +138,11 @@ extension MainWindow {
         window.addAction(importAction)
         window.addAction(openNotesFolderAction)
         window.addAction(reloadAction)
+        window.addAction(settingsAction)
         window.addAction(aboutAction)
 
         let librarySection = GMenuRef()
+        librarySection.append("Settings", action: "win.settings")
         librarySection.append("Import markdown…", action: "win.import-note")
         librarySection.append("Reload from disk", action: "win.reload-notes")
         librarySection.append("Open notes folder", action: "win.open-notes-folder")
@@ -140,6 +156,7 @@ extension MainWindow {
         overflowMenuSectionTitles = ["Library", "Help"]
         overflowMenuItemsBySection = [
             "Library": [
+                "Settings",
                 "Import markdown…",
                 "Reload from disk",
                 "Open notes folder"

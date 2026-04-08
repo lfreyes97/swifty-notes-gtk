@@ -8,6 +8,9 @@ Native GTK markdown notes for Linux, written in Swift with `swift-adwaita`.
 - GTK/libadwaita UI with notes sidebar, live Markdown editor, and inspector-style preview
 - first-launch seeded example note (`Markdown Showcase`)
 - autosave, manual save, import/export, duplicate, rename, delete, and open-notes-folder flows
+- settings window for choosing and moving the notes storage folder
+- editor preferences for line wrapping, font size, tab width, and spaces-vs-tabs indentation
+- configurable autosave delay and appearance override (follow system, light, dark)
 - CLI for listing, reading, creating, and replacing notes by stable ID
 - workspace persistence for selection, search, sort mode, sidebar/preview visibility, and window layout
 - native Wayland UI smoke coverage with headless Weston + AT-SPI
@@ -71,10 +74,25 @@ swift run SwiftyNotes -- cli update <note-id> --stdin
 
 ## Storage
 
-- Notes directory: `XDG_DATA_HOME/me.spaceinbox.SwiftyNotes/notes`
+- Notes directory by default: `XDG_DATA_HOME/me.spaceinbox.SwiftyNotes/notes`
+- Configurable notes directory: set in the app via **Settings** and persisted in `XDG_CONFIG_HOME/me.spaceinbox.SwiftyNotes/settings.json`
 - Workspace state: `XDG_STATE_HOME/me.spaceinbox.SwiftyNotes/workspace.json`
 
 If the notes directory is empty on first launch, the app creates the `Markdown Showcase` note automatically.
+
+When you change the notes folder in Settings, the app moves the existing notes directory to the new location. The CLI follows the same configured folder automatically unless `--notes-dir` is passed explicitly.
+
+## Settings
+
+The Settings window currently lets you configure:
+
+- notes storage location
+- editor line wrapping
+- editor font size
+- editor tab width
+- spaces vs tabs indentation
+- autosave delay
+- appearance override
 
 ## Preview architecture
 

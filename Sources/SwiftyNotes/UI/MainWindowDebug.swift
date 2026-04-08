@@ -166,10 +166,10 @@ extension MainWindow {
         g_action_activate(OpaquePointer(openNotesFolderAction.pointer), nil)
     }
 
-    func debugOpenNotesFolder() async {
+    func debugOpenNotesFolder() {
         do {
             let folderURL = try ensureNotesDirectoryExists()
-            try await directoryOpener(folderURL)
+            try directoryOpener(folderURL)
         } catch {
             presentError(
                 heading: "Could not open notes folder",
@@ -182,8 +182,84 @@ extension MainWindow {
         g_action_activate(OpaquePointer(aboutAction.pointer), nil)
     }
 
+    func debugActivateSettingsAction() {
+        g_action_activate(OpaquePointer(settingsAction.pointer), nil)
+    }
+
+    func debugChangeNotesDirectory(to directory: URL) throws {
+        _ = try changeNotesDirectory(to: directory)
+    }
+
+    func debugUpdateAppSettings(_ settings: AppSettings) throws {
+        _ = try updateAppSettings(settings)
+    }
+
     var debugHasAboutDialog: Bool {
         activeAboutDialog != nil
+    }
+
+    var debugHasSettingsWindow: Bool {
+        activeSettingsWindow != nil
+    }
+
+    var debugSettingsWindowNotesDirectoryPath: String? {
+        activeSettingsWindow?.displayedNotesDirectoryPath
+    }
+
+    var debugSettingsWindowSnapshot: SettingsWindow.Snapshot? {
+        activeSettingsWindow?.snapshot
+    }
+
+    var debugSettingsWindowDefaultHeight: Int? {
+        activeSettingsWindow?.debugDefaultHeight
+    }
+
+    var debugEditorWrapsLines: Bool {
+        editor.view.wrapMode != .none
+    }
+
+    var debugEditorFontSize: Int {
+        editor.currentFontSize
+    }
+
+    var debugEditorTabWidth: Int {
+        editor.view.tabWidth
+    }
+
+    var debugEditorInsertsSpacesInsteadOfTabs: Bool {
+        editor.view.insertSpacesInsteadOfTabs
+    }
+
+    var debugAutosaveDelaySeconds: Int {
+        appSettings.autosaveDelaySeconds
+    }
+
+    var debugAppearanceMode: AppearanceMode {
+        appSettings.appearanceMode
+    }
+
+    func debugSettingsSetWrapLines(_ value: Bool) {
+        activeSettingsWindow?.debugSetWrapLines(value)
+    }
+
+    func debugSettingsSetFontSize(_ value: Int) {
+        activeSettingsWindow?.debugSetFontSize(value)
+    }
+
+    func debugSettingsSetTabWidth(_ value: Int) {
+        activeSettingsWindow?.debugSetTabWidth(value)
+    }
+
+    func debugSettingsSetIndentStyle(_ value: EditorIndentStyle) {
+        activeSettingsWindow?.debugSetIndentStyle(value)
+    }
+
+    func debugSettingsSetAutosaveDelaySeconds(_ value: Int) {
+        activeSettingsWindow?.debugSetAutosaveDelaySeconds(value)
+    }
+
+    func debugSettingsSetAppearanceMode(_ value: AppearanceMode) {
+        activeSettingsWindow?.debugSetAppearanceMode(value)
     }
 
     struct DebugAboutDialogSnapshot: Equatable {

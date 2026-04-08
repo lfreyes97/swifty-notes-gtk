@@ -69,6 +69,45 @@ struct MainWindowCoreTests {
     }
 
     @Test @MainActor
+    func mainWindowAppliesConfiguredEditorAutosaveAndAppearancePreferencesAtStartup() throws {
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let app = Application(id: "me.spaceinbox.SwiftyNotes.Tests.EditorPreferences")
+        try app.register()
+
+        let originalScheme = StyleManager.default.colorScheme
+        defer { StyleManager.default.colorScheme = originalScheme }
+
+        let window = MainWindow(
+            application: app,
+            state: AppState(),
+            stateStore: WorkspaceStateStore(
+                stateFileURL: temp.appendingPathComponent("workspace.json", isDirectory: false)
+            ),
+            repository: NotesRepository(notesDirectory: temp),
+            renderer: MarkdownRenderer(),
+            autosave: AutosaveCoordinator(),
+            appSettings: AppSettings(
+                wrapsEditorLines: false,
+                editorFontSize: 18,
+                editorTabWidth: 2,
+                editorIndentStyle: .tabs,
+                autosaveDelaySeconds: 5,
+                appearanceMode: .dark
+            )
+        )
+
+        #expect(window.debugEditorWrapsLines == false)
+        #expect(window.debugEditorFontSize == 18)
+        #expect(window.debugEditorTabWidth == 2)
+        #expect(window.debugEditorInsertsSpacesInsteadOfTabs == false)
+        #expect(window.debugAutosaveDelaySeconds == 5)
+        #expect(window.debugAppearanceMode == .dark)
+        #expect(StyleManager.default.colorScheme == .forceDark)
+    }
+
+    @Test @MainActor
     func mainWindowCreateNoteAddsAnotherNote() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }

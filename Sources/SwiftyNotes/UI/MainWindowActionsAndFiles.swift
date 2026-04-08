@@ -227,19 +227,7 @@ extension MainWindow {
     func openNotesFolder() {
         do {
             let folderURL = try ensureNotesDirectoryExists()
-            let directoryOpener = self.directoryOpener
-            Task.detached(priority: .userInitiated) { [weak self] in
-                do {
-                    try await directoryOpener(folderURL)
-                } catch {
-                    await MainActor.run { [weak self] in
-                        self?.presentError(
-                            heading: "Could not open notes folder",
-                            body: error.localizedDescription
-                        )
-                    }
-                }
-            }
+            try directoryOpener(folderURL)
         } catch {
             presentError(
                 heading: "Could not open notes folder",
@@ -274,6 +262,118 @@ extension MainWindow {
         }
         activeAboutDialog = about
         about.present(menuButton.root ?? window)
+    }
+
+    func presentSettingsWindow() {
+        if let activeSettingsWindow {
+            activeSettingsWindow.present()
+            return
+        }
+        guard let application = Application.current else {
+            presentError(
+                heading: "Could not open settings",
+                body: "The application instance is not available."
+            )
+            return
+        }
+
+        let settingsWindow = SettingsWindow(
+            application: application,
+            parentWindow: window,
+            currentSettings: appSettings,
+            currentNotesDirectory: repository.notesDirectoryURL,
+            defaultNotesDirectory: NotesRepository.fallbackNotesDirectory(),
+            applyNotesDirectoryChange: { [weak self] directory in
+                guard let self else {
+                    throw CocoaError(.userCancelled)
+                }
+                return try self.changeNotesDirectory(to: directory)
+            },
+            applySettingsChange: { [weak self] settings in
+                guard let self else {
+                    throw CocoaError(.userCancelled)
+                }
+                return try self.updateAppSettings(settings)
+            },
+            openDirectory: { [weak self] url in
+                guard let self else {
+                    throw CocoaError(.userCancelled)
+                }
+                try self.openDirectoryFromSettings(url)
+            }
+        )
+        settingsWindow.window.onDestroy { [weak self, weak settingsWindow] in
+            guard let self, let settingsWindow, self.activeSettingsWindow === settingsWindow else { return }
+            self.activeSettingsWindow = nil
+        }
+        activeSettingsWindow = settingsWindow
+        settingsWindow.present()
+    }
+
+    func openDirectoryFromSettings(_ folderURL: URL) throws {
+        try MainWindow.openDirectoryInSystemFileManager(folderURL)
+    }
+
+    func changeNotesDirectory(
+        to directory: URL,
+        targetSettings explicitTargetSettings: AppSettings? = nil
+    ) throws -> URL {
+        let defaultDirectory = NotesRepository.fallbackNotesDirectory()
+        let targetSettings = (
+            explicitTargetSettings
+            ?? appSettings.updatingNotesDirectory(
+                directory.standardizedFileURL,
+                defaultDirectory: defaultDirectory
+            )
+        ).normalized(defaultDirectory: defaultDirectory)
+        let targetDirectory = targetSettings.resolvedNotesDirectory(defaultDirectory: defaultDirectory)
+        let currentDirectory = repository.notesDirectoryURL.standardizedFileURL
+        guard targetDirectory != currentDirectory else { return currentDirectory }
+
+        try saveModifiedNoteBeforeStorageMove()
+        stopExternalChangeMonitor()
+        do {
+            try repository.ensureNotesDirectory()
+            try NotesDirectoryRelocator.relocate(from: currentDirectory, to: targetDirectory)
+            do {
+                try appSettingsStore.save(targetSettings)
+            } catch {
+                do {
+                    try NotesDirectoryRelocator.relocate(from: targetDirectory, to: currentDirectory)
+                } catch let rollbackError {
+                    throw MainWindow.DirectoryOpenFailure(
+                        message: [
+                            error.localizedDescription,
+                            "Rollback failed: \(rollbackError.localizedDescription)"
+                        ].joined(separator: "\n")
+                    )
+                }
+                throw error
+            }
+
+            repository = NotesRepository(notesDirectory: targetDirectory)
+            let notes = try repository.loadNotes()
+            state.setNotes(notes)
+            directorySnapshot = try repository.directorySnapshot()
+            deferredExternalSnapshot = nil
+            externalReloadDeferred = false
+            applyRuntimeSettings(targetSettings, shouldRefreshPreview: false)
+            renderSelection()
+            persistWorkspaceState()
+            startExternalChangeMonitor()
+            toastOverlay.showToast("Notes folder updated")
+            return targetDirectory
+        } catch {
+            startExternalChangeMonitor()
+            throw error
+        }
+    }
+
+    func saveModifiedNoteBeforeStorageMove() throws {
+        guard editor.buffer.modified, let noteToSave = currentEditedNoteSnapshot() else { return }
+        state.upsert(noteToSave)
+        let savedNote = try repository.save(note: noteToSave)
+        handleSaveSuccess(savedNote, announceSuccess: false)
     }
 
     func reloadFromDisk(announce: Bool, forceDiscardingUnsavedChanges: Bool = false) {

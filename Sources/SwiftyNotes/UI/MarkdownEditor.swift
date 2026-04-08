@@ -1,9 +1,13 @@
 import Adwaita
+import Foundation
 
 @MainActor
 struct MarkdownEditor {
     let view: SourceView
     let buffer: SourceBuffer
+    private let fontCSSProvider = CSSProvider()
+    private let fontCSSClass = "markdown-editor-font-\(UUID().uuidString.lowercased().replacingOccurrences(of: "-", with: ""))"
+    private(set) var currentFontSize = AppSettings.defaultEditorFontSize
 
     init() {
         if let language = SourceLanguageManager.default.language(id: .markdown) {
@@ -31,6 +35,9 @@ struct MarkdownEditor {
         view.topMargin = 8
         view.bottomMargin = 8
         view.setAccessibleLabel("Markdown Editor")
+        view.addCSSClass(fontCSSClass)
+        fontCSSProvider.addToDefaultDisplay()
+        applySettings(.default)
     }
 
     func setText(_ text: String) {
@@ -42,6 +49,16 @@ struct MarkdownEditor {
 
     func focus() {
         _ = view.grabFocus()
+    }
+
+    mutating func applySettings(_ settings: AppSettings) {
+        view.wrapMode = settings.wrapsEditorLines ? .wordChar : .none
+        view.tabWidth = settings.editorTabWidth
+        view.insertSpacesInsteadOfTabs = settings.editorIndentStyle == .spaces
+        currentFontSize = settings.editorFontSize
+        fontCSSProvider.loadFromString(
+            ".\(fontCSSClass) { font-size: \(currentFontSize)pt; }"
+        )
     }
 
     func applyAutomaticStyleScheme(styleManager: StyleManager = .default) {

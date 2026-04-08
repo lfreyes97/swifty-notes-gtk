@@ -16,7 +16,8 @@ actor SaveRecorder {
     }
 }
 
-actor URLRecorder {
+@MainActor
+final class URLRecorder {
     private var value: URL?
 
     func set(_ url: URL) {
