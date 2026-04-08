@@ -43,6 +43,7 @@ jobs:
           packaging/release/assemble-install-root.sh \
             --version "${{ inputs.version }}" \
             --repo-slug "${{ github.repository }}" \
+            --repo-ref "${{ github.sha }}" \
             --dest packaging/out/install-root-usr \
             --prefix /usr
 
@@ -127,6 +128,7 @@ jobs:
           packaging/release/render-flatpak-manifest.sh \
             --version "${{ inputs.version }}" \
             --repo-slug "${{ github.repository }}" \
+            --repo-ref "${{ github.sha }}" \
             --source-path ../../.. \
             --output packaging/out/flatpak/me.spaceinbox.SwiftyNotes.yml
 

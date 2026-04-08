@@ -11,6 +11,7 @@ version=""
 source_path=""
 output_path=""
 repo_slug="makoni/swifty-notes-gtk"
+repo_ref="master"
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -28,6 +29,10 @@ while [ "$#" -gt 0 ]; do
             ;;
         --repo-slug)
             repo_slug="$2"
+            shift 2
+            ;;
+        --repo-ref)
+            repo_ref="$2"
             shift 2
             ;;
         --help|-h)
@@ -54,6 +59,7 @@ mkdir -p "$(dirname "$output_path")"
 sed \
     -e "s|@VERSION@|${version}|g" \
     -e "s|@REPO_SLUG@|${repo_slug}|g" \
+    -e "s|@REPO_REF@|${repo_ref}|g" \
     -e "s|@SOURCE_PATH@|${source_path}|g" \
     "${repo_root}/flatpak/me.spaceinbox.SwiftyNotes.yml.in" \
     > "$output_path"

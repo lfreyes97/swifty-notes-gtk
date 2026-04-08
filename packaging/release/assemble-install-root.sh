@@ -8,6 +8,7 @@ Usage: assemble-install-root.sh --version VERSION --dest DESTDIR [options]
 Options:
   --prefix PREFIX             Install prefix inside the package root (/usr or /app). Default: /usr
   --repo-slug OWNER/REPO      GitHub slug used for generated screenshot URLs.
+  --repo-ref REF              Git ref used for generated screenshot URLs. Default: master
   --build-date YYYY-MM-DD     Release date written into metainfo. Default: current UTC date.
   --screenshot-url URL        Override the AppStream screenshot URL.
 EOF
@@ -17,6 +18,7 @@ version=""
 dest=""
 prefix="/usr"
 repo_slug="makoni/swifty-notes-gtk"
+repo_ref="master"
 build_date="$(date -u +%F)"
 screenshot_url=""
 
@@ -36,6 +38,10 @@ while [ "$#" -gt 0 ]; do
             ;;
         --repo-slug)
             repo_slug="$2"
+            shift 2
+            ;;
+        --repo-ref)
+            repo_ref="$2"
             shift 2
             ;;
         --build-date)
@@ -73,7 +79,7 @@ case "$prefix" in
 esac
 
 if [ -z "$screenshot_url" ]; then
-    screenshot_url="https://raw.githubusercontent.com/${repo_slug}/main/data/screenshots/main-window.png"
+    screenshot_url="https://raw.githubusercontent.com/${repo_slug}/${repo_ref}/data/screenshots/main-window.png"
 fi
 
 script_dir="$(cd "$(dirname "$0")" && pwd)"

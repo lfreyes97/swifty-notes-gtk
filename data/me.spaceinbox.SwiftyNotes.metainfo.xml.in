@@ -40,6 +40,7 @@
   <content_rating type="oars-1.1"/>
   <url type="homepage">https://github.com/makoni/swifty-notes-gtk</url>
   <url type="bugtracker">https://github.com/makoni/swifty-notes-gtk/issues</url>
+  <url type="vcs-browser">https://github.com/makoni/swifty-notes-gtk</url>
   <releases>
     <release version="@VERSION@" date="@DATE@">
       <description>
