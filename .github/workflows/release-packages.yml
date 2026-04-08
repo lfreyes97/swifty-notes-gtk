@@ -124,13 +124,13 @@ jobs:
           packaging/release/render-flatpak-manifest.sh \
             --version "${{ inputs.version }}" \
             --repo-slug "${{ github.repository }}" \
-            --source-path .. \
-            --output flatpak/me.spaceinbox.SwiftyNotes.yml
+            --source-path ../../.. \
+            --output packaging/out/flatpak/me.spaceinbox.SwiftyNotes.yml
 
       - name: Build Flatpak bundle
         uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
-          manifest-path: flatpak/me.spaceinbox.SwiftyNotes.yml
+          manifest-path: packaging/out/flatpak/me.spaceinbox.SwiftyNotes.yml
           bundle: swifty-notes-gtk-${{ inputs.version }}-x86_64.flatpak
           branch: stable
           build-dir: packaging/out/flatpak/build
@@ -145,10 +145,10 @@ jobs:
         run: flatpak install -y flathub org.flatpak.Builder
 
       - name: Lint Flatpak manifest
-        run: flatpak run --command=flatpak-builder-lint org.flatpak.Builder manifest flatpak/me.spaceinbox.SwiftyNotes.yml
+        run: cd packaging/out/flatpak && flatpak run --command=flatpak-builder-lint org.flatpak.Builder manifest me.spaceinbox.SwiftyNotes.yml
 
       - name: Lint Flatpak repo
-        run: flatpak run --command=flatpak-builder-lint org.flatpak.Builder repo packaging/out/flatpak/repo
+        run: cd packaging/out/flatpak && flatpak run --command=flatpak-builder-lint org.flatpak.Builder repo repo
 
       - name: Upload Flatpak artifact
         uses: actions/upload-artifact@v4
@@ -173,6 +173,12 @@ jobs:
       - name: Stamp Snap version
         run: |
           sed -i 's/^version: .*/version: "${{ inputs.version }}"/' snap/snapcraft.yaml
+
+      - name: Restore Snap executable bits
+        run: |
+          chmod 755 \
+            packaging/out/install-root-usr/usr/bin/SwiftyNotes \
+            packaging/out/install-root-usr/usr/libexec/swifty-notes/SwiftyNotes
 
       - name: Build Snap
         id: build-snap

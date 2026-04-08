@@ -14,6 +14,8 @@ website:
   - https://github.com/makoni/swifty-notes-gtk
 issues:
   - https://github.com/makoni/swifty-notes-gtk/issues
+contact:
+  - https://github.com/makoni/swifty-notes-gtk/issues
 source-code:
   - https://github.com/makoni/swifty-notes-gtk
 icon: data/me.spaceinbox.SwiftyNotes.svg
