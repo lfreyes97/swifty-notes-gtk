@@ -59,6 +59,41 @@ struct SettingsStoreTests {
     }
 
     @Test
+    func appSettingsStoreMigratesOldestLegacyDefaultSettingsPrefix() throws {
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let legacyDirectory = temp.appendingPathComponent(AppIdentity.oldestLegacyIdentifier, isDirectory: true)
+        try FileManager.default.createDirectory(at: legacyDirectory, withIntermediateDirectories: true)
+        let customNotesDirectory = temp.appendingPathComponent("legacy-custom-notes", isDirectory: true)
+        let legacyStore = AppSettingsStore(
+            settingsFileURL: legacyDirectory.appendingPathComponent("settings.json", isDirectory: false)
+        )
+        try legacyStore.save(AppSettings(customNotesDirectoryPath: customNotesDirectory.path()))
+
+        let migratedStore = AppSettingsStore(
+            settingsFileURL: temp
+                .appendingPathComponent(AppIdentity.identifier, isDirectory: true)
+                .appendingPathComponent("settings.json", isDirectory: false)
+        )
+
+        let loaded = try migratedStore.load()
+        #expect(loaded.customNotesDirectoryURL?.standardizedFileURL == customNotesDirectory.standardizedFileURL)
+        #expect(FileManager.default.fileExists(
+            atPath: temp
+                .appendingPathComponent(AppIdentity.identifier, isDirectory: true)
+                .appendingPathComponent("settings.json", isDirectory: false)
+                .path()
+        ))
+        #expect(!FileManager.default.fileExists(
+            atPath: temp
+                .appendingPathComponent(AppIdentity.oldestLegacyIdentifier, isDirectory: true)
+                .appendingPathComponent("settings.json", isDirectory: false)
+                .path()
+        ))
+    }
+
+    @Test
     func notesDirectoryRelocatorMovesNotesIntoExistingEmptyFolderAndRemovesOldPath() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }

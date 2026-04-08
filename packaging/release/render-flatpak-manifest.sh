@@ -61,5 +61,5 @@ sed \
     -e "s|@REPO_SLUG@|${repo_slug}|g" \
     -e "s|@REPO_REF@|${repo_ref}|g" \
     -e "s|@SOURCE_PATH@|${source_path}|g" \
-    "${repo_root}/flatpak/me.spaceinbox.SwiftyNotes.yml.in" \
+    "${repo_root}/flatpak/me.spaceinbox.swiftynotes.yml.in" \
     > "$output_path"

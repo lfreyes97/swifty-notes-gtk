@@ -1,14 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>me.spaceinbox.SwiftyNotes</id>
+  <id>me.spaceinbox.swiftynotes</id>
   <metadata_license>FSFAP</metadata_license>
   <project_license>MIT</project_license>
   <name>Swifty Notes</name>
   <developer id="me.spaceinbox">
     <name>Sergey Armodin</name>
   </developer>
-  <summary>Native GTK markdown notes for Linux</summary>
-  <launchable type="desktop-id">me.spaceinbox.SwiftyNotes.desktop</launchable>
+  <summary>Native GTK markdown notes with preview and automation</summary>
+  <launchable type="desktop-id">me.spaceinbox.swiftynotes.desktop</launchable>
+  <branding>
+    <color type="primary" scheme_preference="light">#5b7cff</color>
+    <color type="primary" scheme_preference="dark">#7f93ff</color>
+  </branding>
   <categories>
     <category>Utility</category>
     <category>TextEditor</category>
@@ -18,14 +22,18 @@
     <keyword>markdown</keyword>
     <keyword>editor</keyword>
     <keyword>preview</keyword>
+    <keyword>cli</keyword>
+    <keyword>automation</keyword>
   </keywords>
   <description>
-    <p>Swifty Notes is a native GTK/libadwaita markdown notes application for Linux written in Swift.</p>
-    <p>It keeps notes as regular files, offers a live native Markdown preview, and shares one storage format between the desktop app and the CLI.</p>
+    <p>Swifty Notes is a native GTK/libadwaita Markdown notes application for Linux written in Swift.</p>
+    <p>The desktop app is the primary experience: write, organize, and preview Markdown notes with native GTK widgets, autosave, and remembered workspace state.</p>
+    <p>The included CLI works on the same file-backed notes so shell scripts, automation, and AI agents can safely inspect or update notes without a separate database or background service.</p>
     <ul>
       <li>Create, rename, duplicate, export, and delete Markdown notes.</li>
-      <li>Autosave edits, remember workspace state, and keep note-local image assets.</li>
-      <li>Import images with drag and drop and render Markdown with a native GTK preview.</li>
+      <li>Autosave edits, remember workspace state, and keep note-local image assets together with each note.</li>
+      <li>Import images with drag and drop and render Markdown with a native GTK preview instead of a web view.</li>
+      <li>Use the CLI for JSON-friendly note automation from scripts, shell pipelines, and AI agents.</li>
     </ul>
   </description>
   <provides>
@@ -44,7 +52,7 @@
   <releases>
     <release version="@VERSION@" date="@DATE@">
       <description>
-        <p>Release build prepared from the current Swifty Notes source tree.</p>
+        <p>Native GTK release with Markdown preview, autosave, note-local image assets, and CLI automation for scripts and AI agents.</p>
       </description>
     </release>
   </releases>

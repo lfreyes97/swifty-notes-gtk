@@ -169,12 +169,12 @@ jobs:
             --repo-slug "${{ github.repository }}" \
             --repo-ref "${{ github.sha }}" \
             --source-path ../../.. \
-            --output packaging/out/flatpak/me.spaceinbox.SwiftyNotes.yml
+            --output packaging/out/flatpak/me.spaceinbox.swiftynotes.yml
 
       - name: Build Flatpak bundle
         uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
-          manifest-path: packaging/out/flatpak/me.spaceinbox.SwiftyNotes.yml
+          manifest-path: packaging/out/flatpak/me.spaceinbox.swiftynotes.yml
           bundle: swifty-notes-gtk-${{ inputs.version }}-x86_64.flatpak
           branch: stable
           build-dir: packaging/out/flatpak/build
@@ -198,7 +198,7 @@ jobs:
           done
 
       - name: Lint Flatpak manifest
-        run: cd packaging/out/flatpak && flatpak run --command=flatpak-builder-lint org.flatpak.Builder manifest me.spaceinbox.SwiftyNotes.yml
+        run: cd packaging/out/flatpak && flatpak run --command=flatpak-builder-lint org.flatpak.Builder manifest me.spaceinbox.swiftynotes.yml
 
       - name: Lint Flatpak repo
         run: cd packaging/out/flatpak && flatpak run --command=flatpak-builder-lint org.flatpak.Builder repo repo

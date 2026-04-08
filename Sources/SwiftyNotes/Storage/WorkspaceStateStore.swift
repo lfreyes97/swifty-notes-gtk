@@ -50,18 +50,6 @@ public final class WorkspaceStateStore {
     private func migrateLegacyStateIfNeeded() throws {
         guard stateFileURL.lastPathComponent == "workspace.json" else { return }
         let appDirectory = stateFileURL.deletingLastPathComponent()
-        guard appDirectory.lastPathComponent == AppIdentity.identifier else { return }
-
-        let baseDirectory = appDirectory.deletingLastPathComponent()
-        let legacyAppDirectory = AppIdentity.applicationDirectory(
-            in: baseDirectory,
-            identifier: AppIdentity.legacyIdentifier
-        )
-
-        guard !fileManager.fileExists(atPath: appDirectory.path()),
-              fileManager.fileExists(atPath: legacyAppDirectory.path()) else { return }
-
-        try fileManager.createDirectory(at: baseDirectory, withIntermediateDirectories: true)
-        try fileManager.moveItem(at: legacyAppDirectory, to: appDirectory)
+        try AppIdentity.migrateApplicationDirectoryIfNeeded(currentDirectory: appDirectory, fileManager: fileManager)
     }
 }

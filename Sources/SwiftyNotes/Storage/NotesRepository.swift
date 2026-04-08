@@ -295,19 +295,7 @@ public final class NotesRepository: @unchecked Sendable {
     private func migrateLegacyStorageIfNeededUnlocked() throws {
         guard notesDirectory.lastPathComponent == "notes" else { return }
         let appDirectory = notesDirectory.deletingLastPathComponent()
-        guard appDirectory.lastPathComponent == AppIdentity.identifier else { return }
-
-        let baseDirectory = appDirectory.deletingLastPathComponent()
-        let legacyAppDirectory = AppIdentity.applicationDirectory(
-            in: baseDirectory,
-            identifier: AppIdentity.legacyIdentifier
-        )
-
-        guard !fileManager.fileExists(atPath: appDirectory.path()),
-              fileManager.fileExists(atPath: legacyAppDirectory.path()) else { return }
-
-        try fileManager.createDirectory(at: baseDirectory, withIntermediateDirectories: true)
-        try fileManager.moveItem(at: legacyAppDirectory, to: appDirectory)
+        try AppIdentity.migrateApplicationDirectoryIfNeeded(currentDirectory: appDirectory, fileManager: fileManager)
     }
 
     private func migrateLegacyFlatNoteLayoutIfNeededUnlocked() throws {

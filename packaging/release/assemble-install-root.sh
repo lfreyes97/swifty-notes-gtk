@@ -7,6 +7,7 @@ Usage: assemble-install-root.sh --version VERSION --dest DESTDIR [options]
 
 Options:
   --prefix PREFIX             Install prefix inside the package root (/usr or /app). Default: /usr
+  --license-subdir NAME       Directory name under share/licenses. Default: swifty-notes-gtk
   --repo-slug OWNER/REPO      GitHub slug used for generated screenshot URLs.
   --repo-ref REF              Git ref used for generated screenshot URLs. Default: master
   --build-date YYYY-MM-DD     Release date written into metainfo. Default: current UTC date.
@@ -17,6 +18,7 @@ EOF
 version=""
 dest=""
 prefix="/usr"
+license_subdir="swifty-notes-gtk"
 repo_slug="makoni/swifty-notes-gtk"
 repo_ref="master"
 build_date="$(date -u +%F)"
@@ -34,6 +36,10 @@ while [ "$#" -gt 0 ]; do
             ;;
         --prefix)
             prefix="$2"
+            shift 2
+            ;;
+        --license-subdir)
+            license_subdir="$2"
             shift 2
             ;;
         --repo-slug)
@@ -106,7 +112,7 @@ bin_dir="${prefix}/bin"
 applications_dir="${prefix}/share/applications"
 icon_dir="${prefix}/share/icons/hicolor/scalable/apps"
 metainfo_dir="${prefix}/share/metainfo"
-license_dir="${prefix}/share/licenses/swifty-notes-gtk"
+license_dir="${prefix}/share/licenses/${license_subdir}"
 
 rm -rf "$dest"
 mkdir -p \
@@ -119,15 +125,15 @@ mkdir -p \
 
 install -Dm755 "$binary_path" "${dest}${libexec_dir}/SwiftyNotes"
 cp -R "$resources_dir" "${dest}${libexec_dir}/"
-install -Dm644 data/me.spaceinbox.SwiftyNotes.desktop "${dest}${applications_dir}/me.spaceinbox.SwiftyNotes.desktop"
-install -Dm644 data/me.spaceinbox.SwiftyNotes.svg "${dest}${icon_dir}/me.spaceinbox.SwiftyNotes.svg"
+install -Dm644 data/me.spaceinbox.swiftynotes.desktop "${dest}${applications_dir}/me.spaceinbox.swiftynotes.desktop"
+install -Dm644 data/me.spaceinbox.swiftynotes.svg "${dest}${icon_dir}/me.spaceinbox.swiftynotes.svg"
 install -Dm644 LICENSE "${dest}${license_dir}/LICENSE"
 
 cat > "${dest}${bin_dir}/SwiftyNotes" <<EOF
 #!/bin/sh
 set -eu
 : "\${SWIFTY_NOTES_VERSION:=${version}}"
-: "\${SWIFTY_NOTES_APP_ID:=me.spaceinbox.SwiftyNotes}"
+: "\${SWIFTY_NOTES_APP_ID:=me.spaceinbox.swiftynotes}"
 root_prefix="\${SWIFTY_NOTES_ROOT_PREFIX:-\${SNAP:-}}"
 exec "\${root_prefix}${libexec_dir}/SwiftyNotes" "\$@"
 EOF
@@ -137,15 +143,15 @@ sed \
     -e "s|@VERSION@|${version}|g" \
     -e "s|@DATE@|${build_date}|g" \
     -e "s|@SCREENSHOT_URL@|${screenshot_url}|g" \
-    data/me.spaceinbox.SwiftyNotes.metainfo.xml.in \
-    > "${dest}${metainfo_dir}/me.spaceinbox.SwiftyNotes.metainfo.xml"
+    data/me.spaceinbox.swiftynotes.metainfo.xml.in \
+    > "${dest}${metainfo_dir}/me.spaceinbox.swiftynotes.metainfo.xml"
 
 if command -v desktop-file-validate >/dev/null 2>&1; then
-    desktop-file-validate "${dest}${applications_dir}/me.spaceinbox.SwiftyNotes.desktop"
+    desktop-file-validate "${dest}${applications_dir}/me.spaceinbox.swiftynotes.desktop"
 fi
 
 if command -v appstreamcli >/dev/null 2>&1; then
-    appstreamcli validate --no-net --strict "${dest}${metainfo_dir}/me.spaceinbox.SwiftyNotes.metainfo.xml"
+    appstreamcli validate --no-net --strict "${dest}${metainfo_dir}/me.spaceinbox.swiftynotes.metainfo.xml"
 fi
 
 validation_root="$(mktemp -d)"

@@ -53,14 +53,14 @@ struct UISmokeTests {
             """,
             prepare: { xdgDataHome, xdgStateHome in
                 let notesDirectory = xdgDataHome
-                    .appendingPathComponent("me.spaceinbox.SwiftyNotes", isDirectory: true)
+                    .appendingPathComponent(AppIdentity.identifier, isDirectory: true)
                     .appendingPathComponent("notes", isDirectory: true)
                 let repository = NotesRepository(notesDirectory: notesDirectory)
                 let alpha = try repository.createNote(initialContent: "# Alpha\n\nFirst")
                 _ = try repository.createNote(initialContent: "# Beta\n\nSecond")
 
                 let stateFileURL = xdgStateHome
-                    .appendingPathComponent("me.spaceinbox.SwiftyNotes", isDirectory: true)
+                    .appendingPathComponent(AppIdentity.identifier, isDirectory: true)
                     .appendingPathComponent("workspace.json", isDirectory: false)
                 let stateStore = WorkspaceStateStore(stateFileURL: stateFileURL)
                 try stateStore.save(WorkspaceState(
@@ -229,7 +229,7 @@ private func runWaylandUIScript(
     let xdgDataHome = temp.appendingPathComponent("xdg-data", isDirectory: true)
     let xdgStateHome = temp.appendingPathComponent("xdg-state", isDirectory: true)
     let xdgConfigHome = temp.appendingPathComponent("xdg-config", isDirectory: true)
-    let appID = "me.spaceinbox.SwiftyNotes.UITests.\(temp.lastPathComponent.lowercased())"
+    let appID = "\(AppIdentity.identifier).uitests.\(temp.lastPathComponent.lowercased())"
     try FileManager.default.createDirectory(at: runtimeDirectory, withIntermediateDirectories: true)
     try FileManager.default.createDirectory(at: xdgDataHome, withIntermediateDirectories: true)
     try FileManager.default.createDirectory(at: xdgStateHome, withIntermediateDirectories: true)
@@ -246,8 +246,8 @@ private func runWaylandUIScript(
     export XDG_DATA_HOME="$XDG_DATA_HOME"
     export XDG_STATE_HOME="$XDG_STATE_HOME"
     export XDG_CONFIG_HOME="$XDG_CONFIG_HOME"
-    export NOTES_DIR="$XDG_DATA_HOME/me.spaceinbox.SwiftyNotes/notes"
-    export SETTINGS_FILE="$XDG_CONFIG_HOME/me.spaceinbox.SwiftyNotes/settings.json"
+    export NOTES_DIR="$XDG_DATA_HOME/\(AppIdentity.identifier)/notes"
+    export SETTINGS_FILE="$XDG_CONFIG_HOME/\(AppIdentity.identifier)/settings.json"
     export APP_STDERR_LOG="/tmp/swifty-ui-smoke.err"
     chmod 700 "$XDG_RUNTIME_DIR"
 

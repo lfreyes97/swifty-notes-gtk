@@ -14,8 +14,8 @@ final class MarkdownPreview {
 
     private static let previewCSS = CSSProvider.loadGlobal("""
     .preview-list-row {
-        margin-top: 0;
-        margin-bottom: 0;
+        margin-top: 1px;
+        margin-bottom: 1px;
         padding-top: 0;
         padding-bottom: 0;
         min-height: 0;
@@ -54,12 +54,12 @@ final class MarkdownPreview {
 
     .preview-compact-list-label,
     .preview-compact-list-marker {
-        line-height: 0.72;
+        line-height: 1.14;
     }
 
     .preview-task-list-label,
     .preview-task-list-marker {
-        line-height: 0.84;
+        line-height: 1.14;
     }
 
     .preview-table-header {

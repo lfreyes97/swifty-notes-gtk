@@ -18,14 +18,14 @@ contact:
   - https://github.com/makoni/swifty-notes-gtk/issues
 source-code:
   - https://github.com/makoni/swifty-notes-gtk
-icon: data/me.spaceinbox.SwiftyNotes.svg
+icon: data/me.spaceinbox.swiftynotes.svg
 platforms:
   amd64:
 
 apps:
   swifty-notes:
     command: usr/bin/SwiftyNotes
-    desktop: usr/share/applications/me.spaceinbox.SwiftyNotes.desktop
+    desktop: usr/share/applications/me.spaceinbox.swiftynotes.desktop
     extensions:
       - gnome
 

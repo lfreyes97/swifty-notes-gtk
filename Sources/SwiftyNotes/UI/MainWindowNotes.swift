@@ -9,6 +9,12 @@ extension MainWindow {
         }
     }
 
+    func requestSelectNote(at index: Int) {
+        MainContext.idle { [weak self] in
+            self?.selectNote(at: index)
+        }
+    }
+
     func loadInitialNotes() {
         do {
             var notes = try repository.loadNotes()

@@ -150,7 +150,7 @@ struct CLITests {
         #expect(createResult.exitCode == 0)
 
         let defaultDirectory = xdgDataHome
-            .appendingPathComponent("me.spaceinbox.SwiftyNotes", isDirectory: true)
+            .appendingPathComponent(AppIdentity.identifier, isDirectory: true)
             .appendingPathComponent("notes", isDirectory: true)
         let repository = NotesRepository(notesDirectory: defaultDirectory)
         let notes = try repository.loadNotes()
@@ -175,7 +175,7 @@ struct CLITests {
         let customNotesDirectory = temp.appendingPathComponent("custom-notes", isDirectory: true)
         let settingsStore = AppSettingsStore(
             settingsFileURL: xdgConfigHome
-                .appendingPathComponent("me.spaceinbox.SwiftyNotes", isDirectory: true)
+                .appendingPathComponent(AppIdentity.identifier, isDirectory: true)
                 .appendingPathComponent("settings.json", isDirectory: false)
         )
         try settingsStore.save(AppSettings(customNotesDirectoryPath: customNotesDirectory.path()))
@@ -196,7 +196,7 @@ struct CLITests {
         #expect(notes.first?.title == "Configured Path")
 
         let defaultDirectory = xdgDataHome
-            .appendingPathComponent("me.spaceinbox.SwiftyNotes", isDirectory: true)
+            .appendingPathComponent(AppIdentity.identifier, isDirectory: true)
             .appendingPathComponent("notes", isDirectory: true)
         #expect(!FileManager.default.fileExists(atPath: defaultDirectory.path()))
     }

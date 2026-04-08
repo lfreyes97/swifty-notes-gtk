@@ -93,6 +93,10 @@ extension MainWindow {
         selectNote(at: index)
     }
 
+    func debugRequestSelectDisplayedNote(at index: Int) {
+        requestSelectNote(at: index)
+    }
+
     func debugOpenContextMenuForDisplayedNote(at index: Int) {
         guard displayedNotes.indices.contains(index) else { return }
         let note = displayedNotes[index]

@@ -29,9 +29,9 @@ cp -a usr %{buildroot}/
 /usr/libexec/swifty-notes/SwiftyNotes
 %dir /usr/libexec/swifty-notes/swifty-notes-gtk_SwiftyNotes.resources
 /usr/libexec/swifty-notes/swifty-notes-gtk_SwiftyNotes.resources/*
-/usr/share/applications/me.spaceinbox.SwiftyNotes.desktop
-/usr/share/icons/hicolor/scalable/apps/me.spaceinbox.SwiftyNotes.svg
-/usr/share/metainfo/me.spaceinbox.SwiftyNotes.metainfo.xml
+/usr/share/applications/me.spaceinbox.swiftynotes.desktop
+/usr/share/icons/hicolor/scalable/apps/me.spaceinbox.swiftynotes.svg
+/usr/share/metainfo/me.spaceinbox.swiftynotes.metainfo.xml
 
 %changelog
 * Tue Apr 08 2026 Sergey Armodin <makoni@users.noreply.github.com> - @VERSION@-1

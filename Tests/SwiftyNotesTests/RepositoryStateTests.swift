@@ -186,6 +186,41 @@ struct RepositoryStateTests {
     }
 
     @Test
+    func repositoryMigratesOldestLegacyDefaultStoragePrefix() throws {
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let legacyNotesDirectory = temp
+            .appendingPathComponent(AppIdentity.oldestLegacyIdentifier, isDirectory: true)
+            .appendingPathComponent("notes", isDirectory: true)
+        try FileManager.default.createDirectory(at: legacyNotesDirectory, withIntermediateDirectories: true)
+        try "# Oldest Legacy".write(
+            to: legacyNotesDirectory.appendingPathComponent("legacy.md", isDirectory: false),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let migratedRepository = NotesRepository(
+            notesDirectory: temp
+                .appendingPathComponent(AppIdentity.identifier, isDirectory: true)
+                .appendingPathComponent("notes", isDirectory: true)
+        )
+
+        let notes = try migratedRepository.loadNotes()
+        #expect(notes.count == 1)
+        #expect(notes.first?.content == "# Oldest Legacy")
+        #expect(FileManager.default.fileExists(
+            atPath: temp
+                .appendingPathComponent(AppIdentity.identifier, isDirectory: true)
+                .appendingPathComponent("notes", isDirectory: true)
+                .path()
+        ))
+        #expect(!FileManager.default.fileExists(
+            atPath: temp.appendingPathComponent(AppIdentity.oldestLegacyIdentifier, isDirectory: true).path()
+        ))
+    }
+
+    @Test
     func workspaceStateStoreMigratesLegacyDefaultStatePrefix() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }

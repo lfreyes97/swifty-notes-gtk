@@ -10,7 +10,7 @@ EOF
 version=""
 output_dir=""
 repo_slug="makoni/swifty-notes-gtk"
-app_id="me.spaceinbox.SwiftyNotes"
+app_id="me.spaceinbox.swiftynotes"
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -66,7 +66,7 @@ tar \
     --exclude=.build \
     --exclude=Packages \
     --exclude=packaging/out \
-    --exclude=flatpak/me.spaceinbox.SwiftyNotes.yml \
+    --exclude=flatpak/me.spaceinbox.swiftynotes.yml \
     --exclude=default.profraw \
     -C "$repo_root" \
     -cf - \

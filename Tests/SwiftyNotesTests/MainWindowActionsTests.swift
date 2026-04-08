@@ -10,7 +10,7 @@ struct MainWindowActionsTests {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
-        let app = Application(id: "me.spaceinbox.SwiftyNotes.Tests.ContextMenu")
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.contextmenu")
         try app.register()
 
         let window = MainWindow(
@@ -69,7 +69,7 @@ struct MainWindowActionsTests {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
-        let app = Application(id: "me.spaceinbox.SwiftyNotes.Tests.SettingsWindow")
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.settingswindow")
         try app.register()
 
         let originalScheme = StyleManager.default.colorScheme
@@ -136,7 +136,7 @@ struct MainWindowActionsTests {
         )
         try settingsStore.save(AppSettings(customNotesDirectoryPath: sourceDirectory.path()))
 
-        let app = Application(id: "me.spaceinbox.SwiftyNotes.Tests.SettingsMove")
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.settingsmove")
         try app.register()
 
         let window = MainWindow(
@@ -168,7 +168,7 @@ struct MainWindowActionsTests {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
-        let app = Application(id: "me.spaceinbox.SwiftyNotes.Tests.SettingsControls")
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.settingscontrols")
         try app.register()
 
         let originalScheme = StyleManager.default.colorScheme
@@ -254,7 +254,7 @@ struct MainWindowActionsTests {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
-        let app = Application(id: "me.spaceinbox.SwiftyNotes.Tests.SettingsApply")
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.settingsapply")
         try app.register()
 
         let originalScheme = StyleManager.default.colorScheme
@@ -311,7 +311,7 @@ struct MainWindowActionsTests {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
-        let app = Application(id: "me.spaceinbox.SwiftyNotes.Tests.OpenNotesFolder")
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.opennotesfolder")
         try app.register()
 
         let openedURL = URLRecorder()
@@ -344,7 +344,7 @@ struct MainWindowActionsTests {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
-        let app = Application(id: "me.spaceinbox.SwiftyNotes.Tests.OpenNotesFolderAction")
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.opennotesfolderaction")
         try app.register()
 
         let openedURL = URLRecorder()
@@ -418,7 +418,7 @@ struct MainWindowActionsTests {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
-        let app = Application(id: "me.spaceinbox.SwiftyNotes.Tests.AboutDialog")
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.aboutdialog")
         try app.register()
 
         let window = MainWindow(
@@ -465,7 +465,7 @@ struct MainWindowActionsTests {
             }
         }
 
-        let app = Application(id: "me.spaceinbox.SwiftyNotes.Tests.AboutDialogReleaseVersion")
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.aboutdialogreleaseversion")
         try app.register()
 
         let window = MainWindow(
@@ -510,7 +510,7 @@ struct MainWindowActionsTests {
         _ = try repository.save(note: first)
         _ = try repository.save(note: second)
 
-        let app = Application(id: "me.spaceinbox.SwiftyNotes.Tests.SelectionSwitch")
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.selectionswitch")
         try app.register()
 
         let window = MainWindow(
@@ -566,7 +566,7 @@ struct MainWindowActionsTests {
         _ = try repository.save(note: alpha)
         _ = try repository.save(note: zeta)
 
-        let app = Application(id: "me.spaceinbox.SwiftyNotes.Tests.SortControl")
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.sortcontrol")
         try app.register()
 
         let window = MainWindow(

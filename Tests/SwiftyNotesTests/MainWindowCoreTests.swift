@@ -10,7 +10,7 @@ struct MainWindowCoreTests {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
-        let app = Application(id: "me.spaceinbox.SwiftyNotes.Tests")
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests")
         try app.register()
 
         let window = MainWindow(
@@ -46,7 +46,7 @@ struct MainWindowCoreTests {
         let repository = NotesRepository(notesDirectory: temp)
         _ = try repository.createNote(initialContent: "# Initial\n\nPreview body")
 
-        let app = Application(id: "me.spaceinbox.SwiftyNotes.Tests.InitialPreview")
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.initialpreview")
         try app.register()
 
         let window = MainWindow(
@@ -73,7 +73,7 @@ struct MainWindowCoreTests {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
-        let app = Application(id: "me.spaceinbox.SwiftyNotes.Tests.EditorPreferences")
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.editorpreferences")
         try app.register()
 
         let originalScheme = StyleManager.default.colorScheme
@@ -112,7 +112,7 @@ struct MainWindowCoreTests {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
-        let app = Application(id: "me.spaceinbox.SwiftyNotes.Tests.Create")
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.create")
         try app.register()
 
         let window = MainWindow(
@@ -138,7 +138,7 @@ struct MainWindowCoreTests {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
-        let app = Application(id: "me.spaceinbox.SwiftyNotes.Tests.CreatePresented")
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.createpresented")
         try app.register()
 
         let window = MainWindow(
@@ -171,7 +171,7 @@ struct MainWindowCoreTests {
         let repository = NotesRepository(notesDirectory: temp)
         let existing = try repository.createNote(initialContent: "# Images\n\nBody")
 
-        let app = Application(id: "me.spaceinbox.SwiftyNotes.Tests.DropImage")
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.dropimage")
         try app.register()
 
         let window = MainWindow(
@@ -205,7 +205,7 @@ struct MainWindowCoreTests {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
-        let app = Application(id: "me.spaceinbox.SwiftyNotes.Tests.Signal")
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.signal")
         try app.register()
 
         let window = MainWindow(
@@ -229,11 +229,62 @@ struct MainWindowCoreTests {
     }
 
     @Test @MainActor
+    func mainWindowDeferredSelectionSwitchRunsAfterMainLoopDrain() throws {
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let repository = NotesRepository(notesDirectory: temp)
+        let first = Note(
+            id: UUID(),
+            filename: "first.md",
+            createdAt: Date(timeIntervalSince1970: 100),
+            updatedAt: Date(timeIntervalSince1970: 100),
+            content: "# First\n\nOne"
+        )
+        let second = Note(
+            id: UUID(),
+            filename: "second.md",
+            createdAt: Date(timeIntervalSince1970: 200),
+            updatedAt: Date(timeIntervalSince1970: 200),
+            content: "# Second\n\nTwo"
+        )
+        let savedFirst = try repository.save(note: first)
+        let savedSecond = try repository.save(note: second)
+
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.deferredselection")
+        try app.register()
+
+        let window = MainWindow(
+            application: app,
+            state: AppState(),
+            stateStore: WorkspaceStateStore(
+                stateFileURL: temp.appendingPathComponent("workspace.json", isDirectory: false)
+            ),
+            repository: repository,
+            renderer: MarkdownRenderer(),
+            autosave: AutosaveCoordinator()
+        )
+
+        window.present()
+        window.debugLoadInitialNotes()
+
+        #expect(window.debugSelectedNoteStableID() == savedSecond.stableID)
+
+        window.debugRequestSelectDisplayedNote(at: 1)
+        #expect(window.debugSelectedNoteStableID() == savedSecond.stableID)
+
+        window.debugDrainMainContext()
+        #expect(window.debugSelectedNoteStableID() == savedFirst.stableID)
+        #expect(window.debugPreviewText.contains("First"))
+        #expect(window.debugPreviewText.contains("One"))
+    }
+
+    @Test @MainActor
     func mainWindowToolbarButtonsExposeStandardTooltips() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
-        let app = Application(id: "me.spaceinbox.SwiftyNotes.Tests.Tooltips")
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.tooltips")
         try app.register()
 
         let window = MainWindow(
@@ -266,7 +317,7 @@ struct MainWindowCoreTests {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
-        let app = Application(id: "me.spaceinbox.SwiftyNotes.Tests.SidebarToggle")
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.sidebartoggle")
         try app.register()
 
         let window = MainWindow(
@@ -305,7 +356,7 @@ struct MainWindowCoreTests {
         _ = try repository.createNote(initialContent: "# Beta\n\nSecond")
 
         let stateStore = WorkspaceStateStore(stateFileURL: stateFileURL)
-        let app = Application(id: "me.spaceinbox.SwiftyNotes.Tests.Search")
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.search")
         try app.register()
 
         let window = MainWindow(
@@ -333,7 +384,7 @@ struct MainWindowCoreTests {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
-        let app = Application(id: "me.spaceinbox.SwiftyNotes.Tests.PreviewPane")
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.previewpane")
         try app.register()
 
         let window = MainWindow(
@@ -379,7 +430,7 @@ struct MainWindowCoreTests {
             windowHeight: 720,
             previewWidth: 620
         )
-        let app = Application(id: "me.spaceinbox.SwiftyNotes.Tests.RestoreState")
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.restorestate")
         try app.register()
 
         let window = MainWindow(
@@ -408,7 +459,7 @@ struct MainWindowCoreTests {
         defer { try? FileManager.default.removeItem(at: temp) }
 
         let repository = NotesRepository(notesDirectory: temp)
-        let app = Application(id: "me.spaceinbox.SwiftyNotes.Tests.SaveButton")
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.savebutton")
         try app.register()
 
         let window = MainWindow(
@@ -444,7 +495,7 @@ struct MainWindowCoreTests {
         defer { try? FileManager.default.removeItem(at: temp) }
 
         let repository = NotesRepository(notesDirectory: temp)
-        let app = Application(id: "me.spaceinbox.SwiftyNotes.Tests.Autosave")
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.autosave")
         try app.register()
 
         let window = MainWindow(
@@ -490,7 +541,7 @@ struct MainWindowCoreTests {
         let repository = NotesRepository(notesDirectory: temp)
         let externalRepository = NotesRepository(notesDirectory: temp)
 
-        let app = Application(id: "me.spaceinbox.SwiftyNotes.Tests.ExternalCreate")
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.externalcreate")
         try app.register()
 
         let window = MainWindow(
@@ -523,7 +574,7 @@ struct MainWindowCoreTests {
         let original = try repository.createNote(initialContent: "# Original\n\nBody")
         let externalRepository = NotesRepository(notesDirectory: temp)
 
-        let app = Application(id: "me.spaceinbox.SwiftyNotes.Tests.ExternalUpdate")
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.externalupdate")
         try app.register()
 
         let window = MainWindow(
