@@ -12,6 +12,9 @@ on:
 permissions:
   contents: read
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   prepare-install-roots:
     runs-on: ubuntu-24.04
@@ -142,7 +145,16 @@ jobs:
           verbose: true
 
       - name: Install Flatpak linter
-        run: flatpak install -y flathub org.flatpak.Builder
+        run: |
+          for attempt in 1 2 3; do
+            if flatpak install -y flathub org.flatpak.Builder; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              exit 1
+            fi
+            sleep $((attempt * 10))
+          done
 
       - name: Lint Flatpak manifest
         run: cd packaging/out/flatpak && flatpak run --command=flatpak-builder-lint org.flatpak.Builder manifest me.spaceinbox.SwiftyNotes.yml
