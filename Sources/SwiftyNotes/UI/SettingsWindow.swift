@@ -18,18 +18,12 @@ final class SettingsWindow {
     private let notesFolderRow = ActionRow(title: "Notes folder")
     private let resetToDefaultRow = ActionRow(title: "Use default location")
     private let openCurrentFolderRow = ActionRow(title: "Open current folder")
-    private let wrapLinesRow = ActionRow(title: "Wrap long lines")
-    private let fontSizeRow = ActionRow(title: "Editor font size")
-    private let tabWidthRow = ActionRow(title: "Tab width")
-    private let indentStyleRow = ActionRow(title: "Indent style")
-    private let autosaveDelayRow = ActionRow(title: "Autosave delay")
-    private let appearanceRow = ActionRow(title: "Appearance")
-    private let wrapLinesSwitch = Switch()
-    private let fontSizeSpinButton = SpinButton(min: 10, max: 32, step: 1)
-    private let tabWidthSpinButton = SpinButton(min: 1, max: 8, step: 1)
-    private let indentStyleDropDown = DropDown(strings: EditorIndentStyle.allCases.map(\.displayName))
-    private let autosaveDelaySpinButton = SpinButton(min: 1, max: 60, step: 1)
-    private let appearanceDropDown = DropDown(strings: AppearanceMode.allCases.map(\.displayName))
+    private let wrapLinesRow = SwitchRow(title: "Wrap long lines")
+    private let fontSizeRow = SpinRow(title: "Editor font size", min: 10, max: 32, step: 1)
+    private let tabWidthRow = SpinRow(title: "Tab width", min: 1, max: 8, step: 1)
+    private let indentStyleRow = ComboRow(title: "Indent style")
+    private let autosaveDelayRow = SpinRow(title: "Autosave delay", min: 1, max: 60, step: 1)
+    private let appearanceRow = ComboRow(title: "Appearance")
     private let browseButton = Button(label: "Browse…")
     private let resetButton = Button(label: "Reset")
     private let openButton = Button(label: "Open")
@@ -105,10 +99,10 @@ final class SettingsWindow {
             title: "Storage",
             description: "Choose where Swifty Notes stores markdown files and companion assets."
         )
-        storageGroup.separateRows = true
 
         notesFolderRow.subtitleSelectable = true
         notesFolderRow.subtitleLines = 3
+        browseButton.valign = .center
         browseButton.onClicked { [weak self] in
             self?.chooseNotesFolder()
         }
@@ -119,6 +113,7 @@ final class SettingsWindow {
         resetToDefaultRow.subtitle = defaultNotesDirectory.path()
         resetToDefaultRow.subtitleSelectable = true
         resetToDefaultRow.subtitleLines = 3
+        resetButton.valign = .center
         resetButton.onClicked { [weak self] in
             self?.applyNotesFolderChange(self?.defaultNotesDirectory)
         }
@@ -127,6 +122,7 @@ final class SettingsWindow {
         storageGroup.add(resetToDefaultRow)
 
         openCurrentFolderRow.subtitle = "Reveal the active notes folder in your file manager."
+        openButton.valign = .center
         openButton.onClicked { [weak self] in
             self?.openCurrentNotesFolder()
         }
@@ -138,39 +134,32 @@ final class SettingsWindow {
             title: "Editor",
             description: "Control wrapping, indentation, and editor text size."
         )
-        editorGroup.separateRows = true
+
         wrapLinesRow.subtitle = "Wrap markdown paragraphs instead of scrolling horizontally."
-        wrapLinesRow.addSuffix(wrapLinesSwitch)
-        wrapLinesRow.activatableWidget = wrapLinesSwitch
-        wrapLinesSwitch.onActiveChanged { [weak self] in
+        wrapLinesRow.onNotify(.active) { [weak self] in
             self?.handleInlinePreferenceChange()
         }
         editorGroup.add(wrapLinesRow)
 
         fontSizeRow.subtitle = "Points"
-        fontSizeSpinButton.digits = 0
-        fontSizeSpinButton.numeric = true
-        fontSizeRow.addSuffix(fontSizeSpinButton)
-        fontSizeRow.activatableWidget = fontSizeSpinButton
-        fontSizeSpinButton.onValueChanged { [weak self] in
+        fontSizeRow.digits = 0
+        fontSizeRow.numeric = true
+        fontSizeRow.onNotify(.value) { [weak self] in
             self?.handleInlinePreferenceChange()
         }
         editorGroup.add(fontSizeRow)
 
         tabWidthRow.subtitle = "Columns"
-        tabWidthSpinButton.digits = 0
-        tabWidthSpinButton.numeric = true
-        tabWidthRow.addSuffix(tabWidthSpinButton)
-        tabWidthRow.activatableWidget = tabWidthSpinButton
-        tabWidthSpinButton.onValueChanged { [weak self] in
+        tabWidthRow.digits = 0
+        tabWidthRow.numeric = true
+        tabWidthRow.onNotify(.value) { [weak self] in
             self?.handleInlinePreferenceChange()
         }
         editorGroup.add(tabWidthRow)
 
         indentStyleRow.subtitle = "Choose whether Tab inserts spaces or hard tabs."
-        indentStyleRow.addSuffix(indentStyleDropDown)
-        indentStyleRow.activatableWidget = indentStyleDropDown
-        indentStyleDropDown.onSelectedChanged { [weak self] in
+        indentStyleRow.setModel(StringList(EditorIndentStyle.allCases.map(\.displayName)))
+        indentStyleRow.onNotify(.selected) { [weak self] in
             self?.handleInlinePreferenceChange()
         }
         editorGroup.add(indentStyleRow)
@@ -179,13 +168,10 @@ final class SettingsWindow {
             title: "Saving",
             description: "Autosave runs after the last edit using the configured delay."
         )
-        savingGroup.separateRows = true
         autosaveDelayRow.subtitle = "Seconds"
-        autosaveDelaySpinButton.digits = 0
-        autosaveDelaySpinButton.numeric = true
-        autosaveDelayRow.addSuffix(autosaveDelaySpinButton)
-        autosaveDelayRow.activatableWidget = autosaveDelaySpinButton
-        autosaveDelaySpinButton.onValueChanged { [weak self] in
+        autosaveDelayRow.digits = 0
+        autosaveDelayRow.numeric = true
+        autosaveDelayRow.onNotify(.value) { [weak self] in
             self?.handleInlinePreferenceChange()
         }
         savingGroup.add(autosaveDelayRow)
@@ -194,10 +180,8 @@ final class SettingsWindow {
             title: "Appearance",
             description: "Override the application theme or follow the system."
         )
-        appearanceGroup.separateRows = true
-        appearanceRow.addSuffix(appearanceDropDown)
-        appearanceRow.activatableWidget = appearanceDropDown
-        appearanceDropDown.onSelectedChanged { [weak self] in
+        appearanceRow.setModel(StringList(AppearanceMode.allCases.map(\.displayName)))
+        appearanceRow.onNotify(.selected) { [weak self] in
             self?.handleInlinePreferenceChange()
         }
         appearanceGroup.add(appearanceRow)
@@ -281,12 +265,12 @@ final class SettingsWindow {
     private func updateSettings(_ settings: AppSettings) {
         isUpdatingControls = true
         currentSettings = settings.normalized(defaultDirectory: defaultNotesDirectory)
-        wrapLinesSwitch.active = currentSettings.wrapsEditorLines
-        fontSizeSpinButton.value = Double(currentSettings.editorFontSize)
-        tabWidthSpinButton.value = Double(currentSettings.editorTabWidth)
-        indentStyleDropDown.selected = EditorIndentStyle.allCases.firstIndex(of: currentSettings.editorIndentStyle) ?? 0
-        autosaveDelaySpinButton.value = Double(currentSettings.autosaveDelaySeconds)
-        appearanceDropDown.selected = AppearanceMode.allCases.firstIndex(of: currentSettings.appearanceMode) ?? 0
+        wrapLinesRow.active = currentSettings.wrapsEditorLines
+        fontSizeRow.value = Double(currentSettings.editorFontSize)
+        tabWidthRow.value = Double(currentSettings.editorTabWidth)
+        indentStyleRow.selected = EditorIndentStyle.allCases.firstIndex(of: currentSettings.editorIndentStyle) ?? 0
+        autosaveDelayRow.value = Double(currentSettings.autosaveDelaySeconds)
+        appearanceRow.selected = AppearanceMode.allCases.firstIndex(of: currentSettings.appearanceMode) ?? 0
         isUpdatingControls = false
     }
 
@@ -294,18 +278,18 @@ final class SettingsWindow {
         guard !isUpdatingControls else { return }
 
         let indentStyle = EditorIndentStyle.allCases[
-            min(max(indentStyleDropDown.selected, 0), EditorIndentStyle.allCases.count - 1)
+            min(max(indentStyleRow.selected, 0), EditorIndentStyle.allCases.count - 1)
         ]
         let appearanceMode = AppearanceMode.allCases[
-            min(max(appearanceDropDown.selected, 0), AppearanceMode.allCases.count - 1)
+            min(max(appearanceRow.selected, 0), AppearanceMode.allCases.count - 1)
         ]
         let updatedSettings = AppSettings(
             customNotesDirectoryPath: currentSettings.customNotesDirectoryPath,
-            wrapsEditorLines: wrapLinesSwitch.active,
-            editorFontSize: Int(fontSizeSpinButton.value.rounded()),
-            editorTabWidth: Int(tabWidthSpinButton.value.rounded()),
+            wrapsEditorLines: wrapLinesRow.active,
+            editorFontSize: Int(fontSizeRow.value.rounded()),
+            editorTabWidth: Int(tabWidthRow.value.rounded()),
             editorIndentStyle: indentStyle,
-            autosaveDelaySeconds: Int(autosaveDelaySpinButton.value.rounded()),
+            autosaveDelaySeconds: Int(autosaveDelayRow.value.rounded()),
             appearanceMode: appearanceMode
         )
 
@@ -341,32 +325,32 @@ extension SettingsWindow {
     }
 
     func debugSetWrapLines(_ value: Bool) {
-        wrapLinesSwitch.active = value
+        wrapLinesRow.active = value
         handleInlinePreferenceChange()
     }
 
     func debugSetFontSize(_ value: Int) {
-        fontSizeSpinButton.value = Double(value)
+        fontSizeRow.value = Double(value)
         handleInlinePreferenceChange()
     }
 
     func debugSetTabWidth(_ value: Int) {
-        tabWidthSpinButton.value = Double(value)
+        tabWidthRow.value = Double(value)
         handleInlinePreferenceChange()
     }
 
     func debugSetIndentStyle(_ value: EditorIndentStyle) {
-        indentStyleDropDown.selected = EditorIndentStyle.allCases.firstIndex(of: value) ?? 0
+        indentStyleRow.selected = EditorIndentStyle.allCases.firstIndex(of: value) ?? 0
         handleInlinePreferenceChange()
     }
 
     func debugSetAutosaveDelaySeconds(_ value: Int) {
-        autosaveDelaySpinButton.value = Double(value)
+        autosaveDelayRow.value = Double(value)
         handleInlinePreferenceChange()
     }
 
     func debugSetAppearanceMode(_ value: AppearanceMode) {
-        appearanceDropDown.selected = AppearanceMode.allCases.firstIndex(of: value) ?? 0
+        appearanceRow.selected = AppearanceMode.allCases.firstIndex(of: value) ?? 0
         handleInlinePreferenceChange()
     }
 }
