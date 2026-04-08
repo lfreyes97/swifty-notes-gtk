@@ -68,7 +68,7 @@ Release packaging assets live under `packaging/`, `snap/`, and `data/`.
 - Build a source-built `.flatpak` bundle: `packaging/release/build-flatpak.sh --version 1.0.0 --output packaging/out/flatpak`
 - Build `.rpm` artifacts in CI with `packaging/release/build-rpm.sh`
 
-The Flatpak manifest template lives in `flatpak/me.spaceinbox.SwiftyNotes.yml.in` and pins the SwiftPM dependency sources used in CI. GitHub Actions release automation lives in `.github/workflows/release-packages.yml` and accepts a `version` input via `workflow_dispatch`.
+The Flatpak manifest template lives in `flatpak/me.spaceinbox.swiftynotes.yml.in` and pins the SwiftPM dependency sources used in CI. GitHub Actions release automation lives in `.github/workflows/release-packages.yml` and accepts a `version` input via `workflow_dispatch`.
 
 ## CLI
 
@@ -82,13 +82,13 @@ swift run SwiftyNotes -- cli create --content '# Title\n\nBody'
 swift run SwiftyNotes -- cli update <note-id> --stdin
 ```
 
-`update` replaces the full markdown content of the target note.
+`update` replaces the full markdown content of the target note. The CLI emits JSON that is easy to drive from scripts, shell pipelines, and AI agents while still operating on the same file-backed notes as the desktop app.
 
 ## Storage
 
-- Notes directory by default: `XDG_DATA_HOME/me.spaceinbox.SwiftyNotes/notes`
-- Configurable notes directory: set in the app via **Settings** and persisted in `XDG_CONFIG_HOME/me.spaceinbox.SwiftyNotes/settings.json`
-- Workspace state: `XDG_STATE_HOME/me.spaceinbox.SwiftyNotes/workspace.json`
+- Notes directory by default: `XDG_DATA_HOME/me.spaceinbox.swiftynotes/notes`
+- Configurable notes directory: set in the app via **Settings** and persisted in `XDG_CONFIG_HOME/me.spaceinbox.swiftynotes/settings.json`
+- Workspace state: `XDG_STATE_HOME/me.spaceinbox.swiftynotes/workspace.json`
 
 If the notes directory is empty on first launch, the app creates the `Markdown Showcase` note automatically.
 
