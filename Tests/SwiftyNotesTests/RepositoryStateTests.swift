@@ -59,7 +59,9 @@ struct RepositoryStateTests {
         #expect(notesAfterSeed.count == 1)
         #expect(notesAfterSeed[0].title == "Markdown Showcase")
         #expect(notesAfterSeed[0].content == MarkdownShowcaseSeed.content)
-        #expect(FileManager.default.fileExists(atPath: temp.appendingPathComponent(MarkdownShowcaseSeed.imageFilename).path()))
+        let imageURL = temp.appendingPathComponent(MarkdownShowcaseSeed.imageFilename)
+        #expect(FileManager.default.fileExists(atPath: imageURL.path()))
+        #expect(try Data(contentsOf: imageURL) == MarkdownShowcaseSeed.imageData())
 
         let secondSeed = try repository.seedMarkdownShowcaseIfNeeded(createdAt: Date(timeIntervalSince1970: 200))
         let notesAfterSecondSeed = try repository.loadNotes()

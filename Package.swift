@@ -23,6 +23,9 @@ let package = Package(
             dependencies: [
                 .product(name: "Adwaita", package: "swift-adwaita"),
                 .product(name: "Markdown", package: "swift-markdown")
+            ],
+            resources: [
+                .process("Resources")
             ]
         ),
         .testTarget(

@@ -247,9 +247,7 @@ public final class NotesRepository: @unchecked Sendable {
     private func persistShowcaseImageUnlockedIfNeeded() throws {
         let url = notesDirectory.appendingPathComponent(MarkdownShowcaseSeed.imageFilename, isDirectory: false)
         guard !fileManager.fileExists(atPath: url.path()) else { return }
-        guard let data = Data(base64Encoded: MarkdownShowcaseSeed.imageBase64) else {
-            throw CocoaError(.fileReadCorruptFile)
-        }
+        let data = try MarkdownShowcaseSeed.imageData()
         try data.write(to: url, options: .atomic)
     }
 

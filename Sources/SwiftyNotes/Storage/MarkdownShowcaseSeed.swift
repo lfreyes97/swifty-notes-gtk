@@ -65,12 +65,20 @@ enum MarkdownShowcaseSeed {
 
     ## Image
 
-    ![Tiny demo pixel](markdown-demo-image.png)
+    ![Swift and Adwaita showcase artwork](markdown-demo-image.png)
 
     ## Mixed Content
     
     You can combine text, lists, tables, and code blocks in one note to create rich documentation or project notes
     """
 
-    static let imageBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aM6sAAAAASUVORK5CYII="
+    static func imageData() throws -> Data {
+        guard let url = Bundle.module.url(
+            forResource: "markdown-demo-image",
+            withExtension: "png"
+        ) else {
+            throw CocoaError(.fileNoSuchFile)
+        }
+        return try Data(contentsOf: url)
+    }
 }

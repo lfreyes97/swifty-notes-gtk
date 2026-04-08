@@ -8,9 +8,8 @@ final class MarkdownPreview {
     let rootScroll: ScrolledWindow
 
     private enum PreviewMetrics {
-        static let listIndentPerLevel = 12
-        static let listMarkerSpacing = 6
-        static let nestedListBottomSpacing = 3
+        static let listIndentPerLevel = 10
+        static let listMarkerSpacing = 4
     }
 
     private static let previewCSS = CSSProvider.loadGlobal("""
@@ -32,6 +31,16 @@ final class MarkdownPreview {
         margin-bottom: 1px;
     }
 
+    .preview-paragraph-label,
+    .preview-blockquote-label {
+        line-height: 1.24;
+    }
+
+    .preview-nested-list-row {
+        margin-top: -7px;
+        margin-bottom: 6px;
+    }
+
     .preview-compact-list-label,
     .preview-compact-list-marker,
     .preview-task-list-label,
@@ -41,6 +50,16 @@ final class MarkdownPreview {
         padding-top: 0;
         padding-bottom: 0;
         min-height: 0;
+    }
+
+    .preview-compact-list-label,
+    .preview-compact-list-marker {
+        line-height: 0.72;
+    }
+
+    .preview-task-list-label,
+    .preview-task-list-marker {
+        line-height: 0.84;
     }
 
     .preview-table-header {
@@ -172,6 +191,7 @@ final class MarkdownPreview {
 
     private func makeParagraph(text: RenderedText) -> Label {
         let label = makeMarkupLabel(text.markup)
+        label.addCSSClass("preview-paragraph-label")
         label.selectable = true
         return label
     }
@@ -213,6 +233,7 @@ final class MarkdownPreview {
 
         let content = Box(orientation: .vertical, spacing: 6)
         let label = makeMarkupLabel(text.markup)
+        label.addCSSClass("preview-blockquote-label")
         label.addCSSClass(.dimLabel)
         label.selectable = true
         content.append(label)
@@ -223,9 +244,16 @@ final class MarkdownPreview {
     }
 
     private func makeList(_ items: [(text: RenderedText, depth: Int, marker: String)]) -> Widget {
-        guard let first = items.first else { return Box() }
-        var index = 0
-        return makeListLevel(items, index: &index, depth: first.depth)
+        let list = Box(orientation: .vertical, spacing: 0)
+        for item in items {
+            list.append(makeListItem(
+                text: item.text,
+                depth: item.depth,
+                marker: item.marker,
+                compact: !isTaskListMarker(item.marker)
+            ))
+        }
+        return list
     }
 
     private func makeListItem(text: RenderedText, depth: Int, marker: String, compact: Bool) -> Widget {
@@ -233,6 +261,9 @@ final class MarkdownPreview {
         row.marginStart = PreviewMetrics.listIndentPerLevel * depth
         row.addCSSClass("preview-list-row")
         row.addCSSClass(compact ? "preview-compact-list-row" : "preview-task-list-row")
+        if depth > 0 {
+            row.addCSSClass("preview-nested-list-row")
+        }
 
         let markerLabel = Label(displayMarker(for: marker, depth: depth))
         markerLabel.xalign = 0
@@ -253,50 +284,6 @@ final class MarkdownPreview {
         row.append(markerLabel)
         row.append(content)
         return row
-    }
-
-    private func makeListLevel(
-        _ items: [(text: RenderedText, depth: Int, marker: String)],
-        index: inout Int,
-        depth: Int
-    ) -> Box {
-        let list = Box(orientation: .vertical, spacing: 0)
-
-        while index < items.count {
-            let item = items[index]
-            if item.depth < depth {
-                break
-            }
-            if item.depth > depth {
-                let nested = makeListLevel(items, index: &index, depth: item.depth)
-                nested.marginTop = 0
-                nested.marginBottom = 0
-                list.append(nested)
-                continue
-            }
-
-            let itemContainer = Box(orientation: .vertical, spacing: 0)
-            itemContainer.marginTop = 0
-            itemContainer.marginBottom = 0
-            itemContainer.append(makeListItem(
-                text: item.text,
-                depth: item.depth,
-                marker: item.marker,
-                compact: !isTaskListMarker(item.marker)
-            ))
-            index += 1
-
-            if index < items.count, items[index].depth > depth {
-                let nested = makeListLevel(items, index: &index, depth: items[index].depth)
-                nested.marginTop = 0
-                nested.marginBottom = PreviewMetrics.nestedListBottomSpacing
-                itemContainer.append(nested)
-            }
-
-            list.append(itemContainer)
-        }
-
-        return list
     }
 
     private func displayMarker(for marker: String, depth: Int) -> String {
@@ -381,20 +368,24 @@ final class MarkdownPreview {
         let inner = Box(orientation: .vertical, spacing: 10)
         inner.setMargins(14)
 
-        let description = [alt, title, source].compactMap { value -> String? in
+        let descriptionParts = [alt, title].compactMap { value -> String? in
             guard let value, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
             return value
-        }.joined(separator: " — ")
+        }
+        let description = if descriptionParts.isEmpty {
+            source?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "Image"
+        } else {
+            descriptionParts.joined(separator: " — ")
+        }
 
         if let source,
-           let resolved = resolveImageSource(source),
-           let texture = Texture(filename: resolved.path) {
-            let picture = Picture()
-            picture.setPaintable(texture)
+           let resolved = resolveImageSource(source) {
+            let picture = Picture(filename: resolved.path())
             picture.alternativeText = alt.isEmpty ? (title ?? source) : alt
             picture.canShrink = true
             picture.contentFit = .contain
-            picture.setSizeRequest(height: 260)
+            picture.hexpand = true
+            picture.setSizeRequest(width: -1, height: 260)
             inner.append(picture)
         }
 

@@ -12,7 +12,10 @@ struct HTMLPreviewDocumentBuilder {
     func render(markdown: String) -> [RenderedBlock] {
         let html = HTMLFormatter.format(markdown)
         let nodes = HTMLSubsetParser().parse(html)
-        let rendered = restoringTaskListMarkers(in: blocks(from: nodes, listDepth: 0), markdown: markdown)
+        let rendered = restoringImageMetadata(
+            in: restoringTaskListMarkers(in: blocks(from: nodes, listDepth: 0), markdown: markdown),
+            markdown: markdown
+        )
         if rendered.isEmpty, markdown.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return [.paragraph(.plain("Nothing to preview yet."))]
         }
@@ -33,6 +36,9 @@ struct HTMLPreviewDocumentBuilder {
                 let level = Int(String(name.dropFirst())) ?? 1
                 return [.heading(level: level, text: inlineText(from: children))]
             case "p":
+                if let image = standaloneImage(from: children) {
+                    return [.image(alt: image.alt, source: image.source, title: image.title)]
+                }
                 let text = inlineText(from: children)
                 return text.plainText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? [] : [.paragraph(text)]
             case "blockquote", "aside":
@@ -161,6 +167,29 @@ struct HTMLPreviewDocumentBuilder {
             }
 
         return headers.isEmpty && rows.isEmpty ? [] : [.table(headers: headers, rows: rows, alignments: alignments)]
+    }
+
+    func standaloneImage(from nodes: [HTMLNode]) -> (alt: String, source: String?, title: String?)? {
+        let meaningfulNodes = nodes.compactMap { node -> HTMLNode? in
+            switch node.kind {
+            case let .text(text):
+                return text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : node
+            case .element:
+                return node
+            }
+        }
+
+        guard meaningfulNodes.count == 1,
+              case let .element(name, attributes, _) = meaningfulNodes[0].kind,
+              name == "img" else {
+            return nil
+        }
+
+        return (
+            alt: attributes["alt"] ?? "",
+            source: attributes["src"],
+            title: attributes["title"]
+        )
     }
 
     func inlineText(from nodes: [HTMLNode]) -> RenderedText {
@@ -292,6 +321,37 @@ struct HTMLPreviewDocumentBuilder {
             }
     }
 
+    func restoringImageMetadata(in blocks: [RenderedBlock], markdown: String) -> [RenderedBlock] {
+        let images = markdownImages(from: markdown)
+        guard !images.isEmpty else { return blocks }
+
+        var restored: [RenderedBlock] = []
+        var nextImageIndex = 0
+
+        for block in blocks {
+            guard case let .image(alt, source, title) = block, nextImageIndex < images.count else {
+                restored.append(block)
+                continue
+            }
+
+            let markdownImage = images[nextImageIndex]
+            restored.append(.image(
+                alt: alt.isEmpty ? markdownImage.alt : alt,
+                source: source ?? markdownImage.source,
+                title: title ?? markdownImage.title
+            ))
+            nextImageIndex += 1
+        }
+
+        return restored
+    }
+
+    func markdownImages(from markdown: String) -> [MarkdownImageMetadata] {
+        var collector = MarkdownImageCollector()
+        collector.visit(Document(parsing: markdown))
+        return collector.images
+    }
+
     func firstCheckboxNode(in nodes: [HTMLNode]) -> HTMLNode? {
         for node in nodes {
             if node.name == "input", node.attributes["type"] == "checkbox" {
@@ -317,3 +377,21 @@ struct HTMLPreviewDocumentBuilder {
     }
 }
 
+struct MarkdownImageMetadata {
+    let alt: String
+    let source: String?
+    let title: String?
+}
+
+struct MarkdownImageCollector: MarkupWalker {
+    var images: [MarkdownImageMetadata] = []
+
+    mutating func visitImage(_ image: Markdown.Image) {
+        images.append(.init(
+            alt: image.plainText,
+            source: image.source,
+            title: image.title
+        ))
+        descendInto(image)
+    }
+}

@@ -87,6 +87,23 @@ struct NoteModelAndRendererTests {
     }
 
     @Test
+    func rendererBuildsStandaloneImageBlock() {
+        let renderer = MarkdownRenderer()
+        let blocks = renderer.blocks(
+            for: "![Swift and Adwaita showcase artwork](markdown-demo-image.png)",
+            darkAppearance: false
+        )
+
+        #expect(blocks == [
+            .image(
+                alt: "Swift and Adwaita showcase artwork",
+                source: "markdown-demo-image.png",
+                title: nil
+            )
+        ])
+    }
+
+    @Test
     func rendererBuildsAlignedTableBlock() {
         let renderer = MarkdownRenderer()
         let blocks = renderer.blocks(for: """
