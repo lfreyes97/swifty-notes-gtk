@@ -7,10 +7,14 @@ final class MarkdownPreview {
     let container: Box
     let rootScroll: ScrolledWindow
 
+    private enum PreviewMetrics {
+        static let listIndentPerLevel = 12
+        static let listMarkerSpacing = 6
+        static let nestedListBottomSpacing = 3
+    }
+
     private static let previewCSS = CSSProvider.loadGlobal("""
-    .preview-list-row,
-    .preview-list-label,
-    .preview-list-marker {
+    .preview-list-row {
         margin-top: 0;
         margin-bottom: 0;
         padding-top: 0;
@@ -18,14 +22,25 @@ final class MarkdownPreview {
         min-height: 0;
     }
 
-    .preview-task-list-label,
-    .preview-task-list-marker {
-        line-height: 0.88;
+    .preview-compact-list-row {
+        margin-top: 0;
+        margin-bottom: 0;
+    }
+
+    .preview-task-list-row {
+        margin-top: 1px;
+        margin-bottom: 1px;
     }
 
     .preview-compact-list-label,
-    .preview-compact-list-marker {
-        line-height: 0.45;
+    .preview-compact-list-marker,
+    .preview-task-list-label,
+    .preview-task-list-marker {
+        margin-top: 0;
+        margin-bottom: 0;
+        padding-top: 0;
+        padding-bottom: 0;
+        min-height: 0;
     }
 
     .preview-table-header {
@@ -214,10 +229,10 @@ final class MarkdownPreview {
     }
 
     private func makeListItem(text: RenderedText, depth: Int, marker: String, compact: Bool) -> Widget {
-        let row = Box(orientation: .horizontal, spacing: 8)
-        row.marginStart = 16 * depth
-        row.marginBottom = compact ? 0 : 4
+        let row = Box(orientation: .horizontal, spacing: PreviewMetrics.listMarkerSpacing)
+        row.marginStart = PreviewMetrics.listIndentPerLevel * depth
         row.addCSSClass("preview-list-row")
+        row.addCSSClass(compact ? "preview-compact-list-row" : "preview-task-list-row")
 
         let markerLabel = Label(displayMarker(for: marker, depth: depth))
         markerLabel.xalign = 0
@@ -225,7 +240,7 @@ final class MarkdownPreview {
         markerLabel.valign = .start
         markerLabel.addCSSClass(.dimLabel)
         markerLabel.addCSSClass(compact ? "preview-compact-list-marker" : "preview-task-list-marker")
-        markerLabel.widthChars = max(marker.count, 2)
+        markerLabel.widthChars = markerWidth(for: marker)
 
         let content = makeMarkupLabel(text.markup)
         content.selectable = true
@@ -274,7 +289,7 @@ final class MarkdownPreview {
             if index < items.count, items[index].depth > depth {
                 let nested = makeListLevel(items, index: &index, depth: items[index].depth)
                 nested.marginTop = 0
-                nested.marginBottom = 8
+                nested.marginBottom = PreviewMetrics.nestedListBottomSpacing
                 itemContainer.append(nested)
             }
 
@@ -299,6 +314,17 @@ final class MarkdownPreview {
 
     private func isTaskListMarker(_ marker: String) -> Bool {
         marker == "[x]" || marker == "[ ]"
+    }
+
+    private func markerWidth(for marker: String) -> Int {
+        switch marker {
+        case "-":
+            return 1
+        case "[x]", "[ ]":
+            return 2
+        default:
+            return max(marker.count, 2)
+        }
     }
 
     private func makeSeparator() -> Separator {
