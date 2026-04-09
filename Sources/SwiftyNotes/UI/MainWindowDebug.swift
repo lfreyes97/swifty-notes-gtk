@@ -344,7 +344,9 @@ extension MainWindow {
     }
 
     func debugCloseAboutDialog() {
-        _ = activeAboutDialog?.close()
+        guard let activeAboutDialog else { return }
+        self.activeAboutDialog = nil
+        _ = activeAboutDialog.close()
     }
 
     var debugPreferredPreviewWidth: Int {

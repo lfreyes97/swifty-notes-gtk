@@ -201,7 +201,6 @@ final class MainWindow {
         editorPreviewPane.shrinkStartChild = false
         editorPreviewPane.shrinkEndChild = true
         editorPreviewPane.wideHandle = true
-        applyViewMode(animated: false)
 
         splitView.pinSidebar = true
         splitView.showSidebar = state.isSidebarVisible
@@ -220,6 +219,7 @@ final class MainWindow {
 
         toastOverlay.child = toolbar
         window.setContent(toastOverlay)
+        applyViewMode(animated: false)
     }
 
     func wireSignals() {
