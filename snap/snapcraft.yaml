@@ -21,6 +21,7 @@ source-code:
 icon: data/me.spaceinbox.swiftynotes.svg
 platforms:
   amd64:
+  arm64:
 
 apps:
   swifty-notes:

@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-core-test:
+    name: Build and core test (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            at-spi2-core \
+            dbus \
+            dbus-user-session \
+            libadwaita-1-dev \
+            libgtk-4-dev \
+            libgtksourceview-5-dev
+
+      - name: Build project
+        run: swift build
+
+      - name: Run core test suites
+        run: |
+          dbus-run-session -- bash -lc \
+            "swift test --filter 'CLICommandTests|CLITests|MainWindowActionsTests|MainWindowCoreTests|MarkdownFormattingTests|NoteModelAndRendererTests|RepositoryStateTests|SettingsStoreTests' --no-parallel"
+
+  ui-smoke-tests:
+    name: UI smoke tests
+    runs-on: ubuntu-24.04
+    needs: build-and-core-test
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Install smoke test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            at-spi2-core \
+            dbus \
+            dbus-user-session \
+            libadwaita-1-dev \
+            libgtk-4-dev \
+            libgtksourceview-5-dev \
+            python3-pyatspi \
+            weston
+
+      - name: Run Wayland smoke tests
+        run: |
+          dbus-run-session -- bash -lc \
+            "swift test --filter 'UISmokeTests' --no-parallel"

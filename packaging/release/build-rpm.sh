@@ -56,6 +56,7 @@ fi
 script_dir="$(cd "$(dirname "$0")" && pwd)"
 repo_root="$(cd "${script_dir}/../.." && pwd)"
 top_dir="$(mktemp -d)"
+build_arch="$(rpmbuild --eval '%{_arch}')"
 cleanup() {
     rm -rf "$top_dir"
 }
@@ -75,6 +76,7 @@ tar -C "$install_root" -czf "${top_dir}/SOURCES/${archive_name}" usr
 
 sed \
     -e "s|@VERSION@|${version}|g" \
+    -e "s|@BUILD_ARCH@|${build_arch}|g" \
     "${repo_root}/packaging/rpm/${package_name}.spec.in" \
     > "${top_dir}/SPECS/${package_name}.spec"
 

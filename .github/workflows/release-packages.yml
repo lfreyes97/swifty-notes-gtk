@@ -13,8 +13,51 @@ permissions:
   contents: read
 
 jobs:
+  verify-project:
+    name: Verify project (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            at-spi2-core \
+            dbus \
+            dbus-user-session \
+            libadwaita-1-dev \
+            libgtk-4-dev \
+            libgtksourceview-5-dev
+
+      - name: Verify project
+        run: |
+          swift build
+          dbus-run-session -- bash -lc \
+            "swift test --filter 'CLICommandTests|CLITests|MainWindowActionsTests|MainWindowCoreTests|MarkdownFormattingTests|NoteModelAndRendererTests|RepositoryStateTests|SettingsStoreTests' --no-parallel"
+
   prepare-install-roots:
-    runs-on: ubuntu-24.04
+    name: Prepare install root (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    needs: verify-project
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
 
     steps:
       - name: Check out repository
@@ -47,18 +90,27 @@ jobs:
       - name: Archive /usr install root
         run: |
           tar -C packaging/out/install-root-usr -czf \
-            "packaging/out/swifty-notes-gtk-${{ inputs.version }}-linux-x86_64-install-root.tar.gz" \
+            "packaging/out/swifty-notes-gtk-${{ inputs.version }}-linux-${{ matrix.arch }}-install-root.tar.gz" \
             .
 
       - name: Upload /usr install root
         uses: actions/upload-artifact@v7
         with:
-          name: swifty-notes-gtk-${{ inputs.version }}-linux-x86_64-install-root.tar.gz
-          path: packaging/out/swifty-notes-gtk-${{ inputs.version }}-linux-x86_64-install-root.tar.gz
+          name: swifty-notes-gtk-${{ inputs.version }}-linux-${{ matrix.arch }}-install-root.tar.gz
+          path: packaging/out/swifty-notes-gtk-${{ inputs.version }}-linux-${{ matrix.arch }}-install-root.tar.gz
 
   build-deb:
-    runs-on: ubuntu-24.04
+    name: Build Debian package (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
     needs: prepare-install-roots
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
 
     steps:
       - name: Check out repository
@@ -67,7 +119,7 @@ jobs:
       - name: Download /usr install root
         uses: actions/download-artifact@v8
         with:
-          name: swifty-notes-gtk-${{ inputs.version }}-linux-x86_64-install-root.tar.gz
+          name: swifty-notes-gtk-${{ inputs.version }}-linux-${{ matrix.arch }}-install-root.tar.gz
           path: packaging/out/install-root-archive
 
       - name: Extract /usr install root
@@ -75,7 +127,7 @@ jobs:
           rm -rf packaging/out/install-root-usr
           mkdir -p packaging/out/install-root-usr
           tar -C packaging/out/install-root-usr -xzf \
-            "packaging/out/install-root-archive/swifty-notes-gtk-${{ inputs.version }}-linux-x86_64-install-root.tar.gz"
+            "packaging/out/install-root-archive/swifty-notes-gtk-${{ inputs.version }}-linux-${{ matrix.arch }}-install-root.tar.gz"
 
       - name: Build Debian package
         run: |
@@ -102,8 +154,17 @@ jobs:
           path: ${{ steps.deb-artifact.outputs.path }}
 
   build-rpm:
-    runs-on: ubuntu-24.04
+    name: Build RPM package (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
     needs: prepare-install-roots
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
 
     steps:
       - name: Check out repository
@@ -117,7 +178,7 @@ jobs:
       - name: Download /usr install root
         uses: actions/download-artifact@v8
         with:
-          name: swifty-notes-gtk-${{ inputs.version }}-linux-x86_64-install-root.tar.gz
+          name: swifty-notes-gtk-${{ inputs.version }}-linux-${{ matrix.arch }}-install-root.tar.gz
           path: packaging/out/install-root-archive
 
       - name: Extract /usr install root
@@ -125,7 +186,7 @@ jobs:
           rm -rf packaging/out/install-root-usr
           mkdir -p packaging/out/install-root-usr
           tar -C packaging/out/install-root-usr -xzf \
-            "packaging/out/install-root-archive/swifty-notes-gtk-${{ inputs.version }}-linux-x86_64-install-root.tar.gz"
+            "packaging/out/install-root-archive/swifty-notes-gtk-${{ inputs.version }}-linux-${{ matrix.arch }}-install-root.tar.gz"
 
       - name: Build RPM package
         run: |
@@ -152,8 +213,17 @@ jobs:
           path: ${{ steps.rpm-artifact.outputs.path }}
 
   build-flatpak:
-    runs-on: ubuntu-24.04
-    needs: prepare-install-roots
+    name: Build Flatpak bundle (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    needs: verify-project
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
     container:
       image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-48
       options: --privileged
@@ -175,18 +245,20 @@ jobs:
         uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
           manifest-path: packaging/out/flatpak/me.spaceinbox.swiftynotes.yml
-          bundle: swifty-notes-gtk-${{ inputs.version }}-x86_64.flatpak
+          bundle: swifty-notes-gtk-${{ inputs.version }}-${{ matrix.arch }}.flatpak
           branch: stable
           build-dir: packaging/out/flatpak/build
           repo-dir: packaging/out/flatpak/repo
           state-dir: packaging/out/flatpak/state
-          cache-key: flatpak-builder-${{ github.sha }}
+          cache-key: flatpak-builder-${{ matrix.arch }}-${{ github.sha }}
           mirror-screenshots-url: https://dl.flathub.org/media/
           upload-artifact: false
           verbose: true
+          arch: ${{ matrix.arch }}
 
       - name: Install Flatpak linter
         run: |
+          flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
           for attempt in 1 2 3; do
             if flatpak install -y flathub org.flatpak.Builder; then
               exit 0
@@ -206,12 +278,23 @@ jobs:
       - name: Upload Flatpak artifact
         uses: actions/upload-artifact@v7
         with:
-          name: swifty-notes-gtk-${{ inputs.version }}-x86_64.flatpak
-          path: swifty-notes-gtk-${{ inputs.version }}-x86_64.flatpak
+          name: swifty-notes-gtk-${{ inputs.version }}-${{ matrix.arch }}.flatpak
+          path: swifty-notes-gtk-${{ inputs.version }}-${{ matrix.arch }}.flatpak
 
   build-snap:
-    runs-on: ubuntu-24.04
+    name: Build snap package (${{ matrix.platform }})
+    runs-on: ${{ matrix.runner }}
     needs: prepare-install-roots
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: amd64
+            install_root_arch: x86_64
+            runner: ubuntu-24.04
+          - platform: arm64
+            install_root_arch: aarch64
+            runner: ubuntu-24.04-arm
 
     steps:
       - name: Check out repository
@@ -220,7 +303,7 @@ jobs:
       - name: Download /usr install root
         uses: actions/download-artifact@v8
         with:
-          name: swifty-notes-gtk-${{ inputs.version }}-linux-x86_64-install-root.tar.gz
+          name: swifty-notes-gtk-${{ inputs.version }}-linux-${{ matrix.install_root_arch }}-install-root.tar.gz
           path: packaging/out/install-root-archive
 
       - name: Extract /usr install root
@@ -228,7 +311,7 @@ jobs:
           rm -rf packaging/out/install-root-usr
           mkdir -p packaging/out/install-root-usr
           tar -C packaging/out/install-root-usr -xzf \
-            "packaging/out/install-root-archive/swifty-notes-gtk-${{ inputs.version }}-linux-x86_64-install-root.tar.gz"
+            "packaging/out/install-root-archive/swifty-notes-gtk-${{ inputs.version }}-linux-${{ matrix.install_root_arch }}-install-root.tar.gz"
 
       - name: Stamp Snap version
         run: |
@@ -245,6 +328,7 @@ jobs:
         uses: snapcore/action-build@v1
         with:
           path: .
+          snapcraft-args: --build-for=${{ matrix.platform }}
 
       - name: Resolve Snap artifact
         id: snap-artifact
