@@ -53,3 +53,14 @@ extension JSONDecoder {
         return decoder
     }
 }
+
+@MainActor
+func drainMainContext(iterations: Int = 8) {
+    guard let context = g_main_context_default() else { return }
+    for _ in 0..<max(iterations, 1) {
+        while g_main_context_pending(context) != 0 {
+            _ = g_main_context_iteration(context, 0)
+        }
+        _ = g_main_context_iteration(context, 0)
+    }
+}

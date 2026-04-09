@@ -141,7 +141,11 @@ struct CLITests {
         try FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
 
         let xdgDataHome = temp.appendingPathComponent("xdg-data", isDirectory: true)
-        let environment = ["XDG_DATA_HOME": xdgDataHome.path()]
+        let xdgConfigHome = temp.appendingPathComponent("xdg-config", isDirectory: true)
+        let environment = [
+            "XDG_DATA_HOME": xdgDataHome.path(),
+            "XDG_CONFIG_HOME": xdgConfigHome.path()
+        ]
 
         let createResult = try runCLIExecutable(
             arguments: ["cli", "create", "--content", "# Default Path\n\nBody"],

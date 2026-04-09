@@ -143,6 +143,7 @@ final class MainWindow {
         loadInitialNotes()
         startExternalChangeMonitor()
         scheduleDebugLaunchEditIfRequested()
+        scheduleDebugHeaderSubtitleLogIfRequested()
         scheduleDebugSettingsOpenIfRequested()
         scheduleDebugCreateNoteIfRequested()
         scheduleDebugSelectionSwitchIfRequested()
@@ -281,12 +282,8 @@ final class MainWindow {
             self.refreshSidebar()
             self.refreshPreview()
             self.updateHeaderSubtitle()
-            Task { @MainActor in
-                self.autosave.scheduleSave(after: self.autosaveDelay) {
-                    await MainActor.run { [weak self] in
-                        self?.saveCurrentEditedNote(announceSuccess: false)
-                    }
-                }
+            self.autosave.scheduleSave(after: self.autosaveDelay) { [weak self] in
+                self?.saveCurrentEditedNote(announceSuccess: false)
             }
         }
 
@@ -312,9 +309,7 @@ final class MainWindow {
             self?.saveCurrentEditedNote(announceSuccess: false)
             self?.persistWorkspaceState()
             self?.stopExternalChangeMonitor()
-            Task { @MainActor [weak self] in
-                self?.autosave.cancel()
-            }
+            self?.autosave.cancel()
             return false
         }
 

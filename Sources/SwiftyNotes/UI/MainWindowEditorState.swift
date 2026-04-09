@@ -33,9 +33,7 @@ extension MainWindow {
 
     func saveSelectedNoteNow() {
         saveCurrentEditedNote(announceSuccess: true)
-        Task { @MainActor in
-            autosave.cancel()
-        }
+        autosave.cancel()
     }
 
     func currentEditedNoteSnapshot() -> Note? {

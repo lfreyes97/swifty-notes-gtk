@@ -106,6 +106,55 @@ struct UISmokeTests {
     }
 
     @Test
+    func appAutosaveClearsUnsavedStatusUnderHeadlessWayland() throws {
+        let result = try runWaylandUIScript(
+            """
+            app_stderr_log = os.environ["APP_STDERR_LOG"]
+            wait_until(
+                lambda: "SwiftyNotes debug launch edit: Smoke autosave edit" in open(app_stderr_log, "r", encoding="utf-8").read(),
+                "launch edit settles",
+                timeout=5
+            )
+            note_dirs = wait_until(
+                lambda: sorted(
+                    name for name in os.listdir(NOTES_DIR)
+                    if os.path.isdir(os.path.join(NOTES_DIR, name))
+                    and os.path.isfile(os.path.join(NOTES_DIR, name, "note.md"))
+                ) or None,
+                "note directory created"
+            )
+            note_path = os.path.join(NOTES_DIR, note_dirs[0], "note.md")
+            wait_until(
+                lambda: "Smoke autosave edit" in open(note_path, "r", encoding="utf-8").read(),
+                "autosave writes note content",
+                timeout=6
+            )
+            subtitle_log = wait_until(
+                lambda: next(
+                    (
+                        line.strip()
+                        for line in open(app_stderr_log, "r", encoding="utf-8").read().splitlines()
+                        if line.startswith("SwiftyNotes debug header subtitle:")
+                    ),
+                    None
+                ),
+                "header subtitle logged",
+                timeout=6
+            )
+            assert "Saved" in subtitle_log, subtitle_log
+            assert "Unsaved changes" not in subtitle_log, subtitle_log
+            """,
+            environment: [
+                "SWIFTY_NOTES_DEBUG_APPEND_TEXT_ON_LAUNCH": "Smoke autosave edit",
+                "SWIFTY_NOTES_DEBUG_EDIT_DELAY_MS": "200",
+                "SWIFTY_NOTES_DEBUG_LOG_HEADER_SUBTITLE_DELAY_MS": "3200"
+            ],
+            requiresAccessibility: false
+        )
+        expectUIScriptSucceeded(result)
+    }
+
+    @Test
     func appCreatingNoteDoesNotEmitSnapshotWarningsUnderHeadlessWayland() throws {
         let result = try runWaylandUIScript(
             """

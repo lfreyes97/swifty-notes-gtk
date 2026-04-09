@@ -28,6 +28,19 @@ extension MainWindow {
         }
     }
 
+    func scheduleDebugHeaderSubtitleLogIfRequested() {
+        let delayMilliseconds = ProcessInfo.processInfo.environment["SWIFTY_NOTES_DEBUG_LOG_HEADER_SUBTITLE_DELAY_MS"]
+            .flatMap(Int.init)
+        guard let delayMilliseconds else { return }
+
+        MainContext.delay(ms: UInt32(max(delayMilliseconds, 0))) { [weak self] in
+            guard let self else { return }
+            FileHandle.standardError.write(
+                Data("SwiftyNotes debug header subtitle: \(self.headerTitle.subtitle)\n".utf8)
+            )
+        }
+    }
+
     func scheduleDebugSettingsOpenIfRequested() {
         guard !hasScheduledDebugSettingsOpen else { return }
         let shouldOpen = ProcessInfo.processInfo.environment["SWIFTY_NOTES_DEBUG_OPEN_SETTINGS_ON_LAUNCH"]

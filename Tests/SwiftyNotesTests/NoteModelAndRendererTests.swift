@@ -190,18 +190,18 @@ struct NoteModelAndRendererTests {
     @Test @MainActor
     func autosaveCoordinatorRunsLatestTask() async {
         let autosave = AutosaveCoordinator()
-        let recorder = SaveRecorder()
+        var values: [Int] = []
 
         autosave.scheduleSave(after: .milliseconds(10)) {
-            await recorder.append(1)
+            values.append(1)
         }
         autosave.scheduleSave(after: .milliseconds(10)) {
-            await recorder.append(2)
+            values.append(2)
         }
 
         try? await Task.sleep(for: .milliseconds(40))
+        drainMainContext()
 
-        let result = await recorder.snapshot()
-        #expect(result == [2])
+        #expect(values == [2])
     }
 }

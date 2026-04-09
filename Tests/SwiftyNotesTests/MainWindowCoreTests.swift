@@ -639,19 +639,23 @@ struct MainWindowCoreTests {
 
         window.present()
         try await Task.sleep(for: .milliseconds(40))
+        drainMainContext()
         let originalContent = try repository.loadNotes()[0].content
 
         window.debugSetEditorText("# First draft\n\nA")
         #expect(window.debugHeaderSubtitle.contains("Unsaved changes"))
         try await Task.sleep(for: .milliseconds(15))
+        drainMainContext()
         #expect(try repository.loadNotes()[0].content == originalContent)
 
         window.debugSetEditorText("# Final draft\n\nB")
         #expect(window.debugHeaderSubtitle.contains("Unsaved changes"))
         try await Task.sleep(for: .milliseconds(20))
+        drainMainContext()
         #expect(try repository.loadNotes()[0].content == originalContent)
 
         try await Task.sleep(for: .milliseconds(60))
+        drainMainContext()
         let autosaved = try repository.loadNotes()
         #expect(autosaved[0].content == "# Final draft\n\nB")
         #expect(autosaved[0].title == "Final draft")
