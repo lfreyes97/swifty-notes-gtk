@@ -12,7 +12,7 @@ Options:
   --repo-slug OWNER/REPO    GitHub slug used for generated screenshot URLs.
   --repo-ref REF            Git ref used for generated screenshot URLs. Default: master
   --build-date YYYY-MM-DD   Release date written into metainfo. Default: current UTC date.
-  --screenshot-url URL      Override the AppStream screenshot URL.
+  --screenshot-url URL      Override the primary AppStream screenshot URL. Additional screenshots use the same directory.
 EOF
 }
 
@@ -78,6 +78,10 @@ esac
 if [ -z "$screenshot_url" ]; then
     screenshot_url="https://raw.githubusercontent.com/${repo_slug}/${repo_ref}/data/screenshots/main-window.png"
 fi
+screenshot_main_url="$screenshot_url"
+screenshot_base_url="${screenshot_main_url%/*}"
+screenshot_editor_url="${screenshot_base_url}/markdown-preview.png"
+screenshot_cli_url="${screenshot_base_url}/cli-workflow.png"
 
 script_dir="$(cd "$(dirname "$0")" && pwd)"
 repo_root="$(cd "${script_dir}/../.." && pwd)"
@@ -139,7 +143,9 @@ chmod 755 "${bin_dir}/swiftynotes"
 sed \
     -e "s|@VERSION@|${version}|g" \
     -e "s|@DATE@|${build_date}|g" \
-    -e "s|@SCREENSHOT_URL@|${screenshot_url}|g" \
+    -e "s|@SCREENSHOT_MAIN_URL@|${screenshot_main_url}|g" \
+    -e "s|@SCREENSHOT_EDITOR_URL@|${screenshot_editor_url}|g" \
+    -e "s|@SCREENSHOT_CLI_URL@|${screenshot_cli_url}|g" \
     data/me.spaceinbox.swiftynotes.metainfo.xml.in \
     > "${metainfo_dir}/me.spaceinbox.swiftynotes.metainfo.xml"
 
