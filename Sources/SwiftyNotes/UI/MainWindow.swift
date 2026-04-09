@@ -18,7 +18,14 @@ final class MainWindow {
     let preview = MarkdownPreview()
     let headerTitle = WindowTitle(title: "Swifty Notes", subtitle: "Markdown notes")
     let sidebarToggle = Button(iconName: "sidebar-show-symbolic")
-    let previewToggle = Button(icon: .custom("sidebar-show-right-symbolic"))
+    let editorModeToggle = ToggleButton(label: "Editor")
+    let splitModeToggle = ToggleButton(label: "Split")
+    let previewModeToggle = ToggleButton(label: "Preview")
+    let viewModeSwitcher = Box(orientation: .horizontal, spacing: 0)
+    let editorContent = Box(orientation: .vertical, spacing: 0)
+    let editorFormattingBar = Box(orientation: .horizontal, spacing: 8)
+    let editorInlineFormattingGroup = Box(orientation: .horizontal, spacing: 0)
+    let editorBlockFormattingGroup = Box(orientation: .horizontal, spacing: 0)
     let newNoteButton = Button(icon: .custom("list-add-symbolic"))
     let saveNoteButton = Button(icon: .custom("document-save-symbolic"))
     let deleteNoteButton = Button(icon: .userTrash)
@@ -75,6 +82,8 @@ final class MainWindow {
     var isRestoringPreviewPaneLayout = false
     var previewAnimationID: SourceID?
     var isPreviewPaneAttached = false
+    var suppressViewModeToggleChange = false
+    var editorFormattingButtons: [MarkdownFormattingAction: Button] = [:]
     var noteContextMenu: Popover?
     var noteContextHandlers: [String: @MainActor () -> Void] = [:]
     var noteContextDeferredAction: (@MainActor () -> Void)?
@@ -138,19 +147,26 @@ final class MainWindow {
         scheduleDebugSelectionSwitchIfRequested()
         MainContext.idle { [weak self] in
             self?.refreshPreview()
-            self?.restorePreviewPaneLayout()
-            self?.editor.focus()
+            self?.applyViewMode(animated: false)
+            self?.focusPrimaryContentIfNeeded()
         }
     }
 
     func buildUI() {
         sidebarToggle.addCSSClass(.flat)
-        previewToggle.addCSSClass(.flat)
         newNoteButton.addCSSClass(.flat)
         saveNoteButton.addCSSClass(.flat)
         deleteNoteButton.addCSSClass(.flat)
         menuButton.addCSSClass(.flat)
         menuButton.hasFrame = false
+        configureViewModeToggleContent()
+        splitModeToggle.setGroup(editorModeToggle)
+        previewModeToggle.setGroup(editorModeToggle)
+        viewModeSwitcher.addCSSClass("linked")
+        viewModeSwitcher.append(editorModeToggle)
+        viewModeSwitcher.append(splitModeToggle)
+        viewModeSwitcher.append(previewModeToggle)
+        configureEditorFormattingToolbar()
         configureToolbarAccessibility()
         configureToolbarTooltips()
 
@@ -164,19 +180,26 @@ final class MainWindow {
         header.packStart(saveNoteButton)
         header.packStart(deleteNoteButton)
         header.packEnd(menuButton)
-        header.packEnd(previewToggle)
+        header.packEnd(viewModeSwitcher)
 
         editorScroll.child = editor.view
         editorScroll.setPolicy(horizontal: .automatic, vertical: .automatic)
+        editorScroll.hexpand = true
+        editorScroll.vexpand = true
+        editorContent.hexpand = true
+        editorContent.vexpand = true
         installEditorImageDropTarget()
 
-        editorPreviewPane.startChild = editorScroll
+        editorContent.append(editorFormattingBar)
+        editorContent.append(Separator())
+        editorContent.append(editorScroll)
+        editorPreviewPane.startChild = editorContent
         editorPreviewPane.resizeStartChild = true
         editorPreviewPane.resizeEndChild = false
         editorPreviewPane.shrinkStartChild = false
         editorPreviewPane.shrinkEndChild = true
         editorPreviewPane.wideHandle = true
-        applyPreviewVisibility(animated: false)
+        applyViewMode(animated: false)
 
         splitView.pinSidebar = true
         splitView.showSidebar = state.isSidebarVisible
@@ -219,8 +242,24 @@ final class MainWindow {
             self?.toggleSidebarVisibility()
         }
 
-        previewToggle.onClicked { [weak self] in
-            self?.togglePreviewVisibility()
+        editorModeToggle.onToggled { [weak self] in
+            guard let self, !self.suppressViewModeToggleChange, self.editorModeToggle.active else { return }
+            self.setViewMode(.editor, animated: false)
+        }
+
+        splitModeToggle.onToggled { [weak self] in
+            guard let self, !self.suppressViewModeToggleChange, self.splitModeToggle.active else { return }
+            self.setViewMode(.split, animated: false)
+        }
+
+        previewModeToggle.onToggled { [weak self] in
+            guard let self, !self.suppressViewModeToggleChange, self.previewModeToggle.active else { return }
+            self.setViewMode(.preview, animated: false)
+        }
+        for (action, button) in editorFormattingButtons {
+            button.onClicked { [weak self] in
+                self?.applyEditorFormatting(action)
+            }
         }
 
         newNoteButton.onClicked { [weak self] in
@@ -311,7 +350,7 @@ final class MainWindow {
             return true
         }
         window.addKeyboardShortcut("F9") { [weak self] in
-            self?.togglePreviewVisibility()
+            self?.toggleEditorAndSplitModes()
             return true
         }
     }

@@ -35,8 +35,15 @@ extension MainWindow {
         g_signal_emit_by_name_no_args(UnsafeMutableRawPointer(sidebarToggle.opaquePointer), "clicked")
     }
 
-    func debugEmitPreviewToggleClicked() {
-        g_signal_emit_by_name_no_args(UnsafeMutableRawPointer(previewToggle.opaquePointer), "clicked")
+    func debugSelectViewMode(_ mode: EditorViewMode) {
+        switch mode {
+        case .editor:
+            editorModeToggle.active = true
+        case .split:
+            splitModeToggle.active = true
+        case .preview:
+            previewModeToggle.active = true
+        }
     }
 
     func debugEmitSortButtonClicked() {
@@ -45,6 +52,15 @@ extension MainWindow {
 
     func debugSetEditorText(_ text: String) {
         editor.buffer.text = text
+    }
+
+    func debugSelectEditorRange(_ range: Range<Int>) {
+        editor.select(range: range)
+    }
+
+    func debugEmitEditorFormattingButtonClicked(_ action: MarkdownFormattingAction) {
+        guard let button = editorFormattingButtons[action] else { return }
+        g_signal_emit_by_name_no_args(UnsafeMutableRawPointer(button.opaquePointer), "clicked")
     }
 
     func debugSetSearchQuery(_ text: String) {
@@ -66,6 +82,10 @@ extension MainWindow {
 
     var debugHeaderSubtitle: String {
         headerTitle.subtitle
+    }
+
+    var debugEditorText: String {
+        editor.buffer.text
     }
 
     var debugPreviewText: String {
@@ -135,7 +155,18 @@ extension MainWindow {
             "new": newNoteButton.tooltipText,
             "save": saveNoteButton.tooltipText,
             "delete": deleteNoteButton.tooltipText,
-            "preview": previewToggle.tooltipText,
+            "editorMode": editorModeToggle.tooltipText,
+            "splitMode": splitModeToggle.tooltipText,
+            "previewMode": previewModeToggle.tooltipText,
+            "formatHeading": editorFormattingButtons[.heading]?.tooltipText,
+            "formatBold": editorFormattingButtons[.bold]?.tooltipText,
+            "formatItalic": editorFormattingButtons[.italic]?.tooltipText,
+            "formatCode": editorFormattingButtons[.code]?.tooltipText,
+            "formatLink": editorFormattingButtons[.link]?.tooltipText,
+            "formatQuote": editorFormattingButtons[.quote]?.tooltipText,
+            "formatBullet": editorFormattingButtons[.bulletList]?.tooltipText,
+            "formatNumbered": editorFormattingButtons[.numberedList]?.tooltipText,
+            "formatTask": editorFormattingButtons[.taskList]?.tooltipText,
             "menu": menuButton.tooltipText
         ]
     }
@@ -314,6 +345,10 @@ extension MainWindow {
 
     var debugIsPreviewPaneAttached: Bool {
         isPreviewPaneAttached
+    }
+
+    var debugViewMode: EditorViewMode {
+        state.viewMode
     }
 }
 #endif

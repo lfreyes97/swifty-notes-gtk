@@ -5,17 +5,25 @@ public final class AppState {
     public private(set) var notes: [Note] = []
     public private(set) var selectedNoteID: UUID?
     public var isSidebarVisible: Bool
-    public var isPreviewVisible: Bool
+    public var viewMode: EditorViewMode
     public var searchQuery: String
     public var sortMode: NotesSortMode
     public var preferredWindowWidth: Int
     public var preferredWindowHeight: Int
     public var preferredPreviewWidth: Int
 
+    public var isPreviewVisible: Bool {
+        viewMode.isPreviewVisible
+    }
+
+    public var isEditorVisible: Bool {
+        viewMode != .preview
+    }
+
     public init(persistedState: WorkspaceState = .default) {
         selectedNoteID = persistedState.selectedNoteID
         isSidebarVisible = persistedState.isSidebarVisible
-        isPreviewVisible = persistedState.isPreviewVisible
+        viewMode = persistedState.viewMode
         searchQuery = persistedState.searchQuery
         sortMode = persistedState.sortMode
         preferredWindowWidth = persistedState.windowWidth
@@ -86,7 +94,7 @@ public final class AppState {
         WorkspaceState(
             selectedNoteID: selectedNoteID,
             isSidebarVisible: isSidebarVisible,
-            isPreviewVisible: isPreviewVisible,
+            viewMode: viewMode,
             searchQuery: searchQuery,
             sortMode: sortMode,
             windowWidth: windowWidth,

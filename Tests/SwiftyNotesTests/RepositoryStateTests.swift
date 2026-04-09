@@ -455,6 +455,31 @@ struct RepositoryStateTests {
     }
 
     @Test
+    func workspaceStateStoreRoundTripsPreviewOnlyMode() throws {
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let store = WorkspaceStateStore(
+            stateFileURL: temp.appendingPathComponent("workspace.json", isDirectory: false)
+        )
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let expected = WorkspaceState(
+            selectedNoteID: UUID(),
+            isSidebarVisible: true,
+            viewMode: .preview,
+            searchQuery: "preview",
+            sortMode: .newestFirst,
+            windowWidth: 1100,
+            windowHeight: 760,
+            previewWidth: 600
+        )
+        try store.save(expected)
+
+        let loaded = try store.load()
+        #expect(loaded == expected)
+        #expect(loaded.isPreviewVisible)
+    }
+
+    @Test
     func workspaceStateDecodesOlderPayloadWithoutPreviewWidth() throws {
         let data = Data("""
         {
@@ -471,6 +496,7 @@ struct RepositoryStateTests {
         #expect(decoded.isSidebarVisible)
         #expect(decoded.previewWidth == WorkspaceState.defaultPreviewWidth)
         #expect(decoded.searchQuery == "legacy")
+        #expect(decoded.viewMode == .split)
     }
 
     @Test @MainActor

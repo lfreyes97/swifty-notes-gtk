@@ -122,8 +122,7 @@ extension MainWindow {
 
     func shouldDeferPreviewRender() -> Bool {
         Self.shouldDeferPreviewRender(
-            isPreviewAttached: isPreviewPaneAttached,
-            isPreviewVisible: state.isPreviewVisible,
+            isPreviewPresented: state.isPreviewVisible,
             windowWidth: window.width,
             windowHeight: window.height,
             hasParent: preview.rootScroll.parent != nil,
@@ -134,8 +133,7 @@ extension MainWindow {
     }
 
     nonisolated static func shouldDeferPreviewRender(
-        isPreviewAttached: Bool,
-        isPreviewVisible: Bool,
+        isPreviewPresented: Bool,
         windowWidth: Int,
         windowHeight: Int,
         hasParent: Bool,
@@ -143,14 +141,14 @@ extension MainWindow {
         width: Int,
         height: Int
     ) -> Bool {
-        guard isPreviewAttached, isPreviewVisible, hasParent else { return false }
+        guard isPreviewPresented, hasParent else { return false }
         guard windowWidth > 0, windowHeight > 0 else { return false }
         guard hasRoot else { return false }
         return width <= 0 || height <= 0
     }
 
     func syncPreviewScroll() {
-        guard state.isPreviewVisible, isPreviewPaneAttached else { return }
+        guard state.viewMode == .split, isPreviewPaneAttached else { return }
         guard preview.rootScroll.parent != nil, preview.rootScroll.width > 0, preview.rootScroll.height > 0 else { return }
         let source = editorScroll.verticalAdjustment
         let destination = preview.rootScroll.verticalAdjustment
@@ -206,7 +204,10 @@ extension MainWindow {
         saveNoteButton.setAccessibleLabel("Save Note")
         deleteNoteButton.setAccessibleLabel("Delete Note")
         menuButton.setAccessibleLabel("Main Menu")
-        updatePreviewToggleAccessibility()
+        editorModeToggle.setAccessibleLabel("Editor")
+        splitModeToggle.setAccessibleLabel("Split")
+        previewModeToggle.setAccessibleLabel("Preview")
+        updateViewModeToggleState()
     }
 
     func configureToolbarTooltips() {
@@ -215,15 +216,10 @@ extension MainWindow {
         saveNoteButton.tooltipText = "Save Note"
         deleteNoteButton.tooltipText = "Delete Note"
         menuButton.tooltipText = "Main Menu"
-        updatePreviewToggleTooltip()
-    }
-
-    func updatePreviewToggleAccessibility() {
-        previewToggle.setAccessibleLabel(state.isPreviewVisible ? "Hide Preview" : "Show Preview")
-    }
-
-    func updatePreviewToggleTooltip() {
-        previewToggle.tooltipText = state.isPreviewVisible ? "Hide Preview" : "Show Preview"
+        editorModeToggle.tooltipText = "Editor only"
+        splitModeToggle.tooltipText = "Split view"
+        previewModeToggle.tooltipText = "Preview only"
+        updateViewModeToggleState()
     }
 
     func updateSidebarToggleAccessibility() {
@@ -241,12 +237,37 @@ extension MainWindow {
         deleteAction.enabled = hasSelection
         copyNoteIDAction.enabled = hasSelection
         exportAction.enabled = hasSelection
+        for button in editorFormattingButtons.values {
+            button.sensitive = hasSelection
+        }
     }
 
-    func togglePreviewVisibility() {
-        state.isPreviewVisible.toggle()
-        applyPreviewVisibility(animated: true)
+    func updateViewModeToggleState() {
+        suppressViewModeToggleChange = true
+        editorModeToggle.active = state.viewMode == .editor
+        splitModeToggle.active = state.viewMode == .split
+        previewModeToggle.active = state.viewMode == .preview
+        suppressViewModeToggleChange = false
+    }
+
+    func setViewMode(_ mode: EditorViewMode, animated: Bool) {
+        guard state.viewMode != mode else {
+            updateViewModeToggleState()
+            return
+        }
+        state.viewMode = mode
+        applyViewMode(animated: animated)
+        if state.isEditorVisible {
+            MainContext.idle { [weak self] in
+                self?.focusPrimaryContentIfNeeded()
+            }
+        }
         persistWorkspaceState()
+    }
+
+    func toggleEditorAndSplitModes() {
+        let nextMode: EditorViewMode = state.viewMode == .editor ? .split : .editor
+        setViewMode(nextMode, animated: true)
     }
 
     func toggleSidebarVisibility() {
@@ -261,18 +282,41 @@ extension MainWindow {
         updateSidebarToggleTooltip()
     }
 
-    func applyPreviewVisibility(animated: Bool) {
+    func applyViewMode(animated: Bool) {
+        updateViewModeToggleState()
         stopPreviewAnimation()
-        if state.isPreviewVisible {
-            showPreviewPane(animated: animated)
-        } else {
+        switch state.viewMode {
+        case .editor:
+            showEditorContent()
             hidePreviewPane(animated: animated)
+        case .split:
+            showEditorContent()
+            showPreviewPane(animated: animated)
+        case .preview:
+            showPreviewOnlyContent()
         }
-        updatePreviewToggleAccessibility()
-        updatePreviewToggleTooltip()
+    }
+
+    func showEditorContent() {
+        guard splitView.content?.opaquePointer != editorPreviewPane.opaquePointer else { return }
+        splitView.content = editorPreviewPane
+    }
+
+    func showPreviewOnlyContent() {
+        stopPreviewAnimation()
+        detachPreviewPane()
+        guard splitView.content?.opaquePointer != preview.rootScroll.opaquePointer else { return }
+        splitView.content = preview.rootScroll
+        refreshPreview()
+    }
+
+    func focusPrimaryContentIfNeeded() {
+        guard state.isEditorVisible else { return }
+        editor.focus()
     }
 
     func showPreviewPane(animated: Bool) {
+        showEditorContent()
         attachPreviewPane()
         if animated, canAnimatePreviewPane {
             let totalWidth = currentPreviewContainerWidth
@@ -285,6 +329,7 @@ extension MainWindow {
     }
 
     func hidePreviewPane(animated: Bool) {
+        showEditorContent()
         guard isPreviewPaneAttached else { return }
         guard animated, canAnimatePreviewPane else {
             detachPreviewPane()
@@ -294,7 +339,7 @@ extension MainWindow {
     }
 
     func restorePreviewPaneLayout() {
-        guard state.isPreviewVisible else { return }
+        guard state.viewMode == .split else { return }
         let totalWidth = currentPreviewContainerWidth
         isRestoringPreviewPaneLayout = true
         editorPreviewPane.position = resolvedVisiblePreviewPosition(totalWidth: totalWidth)
@@ -321,8 +366,8 @@ extension MainWindow {
         let startPosition = editorPreviewPane.position
         guard startPosition != targetPosition else {
             isRestoringPreviewPaneLayout = false
-            if !state.isPreviewVisible {
-                schedulePreviewDetachIfHidden()
+            if state.viewMode != .split {
+                schedulePreviewDetachIfNeeded()
             }
             return
         }
@@ -343,16 +388,16 @@ extension MainWindow {
 
             self.previewAnimationID = nil
             self.isRestoringPreviewPaneLayout = false
-            if !self.state.isPreviewVisible {
-                self.schedulePreviewDetachIfHidden()
+            if self.state.viewMode != .split {
+                self.schedulePreviewDetachIfNeeded()
             }
             return false
         }
     }
 
-    func schedulePreviewDetachIfHidden() {
+    func schedulePreviewDetachIfNeeded() {
         MainContext.delay(ms: 1) { [weak self] in
-            guard let self, !self.state.isPreviewVisible else { return }
+            guard let self, self.state.viewMode != .split else { return }
             self.detachPreviewPane()
         }
     }
@@ -391,7 +436,7 @@ extension MainWindow {
     }
 
     func handlePreviewPaneMoved() {
-        guard state.isPreviewVisible, isPreviewPaneAttached, !isRestoringPreviewPaneLayout else { return }
+        guard state.viewMode == .split, isPreviewPaneAttached, !isRestoringPreviewPaneLayout else { return }
         let totalWidth = max(editorPreviewPane.width, window.width - currentSidebarWidth, window.defaultWidth - 280)
         guard totalWidth >= Self.minimumPreviewWidth + Self.minimumEditorWidth else { return }
         let previewWidth = totalWidth - editorPreviewPane.position

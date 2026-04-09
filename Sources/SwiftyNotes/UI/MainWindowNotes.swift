@@ -52,7 +52,7 @@ extension MainWindow {
             renderSelection()
             persistWorkspaceState()
             MainContext.idle { [weak self] in
-                self?.editor.focus()
+                self?.focusPrimaryContentIfNeeded()
             }
         } catch {
             presentError(
@@ -139,7 +139,7 @@ extension MainWindow {
         refreshPreview()
         saveNoteButton.visible = true
         deleteNoteButton.visible = true
-        applyPreviewVisibility(animated: false)
+        applyViewMode(animated: false)
         updateHeaderSubtitle()
     }
 

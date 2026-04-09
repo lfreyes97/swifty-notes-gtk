@@ -304,12 +304,18 @@ struct MainWindowCoreTests {
         #expect(window.debugToolbarTooltips["save"] == "Save Note")
         #expect(window.debugToolbarTooltips["delete"] == "Delete Note")
         #expect(window.debugToolbarTooltips["menu"] == "Main Menu")
-        #expect(window.debugToolbarTooltips["preview"] == "Hide Preview")
-
-        window.debugEmitPreviewToggleClicked()
-        #expect(window.debugToolbarTooltips["preview"] == "Show Preview")
-        window.debugEmitPreviewToggleClicked()
-        #expect(window.debugToolbarTooltips["preview"] == "Hide Preview")
+        #expect(window.debugToolbarTooltips["editorMode"] == "Editor only")
+        #expect(window.debugToolbarTooltips["splitMode"] == "Split view")
+        #expect(window.debugToolbarTooltips["previewMode"] == "Preview only")
+        #expect(window.debugToolbarTooltips["formatHeading"] == "Turn the current line into a heading")
+        #expect(window.debugToolbarTooltips["formatBold"] == "Wrap the selection in bold markdown")
+        #expect(window.debugToolbarTooltips["formatItalic"] == "Wrap the selection in italic markdown")
+        #expect(window.debugToolbarTooltips["formatCode"] == "Insert inline code or a fenced code block")
+        #expect(window.debugToolbarTooltips["formatLink"] == "Insert a markdown link")
+        #expect(window.debugToolbarTooltips["formatQuote"] == "Prefix the selected lines as a quote")
+        #expect(window.debugToolbarTooltips["formatBullet"] == "Prefix the selected lines as a bulleted list")
+        #expect(window.debugToolbarTooltips["formatNumbered"] == "Prefix the selected lines as a numbered list")
+        #expect(window.debugToolbarTooltips["formatTask"] == "Prefix the selected lines as a task list")
     }
 
     @Test @MainActor
@@ -380,7 +386,7 @@ struct MainWindowCoreTests {
     }
 
     @Test @MainActor
-    func mainWindowPreviewToggleDetachesAndRestoresPreviewPane() async throws {
+    func mainWindowViewModeSwitcherUpdatesLayout() async throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -400,15 +406,50 @@ struct MainWindowCoreTests {
 
         window.debugLoadInitialNotes()
         #expect(window.debugIsPreviewPaneAttached)
+        #expect(window.debugViewMode == .split)
 
-        window.debugEmitPreviewToggleClicked()
-        try await Task.sleep(for: .milliseconds(280))
+        window.debugSelectViewMode(.editor)
+        try await Task.sleep(for: .milliseconds(80))
         #expect(!window.debugIsPreviewPaneAttached)
-        #expect(window.debugToolbarTooltips["preview"] == "Show Preview")
+        #expect(window.debugViewMode == .editor)
 
-        window.debugEmitPreviewToggleClicked()
+        window.debugSelectViewMode(.preview)
+        try await Task.sleep(for: .milliseconds(80))
+        #expect(!window.debugIsPreviewPaneAttached)
+        #expect(window.debugViewMode == .preview)
+
+        window.debugSelectViewMode(.split)
         #expect(window.debugIsPreviewPaneAttached)
-        #expect(window.debugToolbarTooltips["preview"] == "Hide Preview")
+        #expect(window.debugViewMode == .split)
+    }
+
+    @Test @MainActor
+    func mainWindowFormattingToolbarAppliesBoldToSelectedEditorText() throws {
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.formatting")
+        try app.register()
+
+        let window = MainWindow(
+            application: app,
+            state: AppState(),
+            stateStore: WorkspaceStateStore(
+                stateFileURL: temp.appendingPathComponent("workspace.json", isDirectory: false)
+            ),
+            repository: NotesRepository(notesDirectory: temp),
+            renderer: MarkdownRenderer(),
+            autosave: AutosaveCoordinator()
+        )
+
+        window.debugLoadInitialNotes()
+        window.debugSetEditorText("Hello world")
+        window.debugSelectEditorRange(6..<11)
+
+        window.debugEmitEditorFormattingButtonClicked(.bold)
+
+        #expect(window.debugEditorText == "Hello **world**")
+        #expect(window.debugSelectedNoteContent == "Hello **world**")
     }
 
     @Test @MainActor
@@ -448,6 +489,7 @@ struct MainWindowCoreTests {
 
         #expect(!window.debugSidebarVisible)
         #expect(!window.debugIsPreviewPaneAttached)
+        #expect(window.debugViewMode == .editor)
         #expect(window.debugSearchQuery == "a")
         #expect(window.debugSortMode == .title)
         #expect(window.debugDisplayedNoteTitles == ["Alpha", "Beta"])

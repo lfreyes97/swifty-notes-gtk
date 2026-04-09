@@ -40,23 +40,38 @@ public enum NotesSortMode: String, Codable, CaseIterable, Sendable {
     }
 }
 
+public enum EditorViewMode: String, Codable, CaseIterable, Sendable {
+    case editor
+    case split
+    case preview
+
+    var isPreviewVisible: Bool {
+        self != .editor
+    }
+}
+
 public struct WorkspaceState: Codable, Equatable, Sendable {
     public static let legacyDefaultPreviewWidth = 440
     public static let defaultPreviewWidth = 560
 
     public var selectedNoteID: UUID?
     public var isSidebarVisible: Bool
-    public var isPreviewVisible: Bool
+    public var viewMode: EditorViewMode
     public var searchQuery: String
     public var sortMode: NotesSortMode
     public var windowWidth: Int
     public var windowHeight: Int
     public var previewWidth: Int
 
+    public var isPreviewVisible: Bool {
+        viewMode.isPreviewVisible
+    }
+
     public init(
         selectedNoteID: UUID? = nil,
         isSidebarVisible: Bool = true,
         isPreviewVisible: Bool = true,
+        viewMode: EditorViewMode? = nil,
         searchQuery: String = "",
         sortMode: NotesSortMode = .newestFirst,
         windowWidth: Int = 1200,
@@ -65,7 +80,7 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
     ) {
         self.selectedNoteID = selectedNoteID
         self.isSidebarVisible = isSidebarVisible
-        self.isPreviewVisible = isPreviewVisible
+        self.viewMode = viewMode ?? (isPreviewVisible ? .split : .editor)
         self.searchQuery = searchQuery
         self.sortMode = sortMode
         self.windowWidth = windowWidth
@@ -78,6 +93,7 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case selectedNoteID
         case isSidebarVisible
+        case viewMode
         case isPreviewVisible
         case searchQuery
         case sortMode
@@ -90,11 +106,28 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         selectedNoteID = try container.decodeIfPresent(UUID.self, forKey: .selectedNoteID)
         isSidebarVisible = try container.decodeIfPresent(Bool.self, forKey: .isSidebarVisible) ?? true
-        isPreviewVisible = try container.decodeIfPresent(Bool.self, forKey: .isPreviewVisible) ?? true
+        if let viewMode = try container.decodeIfPresent(EditorViewMode.self, forKey: .viewMode) {
+            self.viewMode = viewMode
+        } else {
+            self.viewMode = (try container.decodeIfPresent(Bool.self, forKey: .isPreviewVisible) ?? true) ? .split : .editor
+        }
         searchQuery = try container.decodeIfPresent(String.self, forKey: .searchQuery) ?? ""
         sortMode = try container.decodeIfPresent(NotesSortMode.self, forKey: .sortMode) ?? .newestFirst
         windowWidth = try container.decodeIfPresent(Int.self, forKey: .windowWidth) ?? 1200
         windowHeight = try container.decodeIfPresent(Int.self, forKey: .windowHeight) ?? 800
         previewWidth = try container.decodeIfPresent(Int.self, forKey: .previewWidth) ?? WorkspaceState.defaultPreviewWidth
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(selectedNoteID, forKey: .selectedNoteID)
+        try container.encode(isSidebarVisible, forKey: .isSidebarVisible)
+        try container.encode(viewMode, forKey: .viewMode)
+        try container.encode(isPreviewVisible, forKey: .isPreviewVisible)
+        try container.encode(searchQuery, forKey: .searchQuery)
+        try container.encode(sortMode, forKey: .sortMode)
+        try container.encode(windowWidth, forKey: .windowWidth)
+        try container.encode(windowHeight, forKey: .windowHeight)
+        try container.encode(previewWidth, forKey: .previewWidth)
     }
 }

@@ -128,8 +128,7 @@ struct NoteModelAndRendererTests {
     @Test
     func previewRenderDeferralWaitsForVisibleAllocatedPreviewPane() {
         #expect(MainWindow.shouldDeferPreviewRender(
-            isPreviewAttached: true,
-            isPreviewVisible: true,
+            isPreviewPresented: true,
             windowWidth: 1200,
             windowHeight: 800,
             hasParent: true,
@@ -138,8 +137,7 @@ struct NoteModelAndRendererTests {
             height: 320
         ))
         #expect(!MainWindow.shouldDeferPreviewRender(
-            isPreviewAttached: true,
-            isPreviewVisible: true,
+            isPreviewPresented: true,
             windowWidth: 0,
             windowHeight: 0,
             hasParent: true,
@@ -152,8 +150,7 @@ struct NoteModelAndRendererTests {
     @Test
     func previewRenderDeferralSkipsDetachedOrHiddenPreviewPane() {
         #expect(!MainWindow.shouldDeferPreviewRender(
-            isPreviewAttached: false,
-            isPreviewVisible: true,
+            isPreviewPresented: true,
             windowWidth: 1200,
             windowHeight: 800,
             hasParent: false,
@@ -162,8 +159,7 @@ struct NoteModelAndRendererTests {
             height: 0
         ))
         #expect(!MainWindow.shouldDeferPreviewRender(
-            isPreviewAttached: true,
-            isPreviewVisible: false,
+            isPreviewPresented: false,
             windowWidth: 1200,
             windowHeight: 800,
             hasParent: true,
