@@ -1,5 +1,7 @@
 # Swifty Notes
 
+<img alt="Swifty Notes" src="https://arm1.ru/img/uploaded/swift-notes-1.0.0.webp">
+
 Native GTK markdown notes for Linux, written in Swift with `swift-adwaita`.
 
 ## Features
