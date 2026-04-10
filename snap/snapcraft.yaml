@@ -61,8 +61,8 @@ parts:
     override-build: |
       set -eux
 
-      swift_branch='swift-6.0.3-release'
-      swift_version='swift-6.0.3-RELEASE'
+      swift_branch='swift-6.3-release'
+      swift_version='swift-6.3-RELEASE'
       swift_platform='ubuntu24.04'
       swift_signing_key='52BB7E3DE28A71BE22EC05FFEF80A866B47A981F'
 
