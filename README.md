@@ -4,6 +4,8 @@
 
 Native GTK markdown notes for Linux, written in Swift with `swift-adwaita`.
 
+<img alt="Swift Adwaita" src="https://spaceinbox.me/images/swifty-notes-demo.gif">
+
 ## Features
 
 - file-backed markdown notes stored in per-note directories with `note.md`, `meta.json`, and `assets/`
