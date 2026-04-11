@@ -206,6 +206,78 @@ struct CLITests {
     }
 
     @Test
+    func cliExecutableFallsBackToFlatpakDefaultNotesDirectoryWhenHostStorageIsEmpty() throws {
+        let temp = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: temp) }
+        try FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
+
+        let flatpakDataHome = temp
+            .appendingPathComponent(".var", isDirectory: true)
+            .appendingPathComponent("app", isDirectory: true)
+            .appendingPathComponent(AppIdentity.identifier, isDirectory: true)
+            .appendingPathComponent("data", isDirectory: true)
+        let flatpakNotesDirectory = flatpakDataHome
+            .appendingPathComponent(AppIdentity.identifier, isDirectory: true)
+            .appendingPathComponent("notes", isDirectory: true)
+        let note = try NotesRepository(notesDirectory: flatpakNotesDirectory)
+            .createNote(initialContent: "# Flatpak Default\n\nBody")
+
+        let environment = [
+            "HOME": temp.path(),
+            "XDG_DATA_HOME": "",
+            "XDG_CONFIG_HOME": "",
+            "XDG_STATE_HOME": ""
+        ]
+
+        let getResult = try runCLIExecutable(
+            arguments: ["cli", "get", note.stableID],
+            environment: environment
+        )
+        #expect(getResult.exitCode == 0)
+        let fetched = try decodeDocument(from: getResult.stdout)
+        #expect(fetched.id == note.stableID)
+        #expect(fetched.title == "Flatpak Default")
+    }
+
+    @Test
+    func cliExecutableFallsBackToFlatpakConfiguredNotesDirectoryWhenHostStorageIsEmpty() throws {
+        let temp = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: temp) }
+        try FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
+
+        let flatpakRoot = temp
+            .appendingPathComponent(".var", isDirectory: true)
+            .appendingPathComponent("app", isDirectory: true)
+            .appendingPathComponent(AppIdentity.identifier, isDirectory: true)
+        let flatpakConfigHome = flatpakRoot.appendingPathComponent("config", isDirectory: true)
+        let customNotesDirectory = temp.appendingPathComponent("flatpak-custom-notes", isDirectory: true)
+        let settingsStore = AppSettingsStore(
+            settingsFileURL: flatpakConfigHome
+                .appendingPathComponent(AppIdentity.identifier, isDirectory: true)
+                .appendingPathComponent("settings.json", isDirectory: false)
+        )
+        try settingsStore.save(AppSettings(customNotesDirectoryPath: customNotesDirectory.path()))
+        let note = try NotesRepository(notesDirectory: customNotesDirectory)
+            .createNote(initialContent: "# Flatpak Configured\n\nBody")
+
+        let environment = [
+            "HOME": temp.path(),
+            "XDG_DATA_HOME": "",
+            "XDG_CONFIG_HOME": "",
+            "XDG_STATE_HOME": ""
+        ]
+
+        let getResult = try runCLIExecutable(
+            arguments: ["cli", "get", note.stableID],
+            environment: environment
+        )
+        #expect(getResult.exitCode == 0)
+        let fetched = try decodeDocument(from: getResult.stdout)
+        #expect(fetched.id == note.stableID)
+        #expect(fetched.title == "Flatpak Configured")
+    }
+
+    @Test
     func cliExecutableSurfacesHelpAndExitCodes() throws {
         let helpResult = try runCLIExecutable(arguments: ["cli", "help", "create"])
         #expect(helpResult.exitCode == 0)

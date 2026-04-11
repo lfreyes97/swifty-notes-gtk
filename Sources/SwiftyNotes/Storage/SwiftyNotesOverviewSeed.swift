@@ -36,7 +36,7 @@ enum SwiftyNotesOverviewSeed {
     1. Capture text in the editor
     2. Refine formatting with the toolbar
     3. Review the native preview
-    4. Script batch changes through `swiftynotes cli`
+    4. Script batch changes through the CLI from a terminal
 
     > Everything stays readable as plain files, so you keep ownership of your notes.
     """

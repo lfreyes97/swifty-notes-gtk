@@ -87,7 +87,9 @@ The Flatpak manifest template lives in `flatpak/me.spaceinbox.swiftynotes.yml.in
 
 ## CLI
 
-The same executable exposes a CLI:
+The same executable exposes a CLI.
+
+From a source checkout:
 
 ```bash
 swift run swiftynotes -- cli list
@@ -97,7 +99,32 @@ swift run swiftynotes -- cli create --content '# Title\n\nBody'
 swift run swiftynotes -- cli update <note-id> --stdin
 ```
 
+If you installed from Flathub, use the Flatpak form:
+
+```bash
+flatpak run me.spaceinbox.swiftynotes cli list
+flatpak run me.spaceinbox.swiftynotes cli get <note-id>
+flatpak run me.spaceinbox.swiftynotes cli get <note-id> --raw
+flatpak run me.spaceinbox.swiftynotes cli create --content '# Title\n\nBody'
+flatpak run me.spaceinbox.swiftynotes cli update <note-id> --stdin
+```
+
+If you want a short host command for a Flathub install, create a local wrapper:
+
+```bash
+mkdir -p ~/.local/bin
+cat > ~/.local/bin/swiftynotes <<'EOF'
+#!/bin/sh
+exec flatpak run me.spaceinbox.swiftynotes "$@"
+EOF
+chmod +x ~/.local/bin/swiftynotes
+```
+
+After that, `swiftynotes cli ...` works from the host shell as long as `~/.local/bin` is in your `PATH`.
+
 `update` replaces the full markdown content of the target note. The CLI emits JSON that is easy to drive from scripts, shell pipelines, and AI agents while still operating on the same file-backed notes as the desktop app.
+
+If you run the CLI outside Flatpak and have no host notes folder or host settings configured yet, it automatically falls back to the default Flathub data under `~/.var/app/me.spaceinbox.swiftynotes/`, so it can still see notes created by the Flatpak GUI.
 
 ## Storage
 

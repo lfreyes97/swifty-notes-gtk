@@ -78,6 +78,7 @@ struct CLICommandTests {
         #expect(result?.exitCode == 0)
         #expect(result?.stdout.contains("SwiftyNotes CLI") == true)
         #expect(result?.stdout.contains("Commands:") == true)
+        #expect(result?.stdout.contains("flatpak run me.spaceinbox.swiftynotes cli <command> [options]") == true)
         #expect(result?.stdout.contains("swiftynotes cli help <command>") == true)
     }
 

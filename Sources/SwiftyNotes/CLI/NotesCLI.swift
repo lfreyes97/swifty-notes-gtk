@@ -30,7 +30,7 @@ enum NotesCLI {
         do {
             let parsed = try ParsedInvocation(arguments: arguments, stdin: stdin)
             let repository = NotesRepository(
-                notesDirectory: parsed.notesDirectory ?? NotesRepository.defaultNotesDirectory()
+                notesDirectory: parsed.notesDirectory ?? CLINotesDirectoryResolver.resolve()
             )
 
             let output: String
@@ -93,6 +93,7 @@ enum NotesCLI {
             Manage the same file-backed markdown notes used by the GUI.
 
             Usage:
+              flatpak run me.spaceinbox.swiftynotes cli <command> [options]
               swiftynotes cli <command> [options]
 
             Commands:
@@ -107,7 +108,10 @@ enum NotesCLI {
 
             Notes:
               - Note IDs are lowercase UUID strings.
+              - For Flathub installs, run `flatpak run me.spaceinbox.swiftynotes cli ...`.
+              - To add a short host command, create `~/.local/bin/swiftynotes` that runs `flatpak run me.spaceinbox.swiftynotes "$@"`.
               - Without --notes-dir, the CLI uses the same storage directory as the GUI.
+              - If host storage is empty, the CLI also checks the default Flatpak storage under ~/.var/app/me.spaceinbox.swiftynotes/.
               - JSON output is intended to be easy for scripts and AI agents to consume.
 
             Examples:
@@ -427,6 +431,170 @@ private struct ParsedInvocation {
             throw NotesCLIError.usage("Replacement content is required.\n\n\(NotesCLI.help(for: .update))")
         }
         return ""
+    }
+}
+
+private enum CLINotesDirectoryResolver {
+    private static let notesDirectoryName = "notes"
+    private static let settingsFilename = "settings.json"
+    private static let noteFilename = "note.md"
+
+    static func resolve(
+        fileManager: FileManager = .default,
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> URL {
+        let hostDataHome = dataHome(in: environment, fileManager: fileManager)
+        let hostConfigHome = configHome(in: environment, fileManager: fileManager)
+        let hostDefaultNotesDirectory = notesDirectory(in: hostDataHome)
+
+        if let hostSettings = loadSettings(from: hostConfigHome, fileManager: fileManager) {
+            return hostSettings.resolvedNotesDirectory(defaultDirectory: hostDefaultNotesDirectory)
+        }
+        if hasStoredNotes(in: hostDataHome, fileManager: fileManager) {
+            return hostDefaultNotesDirectory
+        }
+        if hasExplicitXDGOverride(in: environment) {
+            return hostDefaultNotesDirectory
+        }
+
+        let flatpakRoot = flatpakRootDirectory(in: environment, fileManager: fileManager)
+        let flatpakDataHome = flatpakRoot.appendingPathComponent("data", isDirectory: true)
+        let flatpakConfigHome = flatpakRoot.appendingPathComponent("config", isDirectory: true)
+        let flatpakDefaultNotesDirectory = notesDirectory(in: flatpakDataHome)
+
+        if let flatpakSettings = loadSettings(from: flatpakConfigHome, fileManager: fileManager) {
+            return flatpakSettings.resolvedNotesDirectory(defaultDirectory: flatpakDefaultNotesDirectory)
+        }
+        if hasStoredNotes(in: flatpakDataHome, fileManager: fileManager) {
+            return flatpakDefaultNotesDirectory
+        }
+
+        return hostDefaultNotesDirectory
+    }
+
+    private static func loadSettings(
+        from configHome: URL,
+        fileManager: FileManager
+    ) -> AppSettings? {
+        let settingsURL = AppIdentity.applicationDirectory(in: configHome)
+            .appendingPathComponent(settingsFilename, isDirectory: false)
+        guard fileManager.fileExists(atPath: settingsURL.path()) else { return nil }
+        return try? AppSettingsStore(settingsFileURL: settingsURL, fileManager: fileManager).load()
+    }
+
+    private static func hasStoredNotes(
+        in dataHome: URL,
+        fileManager: FileManager
+    ) -> Bool {
+        let applicationIdentifiers = [AppIdentity.identifier] + AppIdentity.legacyIdentifiers
+        for applicationIdentifier in applicationIdentifiers {
+            let notesDirectory = AppIdentity.applicationDirectory(
+                in: dataHome,
+                identifier: applicationIdentifier
+            )
+            .appendingPathComponent(notesDirectoryName, isDirectory: true)
+
+            guard fileManager.fileExists(atPath: notesDirectory.path()) else { continue }
+            guard let contents = try? fileManager.contentsOfDirectory(
+                at: notesDirectory,
+                includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsHiddenFiles]
+            ) else {
+                continue
+            }
+
+            if contents.contains(where: { isStoredNoteEntry($0, fileManager: fileManager) }) {
+                return true
+            }
+        }
+        return false
+    }
+
+    private static func isStoredNoteEntry(
+        _ entryURL: URL,
+        fileManager: FileManager
+    ) -> Bool {
+        if entryURL.hasDirectoryPath {
+            return fileManager.fileExists(
+                atPath: entryURL.appendingPathComponent(noteFilename, isDirectory: false).path()
+            )
+        }
+        return entryURL.pathExtension == "md"
+    }
+
+    private static func notesDirectory(in dataHome: URL) -> URL {
+        AppIdentity.applicationDirectory(in: dataHome)
+            .appendingPathComponent(notesDirectoryName, isDirectory: true)
+            .standardizedFileURL
+    }
+
+    private static func hasExplicitXDGOverride(
+        in environment: [String: String]
+    ) -> Bool {
+        (environment["XDG_DATA_HOME"]?.isEmpty == false)
+            || (environment["XDG_CONFIG_HOME"]?.isEmpty == false)
+    }
+
+    private static func dataHome(
+        in environment: [String: String],
+        fileManager: FileManager
+    ) -> URL {
+        xdgHome(
+            variable: "XDG_DATA_HOME",
+            fallbackComponents: [".local", "share"],
+            environment: environment,
+            fileManager: fileManager
+        )
+    }
+
+    private static func configHome(
+        in environment: [String: String],
+        fileManager: FileManager
+    ) -> URL {
+        xdgHome(
+            variable: "XDG_CONFIG_HOME",
+            fallbackComponents: [".config"],
+            environment: environment,
+            fileManager: fileManager
+        )
+    }
+
+    private static func xdgHome(
+        variable: String,
+        fallbackComponents: [String],
+        environment: [String: String],
+        fileManager: FileManager
+    ) -> URL {
+        if let configuredPath = environment[variable], !configuredPath.isEmpty {
+            return URL(fileURLWithPath: configuredPath, isDirectory: true).standardizedFileURL
+        }
+
+        var directory = homeDirectory(in: environment, fileManager: fileManager)
+        for component in fallbackComponents {
+            directory.appendPathComponent(component, isDirectory: true)
+        }
+        return directory.standardizedFileURL
+    }
+
+    private static func flatpakRootDirectory(
+        in environment: [String: String],
+        fileManager: FileManager
+    ) -> URL {
+        homeDirectory(in: environment, fileManager: fileManager)
+            .appendingPathComponent(".var", isDirectory: true)
+            .appendingPathComponent("app", isDirectory: true)
+            .appendingPathComponent(AppIdentity.identifier, isDirectory: true)
+            .standardizedFileURL
+    }
+
+    private static func homeDirectory(
+        in environment: [String: String],
+        fileManager: FileManager
+    ) -> URL {
+        if let homePath = environment["HOME"], !homePath.isEmpty {
+            return URL(fileURLWithPath: homePath, isDirectory: true).standardizedFileURL
+        }
+        return fileManager.homeDirectoryForCurrentUser.standardizedFileURL
     }
 }
 
