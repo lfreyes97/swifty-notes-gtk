@@ -27,6 +27,21 @@ func sourceDependency(
     return .package(url: remoteURL, revision: revision)
 }
 
+func sourceDependency(
+    bundledPath: String,
+    overridePath: String? = nil,
+    remoteURL: String,
+    minimumVersion: Version
+) -> Package.Dependency {
+    if useBundledSwiftPMDependencies, packagePathExists(bundledPath) {
+        return .package(path: bundledPath)
+    }
+    if let overridePath, !overridePath.isEmpty, packagePathExists(overridePath) {
+        return .package(path: overridePath)
+    }
+    return .package(url: remoteURL, from: minimumVersion)
+}
+
 let package = Package(
     name: "swifty-notes-gtk",
     platforms: [
@@ -47,17 +62,17 @@ let package = Package(
             bundledPath: "flatpak-deps/swift-adwaita",
             overridePath: localSwiftAdwaitaPath,
             remoteURL: "https://github.com/makoni/swift-adwaita.git",
-            revision: "d66e7f86e4ce6cbbe503b81f08b89fe8b9ad8b42"
+            revision: "a9046505ba5c0adf7ab34d1fafa20837ec0d4e7e"
         ),
         sourceDependency(
             bundledPath: "flatpak-deps/swift-markdown",
             remoteURL: "https://github.com/swiftlang/swift-markdown.git",
-            revision: "7d9a5ce307528578dfa777d505496bd5f544ad94"
+            revision: "55d66d9a9e8d4fd3f48d111b0d437e82fe451903"
         ),
         sourceDependency(
             bundledPath: "flatpak-deps/swift-cmark",
             remoteURL: "https://github.com/swiftlang/swift-cmark.git",
-            revision: "5d9bdaa4228b381639fff09403e39a04926e2dbe"
+            minimumVersion: Version(0, 7, 0)
         )
     ],
     targets: [
