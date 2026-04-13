@@ -70,5 +70,10 @@
         </ul>
       </description>
     </release>
+    <release version="1.0.0" date="2026-04-10">
+      <description>
+        <p>Native GTK release with Markdown preview, editor customization, configurable note storage for cloud-synced folders, note-local image assets, and CLI automation for scripts and AI agents.</p>
+      </description>
+    </release>
   </releases>
 </component>
