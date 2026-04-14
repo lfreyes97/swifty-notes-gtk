@@ -507,6 +507,6 @@ struct RepositoryStateTests {
     func previewWidthResolutionExpandsLegacyDefaultButPreservesCustomWidths() {
         #expect(MainWindow.resolvedPreviewWidth(storedWidth: WorkspaceState.legacyDefaultPreviewWidth, availableWidth: 1600) == 560)
         #expect(MainWindow.resolvedPreviewWidth(storedWidth: 720, availableWidth: 1600) == 720)
-        #expect(MainWindow.resolvedPreviewWidth(storedWidth: 720, availableWidth: 900) == 480)
+        #expect(MainWindow.resolvedPreviewWidth(storedWidth: 720, availableWidth: 900) == 540)
     }
 }

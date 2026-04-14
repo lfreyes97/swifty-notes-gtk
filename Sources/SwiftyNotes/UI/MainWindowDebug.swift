@@ -173,6 +173,24 @@ extension MainWindow {
         ]
     }
 
+    struct DebugEditorFormattingToolbarSnapshot: Equatable {
+        let isCompact: Bool
+        let usesTwoRows: Bool
+        let labelsByAction: [MarkdownFormattingAction: String?]
+    }
+
+    var debugEditorFormattingToolbarSnapshot: DebugEditorFormattingToolbarSnapshot {
+        .init(
+            isCompact: isEditorFormattingToolbarCompact,
+            usesTwoRows: isEditorFormattingToolbarUsingTwoRows,
+            labelsByAction: editorFormattingToolbarLabels()
+        )
+    }
+
+    func debugSetEditorFormattingToolbarWidth(_ width: Int) {
+        updateEditorFormattingToolbarLayout(forWidth: width)
+    }
+
     var debugNoteContextMenuLabels: [String] {
         noteContextMenuLabels
     }

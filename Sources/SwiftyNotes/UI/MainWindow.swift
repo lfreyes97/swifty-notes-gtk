@@ -1,6 +1,20 @@
 import Adwaita
 import Foundation
 
+struct ToolbarButtonContentConfiguration {
+    let primaryText: String
+    let iconName: String?
+    let prefersCompactLabel: Bool
+    let hidesLabelWhenCompact: Bool
+
+    func displayedText(isCompact: Bool) -> String? {
+        if isCompact, hidesLabelWhenCompact {
+            return nil
+        }
+        return primaryText
+    }
+}
+
 @MainActor
 final class MainWindow {
     let window: ApplicationWindow
@@ -23,9 +37,13 @@ final class MainWindow {
     let previewModeToggle = ToggleButton(label: "Preview")
     let viewModeSwitcher = Box(orientation: .horizontal, spacing: 0)
     let editorContent = Box(orientation: .vertical, spacing: 0)
-    let editorFormattingBar = Box(orientation: .horizontal, spacing: 8)
+    let editorFormattingBar = Box(orientation: .vertical, spacing: 6)
+    let editorFormattingBarScroll = ScrolledWindow()
+    let editorFormattingPrimaryRow = Box(orientation: .horizontal, spacing: 8)
+    let editorFormattingSecondaryRow = Box(orientation: .horizontal, spacing: 8)
     let editorInlineFormattingGroup = Box(orientation: .horizontal, spacing: 0)
     let editorBlockFormattingGroup = Box(orientation: .horizontal, spacing: 0)
+    let editorFormattingGroupSeparator = Separator(orientation: .vertical)
     let newNoteButton = Button(icon: .custom("list-add-symbolic"))
     let saveNoteButton = Button(icon: .custom("document-save-symbolic"))
     let deleteNoteButton = Button(icon: .userTrash)
@@ -85,6 +103,9 @@ final class MainWindow {
     var isPreviewPaneAttached = false
     var suppressViewModeToggleChange = false
     var editorFormattingButtons: [MarkdownFormattingAction: Button] = [:]
+    var editorFormattingButtonConfigurations: [MarkdownFormattingAction: ToolbarButtonContentConfiguration] = [:]
+    var isEditorFormattingToolbarCompact = false
+    var isEditorFormattingToolbarUsingTwoRows = false
     var noteContextMenu: Popover?
     var noteContextMenuRequestID: UInt = 0
     var noteContextHandlers: [String: @MainActor () -> Void] = [:]
@@ -198,7 +219,7 @@ final class MainWindow {
         editorContent.vexpand = true
         installEditorImageDropTarget()
 
-        editorContent.append(editorFormattingBar)
+        editorContent.append(editorFormattingBarScroll)
         editorContent.append(Separator())
         editorContent.append(editorScroll)
         editorPreviewPane.startChild = editorContent
@@ -306,6 +327,10 @@ final class MainWindow {
             self?.handlePreviewPaneMoved()
         }
 
+        editorFormattingBarScroll.onSizeAllocate { [weak self] width, _ in
+            self?.updateEditorFormattingToolbarLayout(forWidth: width)
+        }
+
         editorScroll.verticalAdjustment.onValueChanged { [weak self] in
             guard let self else { return }
             self.syncPreviewScroll()
@@ -368,7 +393,8 @@ final class MainWindow {
     }
 
     static let minimumPreviewWidth = 400
-    static let minimumEditorWidth = 420
+    static let minimumEditorWidth = 360
+    static let editorFormattingCompactWidthThreshold = 520
     static let previewAnimationDuration = 220
 
     struct DirectoryOpenFailure: LocalizedError {

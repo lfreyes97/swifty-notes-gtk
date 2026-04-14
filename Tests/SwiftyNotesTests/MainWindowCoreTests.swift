@@ -356,6 +356,123 @@ struct MainWindowCoreTests {
     }
 
     @Test @MainActor
+    func mainWindowFormattingToolbarUsesCompactIconModeWhenEditorNarrows() throws {
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.toolbarcompact")
+        try app.register()
+
+        let window = MainWindow(
+            application: app,
+            state: AppState(),
+            stateStore: WorkspaceStateStore(
+                stateFileURL: temp.appendingPathComponent("workspace.json", isDirectory: false)
+            ),
+            repository: NotesRepository(notesDirectory: temp),
+            renderer: MarkdownRenderer(),
+            autosave: AutosaveCoordinator()
+        )
+
+        window.debugLoadInitialNotes()
+        window.debugSetEditorFormattingToolbarWidth(MainWindow.editorFormattingCompactWidthThreshold + 80)
+
+        let expandedLabels: [MarkdownFormattingAction: String?] = [
+            .heading: "H1",
+            .bold: "Bold",
+            .italic: "Italic",
+            .code: "</>",
+            .link: "Link",
+            .quote: "Quote",
+            .bulletList: "Bullets",
+            .numberedList: "1.",
+            .taskList: "[ ]"
+        ]
+        #expect(window.debugEditorFormattingToolbarSnapshot == .init(
+            isCompact: false,
+            usesTwoRows: false,
+            labelsByAction: expandedLabels
+        ))
+
+        window.debugSetEditorFormattingToolbarWidth(MainWindow.editorFormattingCompactWidthThreshold - 1)
+
+        let compactLabels: [MarkdownFormattingAction: String?] = [
+            .heading: "H1",
+            .bold: nil,
+            .italic: nil,
+            .code: "</>",
+            .link: nil,
+            .quote: nil,
+            .bulletList: nil,
+            .numberedList: nil,
+            .taskList: "[ ]"
+        ]
+        #expect(window.debugEditorFormattingToolbarSnapshot == .init(
+            isCompact: true,
+            usesTwoRows: false,
+            labelsByAction: compactLabels
+        ))
+        #expect(window.debugToolbarTooltips["formatBold"] == "Wrap the selection in bold markdown")
+
+        window.debugSetEditorFormattingToolbarWidth(MainWindow.editorFormattingCompactWidthThreshold + 80)
+
+        #expect(window.debugEditorFormattingToolbarSnapshot == .init(
+            isCompact: false,
+            usesTwoRows: false,
+            labelsByAction: expandedLabels
+        ))
+    }
+
+    @Test @MainActor
+    func mainWindowFormattingToolbarWrapsIntoTwoRowsWhenCompactRowStillDoesNotFit() throws {
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.toolbarwrap")
+        try app.register()
+
+        let window = MainWindow(
+            application: app,
+            state: AppState(),
+            stateStore: WorkspaceStateStore(
+                stateFileURL: temp.appendingPathComponent("workspace.json", isDirectory: false)
+            ),
+            repository: NotesRepository(notesDirectory: temp),
+            renderer: MarkdownRenderer(),
+            autosave: AutosaveCoordinator()
+        )
+
+        window.debugLoadInitialNotes()
+        window.debugSetEditorFormattingToolbarWidth(220)
+
+        let compactLabels: [MarkdownFormattingAction: String?] = [
+            .heading: "H1",
+            .bold: nil,
+            .italic: nil,
+            .code: "</>",
+            .link: nil,
+            .quote: nil,
+            .bulletList: nil,
+            .numberedList: nil,
+            .taskList: "[ ]"
+        ]
+        #expect(window.debugEditorFormattingToolbarSnapshot == .init(
+            isCompact: true,
+            usesTwoRows: true,
+            labelsByAction: compactLabels
+        ))
+        #expect(window.debugToolbarTooltips["formatNumbered"] == "Prefix the selected lines as a numbered list")
+
+        window.debugSetEditorFormattingToolbarWidth(MainWindow.editorFormattingCompactWidthThreshold - 1)
+
+        #expect(window.debugEditorFormattingToolbarSnapshot == .init(
+            isCompact: true,
+            usesTwoRows: false,
+            labelsByAction: compactLabels
+        ))
+    }
+
+    @Test @MainActor
     func mainWindowUsesApplicationIconName() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }

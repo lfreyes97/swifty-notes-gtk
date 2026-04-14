@@ -306,6 +306,7 @@ extension MainWindow {
         splitView.showSidebar = state.isSidebarVisible
         updateSidebarToggleAccessibility()
         updateSidebarToggleTooltip()
+        refreshEditorFormattingToolbarLayout()
     }
 
     func applyViewMode(animated: Bool) {
@@ -321,6 +322,7 @@ extension MainWindow {
         case .preview:
             showPreviewOnlyContent()
         }
+        refreshEditorFormattingToolbarLayout()
     }
 
     func showEditorContent() {
@@ -369,6 +371,7 @@ extension MainWindow {
         let totalWidth = currentPreviewContainerWidth
         isRestoringPreviewPaneLayout = true
         editorPreviewPane.position = resolvedVisiblePreviewPosition(totalWidth: totalWidth)
+        refreshEditorFormattingToolbarLayout()
         MainContext.idle { [weak self] in
             self?.isRestoringPreviewPaneLayout = false
         }
@@ -468,6 +471,7 @@ extension MainWindow {
         let previewWidth = totalWidth - editorPreviewPane.position
         guard previewWidth >= Self.minimumPreviewWidth else { return }
         state.setPreferredPreviewWidth(previewWidth)
+        updateEditorFormattingToolbarLayout(forWidth: editorPreviewPane.position)
     }
 
     var currentSidebarWidth: Int {

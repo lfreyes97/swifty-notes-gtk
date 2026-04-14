@@ -1,4 +1,5 @@
 import Adwaita
+import CAdwaita
 import Foundation
 
 @MainActor
@@ -29,7 +30,20 @@ extension MainWindow {
         editorFormattingBar.marginEnd = 8
         editorFormattingBar.marginTop = 8
         editorFormattingBar.marginBottom = 8
-        editorFormattingBar.hexpand = true
+        editorFormattingBar.hexpand = false
+        editorFormattingBar.halign = .start
+
+        editorFormattingPrimaryRow.halign = .start
+        editorFormattingSecondaryRow.halign = .start
+        editorFormattingSecondaryRow.visible = false
+
+        editorFormattingBar.append(editorFormattingPrimaryRow)
+        editorFormattingBar.append(editorFormattingSecondaryRow)
+
+        editorFormattingBarScroll.child = editorFormattingBar
+        editorFormattingBarScroll.setPolicy(horizontal: .automatic, vertical: .never)
+        editorFormattingBarScroll.hexpand = true
+        editorFormattingBarScroll.minContentWidth = 0
 
         editorInlineFormattingGroup.addCSSClass("linked")
         editorBlockFormattingGroup.addCSSClass("linked")
@@ -49,9 +63,7 @@ extension MainWindow {
             editorFormattingButtons[action] = button
         }
 
-        editorFormattingBar.append(editorInlineFormattingGroup)
-        editorFormattingBar.append(Separator(orientation: .vertical))
-        editorFormattingBar.append(editorBlockFormattingGroup)
+        layoutEditorFormattingRows(useTwoRows: false)
     }
 
     func applyEditorFormatting(_ action: MarkdownFormattingAction) {
@@ -59,47 +71,165 @@ extension MainWindow {
         editor.applyFormatting(action)
     }
 
+    func updateEditorFormattingToolbarLayout(forWidth width: Int) {
+        guard width > 0 else { return }
+
+        let shouldUseCompactMode = width <= Self.editorFormattingCompactWidthThreshold
+        if isEditorFormattingToolbarCompact != shouldUseCompactMode {
+            isEditorFormattingToolbarCompact = shouldUseCompactMode
+            refreshEditorFormattingToolbarButtons()
+        }
+
+        let shouldUseTwoRows: Bool
+        if shouldUseCompactMode {
+            layoutEditorFormattingRows(useTwoRows: false)
+            shouldUseTwoRows = measuredNaturalWidth(of: editorFormattingBar) > width
+        } else {
+            shouldUseTwoRows = false
+        }
+
+        if isEditorFormattingToolbarUsingTwoRows != shouldUseTwoRows {
+            isEditorFormattingToolbarUsingTwoRows = shouldUseTwoRows
+        }
+        layoutEditorFormattingRows(useTwoRows: shouldUseTwoRows)
+        editorFormattingBarScroll.horizontalAdjustment.value = 0
+    }
+
+    func refreshEditorFormattingToolbarLayout() {
+        updateEditorFormattingToolbarLayout(forWidth: resolvedEditorFormattingToolbarWidth())
+    }
+
+    func editorFormattingToolbarLabels() -> [MarkdownFormattingAction: String?] {
+        var labels: [MarkdownFormattingAction: String?] = [:]
+        for action in MarkdownFormattingAction.allCases {
+            labels[action] = editorFormattingButtonConfigurations[action]?.displayedText(
+                isCompact: isEditorFormattingToolbarCompact
+            )
+        }
+        return labels
+    }
+
     private func makeEditorFormattingButton(for action: MarkdownFormattingAction) -> Button {
         let button = Button()
         button.tooltipText = action.tooltip
         button.setAccessibleLabel(action.accessibilityLabel)
-        button.child = makeToolbarButtonContent(
+        let configuration = ToolbarButtonContentConfiguration(
             primaryText: action.shortLabel ?? action.accessibilityLabel,
             iconName: action.iconName,
-            prefersCompactLabel: action.iconName != nil && action.shortLabel == nil
+            prefersCompactLabel: action.iconName != nil && action.shortLabel == nil,
+            hidesLabelWhenCompact: action.iconName != nil
+        )
+        editorFormattingButtonConfigurations[action] = configuration
+        button.child = makeToolbarButtonContent(
+            configuration: configuration,
+            isCompact: isEditorFormattingToolbarCompact
         )
         return button
     }
 
     private func setToggleContent(_ toggle: ToggleButton, label: String, iconName: String) {
         toggle.child = makeToolbarButtonContent(
-            primaryText: label,
-            iconName: iconName,
-            prefersCompactLabel: false
+            configuration: ToolbarButtonContentConfiguration(
+                primaryText: label,
+                iconName: iconName,
+                prefersCompactLabel: false,
+                hidesLabelWhenCompact: false
+            ),
+            isCompact: false
         )
     }
 
-    private func makeToolbarButtonContent(
-        primaryText: String,
-        iconName: String?,
-        prefersCompactLabel: Bool
-    ) -> Widget {
-        let box = Box(orientation: .horizontal, spacing: 6)
-        box.marginStart = prefersCompactLabel ? 2 : 4
-        box.marginEnd = prefersCompactLabel ? 2 : 4
+    private func resolvedEditorFormattingToolbarWidth() -> Int {
+        if state.viewMode == .split {
+            let totalWidth = currentPreviewContainerWidth
+            let previewWidth = Self.resolvedPreviewWidth(
+                storedWidth: state.preferredPreviewWidth,
+                availableWidth: totalWidth
+            )
+            return max(totalWidth - previewWidth, Self.minimumEditorWidth)
+        }
 
-        if let iconName {
+        let allocatedWidth = max(editorFormattingBarScroll.width, editorContent.width, editorPreviewPane.width)
+        if allocatedWidth > 0 {
+            return allocatedWidth
+        }
+        return currentPreviewContainerWidth
+    }
+
+    private func layoutEditorFormattingRows(useTwoRows: Bool) {
+        detachEditorFormattingWidgetIfNeeded(editorInlineFormattingGroup)
+        detachEditorFormattingWidgetIfNeeded(editorFormattingGroupSeparator)
+        detachEditorFormattingWidgetIfNeeded(editorBlockFormattingGroup)
+
+        editorFormattingPrimaryRow.append(editorInlineFormattingGroup)
+        if useTwoRows {
+            editorFormattingSecondaryRow.append(editorBlockFormattingGroup)
+            editorFormattingSecondaryRow.visible = true
+        } else {
+            editorFormattingPrimaryRow.append(editorFormattingGroupSeparator)
+            editorFormattingPrimaryRow.append(editorBlockFormattingGroup)
+            editorFormattingSecondaryRow.visible = false
+        }
+    }
+
+    private func refreshEditorFormattingToolbarButtons() {
+        for (action, button) in editorFormattingButtons {
+            guard let configuration = editorFormattingButtonConfigurations[action] else { continue }
+            button.child = makeToolbarButtonContent(
+                configuration: configuration,
+                isCompact: isEditorFormattingToolbarCompact
+            )
+        }
+    }
+
+    private func detachEditorFormattingWidgetIfNeeded(_ widget: Widget) {
+        if widget.parent?.opaquePointer == editorFormattingPrimaryRow.opaquePointer {
+            editorFormattingPrimaryRow.remove(widget)
+        } else if widget.parent?.opaquePointer == editorFormattingSecondaryRow.opaquePointer {
+            editorFormattingSecondaryRow.remove(widget)
+        }
+    }
+
+    private func measuredNaturalWidth(of widget: Widget) -> Int {
+        var minimum: Int32 = 0
+        var natural: Int32 = 0
+        gtk_widget_measure(
+            widget.widgetPointer,
+            GTK_ORIENTATION_HORIZONTAL,
+            -1,
+            &minimum,
+            &natural,
+            nil,
+            nil
+        )
+        return Int(natural)
+    }
+
+    private func makeToolbarButtonContent(
+        configuration: ToolbarButtonContentConfiguration,
+        isCompact: Bool
+    ) -> Widget {
+        let labelText = configuration.displayedText(isCompact: isCompact)
+        let showsLabel = labelText != nil
+        let box = Box(orientation: .horizontal, spacing: showsLabel && configuration.iconName != nil ? 6 : 0)
+        let horizontalMargin = showsLabel ? (configuration.prefersCompactLabel ? 2 : 4) : 6
+        box.marginStart = horizontalMargin
+        box.marginEnd = horizontalMargin
+
+        if let iconName = configuration.iconName {
             let image = Image(iconName: iconName)
             image.pixelSize = 16
             box.append(image)
         }
 
-        let label = Label(primaryText)
-        label.xalign = 0
-        if prefersCompactLabel {
-            label.addCSSClass(.caption)
+        if let labelText {
+            let label = Label(labelText)
+            label.xalign = 0
+            if configuration.prefersCompactLabel {
+                label.addCSSClass(.caption)
+            }
+            box.append(label)
         }
-        box.append(label)
         return box
     }
 }
