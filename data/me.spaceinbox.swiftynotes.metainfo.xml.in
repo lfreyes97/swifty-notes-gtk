@@ -63,8 +63,9 @@
   <releases>
     <release version="@VERSION@" date="@DATE@">
       <description>
-        <p>This update makes split view much more comfortable on tighter window sizes, especially when you want to keep the preview open while editing.</p>
+        <p>This update makes split view more comfortable on tighter window sizes and adds a more direct way to open and edit Markdown files outside your library.</p>
         <ul>
+          <li>You can now open and edit standalone Markdown files without importing them first, including from your file manager’s Open With flow.</li>
           <li>The formatting toolbar now adapts more gracefully as the editor narrows, so actions stay easier to reach instead of disappearing off the edge.</li>
           <li>Very narrow layouts can now flow the formatting toolbar into two rows, keeping the preview usable without hiding the sidebar.</li>
           <li>Split view now shares space more gracefully between the editor and preview on smaller screens.</li>
