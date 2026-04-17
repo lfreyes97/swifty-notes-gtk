@@ -255,7 +255,7 @@ extension MainWindow {
             guard let self else { return }
             let path: String?
             do {
-                path = try await dialog.openThrowing(parent: self.window.root ?? self.window)
+                path = try await dialog.open(parent: self.window.root ?? self.window)
             } catch {
                 self.activeFileDialog = nil
                 self.presentError(
@@ -297,7 +297,7 @@ extension MainWindow {
             guard let self else { return }
             let path: String?
             do {
-                path = try await dialog.openThrowing(parent: self.window.root ?? self.window)
+                path = try await dialog.open(parent: self.window.root ?? self.window)
             } catch {
                 self.activeFileDialog = nil
                 self.presentError(
@@ -335,7 +335,7 @@ extension MainWindow {
             guard let self else { return }
             let path: String?
             do {
-                path = try await dialog.saveThrowing(parent: self.window.root ?? self.window)
+                path = try await dialog.save(parent: self.window.root ?? self.window)
             } catch {
                 self.activeFileDialog = nil
                 self.presentError(

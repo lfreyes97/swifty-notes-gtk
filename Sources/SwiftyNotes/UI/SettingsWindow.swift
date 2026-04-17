@@ -211,7 +211,7 @@ final class SettingsWindow {
             guard let self, let dialog else { return }
             let path: String?
             do {
-                path = try await dialog.selectFolderThrowing(parent: self.window)
+                path = try await dialog.selectFolder(parent: self.window)
             } catch {
                 if self.activeFileDialog === dialog {
                     self.activeFileDialog = nil

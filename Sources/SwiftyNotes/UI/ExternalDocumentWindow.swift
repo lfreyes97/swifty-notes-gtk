@@ -980,7 +980,7 @@ private extension ExternalDocumentWindow {
             guard let self else { return }
             let path: String?
             do {
-                path = try await dialog.saveThrowing(parent: self.window.root ?? self.window)
+                path = try await dialog.save(parent: self.window.root ?? self.window)
             } catch {
                 self.activeFileDialog = nil
                 self.presentError(
