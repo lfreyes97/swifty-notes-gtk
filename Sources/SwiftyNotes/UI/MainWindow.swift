@@ -445,18 +445,10 @@ final class MainWindow {
     }
 
     nonisolated static func launchDefaultForURI(_ uri: String) throws {
-        var error: UnsafeMutablePointer<GError>?
-        let launched = g_app_info_launch_default_for_uri(uri, nil, &error)
-        defer {
-            if let error {
-                g_error_free(error)
-            }
-        }
-
-        guard launched != 0 else {
-            let message = error.map { String(cString: $0.pointee.message) }
-                ?? "No application could open \(uri)."
-            throw DirectoryOpenFailure(message: message)
+        do {
+            try AppLauncher.launchDefault(forURI: uri)
+        } catch let error as GLibError {
+            throw DirectoryOpenFailure(message: error.message)
         }
     }
 

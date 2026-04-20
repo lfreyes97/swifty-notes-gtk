@@ -869,15 +869,15 @@ private extension ExternalDocumentWindow {
     }
 
     private func detachEditorFormattingWidgetIfNeeded(_ widget: Widget) {
-        if widget.parent?.opaquePointer == editorFormattingPrimaryRow.opaquePointer {
+        if widget.parent?.isSame(as: editorFormattingPrimaryRow) == true {
             editorFormattingPrimaryRow.remove(widget)
-        } else if widget.parent?.opaquePointer == editorFormattingSecondaryRow.opaquePointer {
+        } else if widget.parent?.isSame(as: editorFormattingSecondaryRow) == true {
             editorFormattingSecondaryRow.remove(widget)
         }
     }
 
     private func measuredNaturalWidth(of widget: Widget) -> Int {
-        widget.measure(orientation: GTK_ORIENTATION_HORIZONTAL).natural
+        widget.measure(orientation: .horizontal).natural
     }
 
     private func makeToolbarButtonContent(

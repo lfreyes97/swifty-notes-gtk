@@ -1,4 +1,4 @@
-import CAdwaita
+import Adwaita
 import Foundation
 
 #if canImport(FoundationNetworking)
@@ -135,29 +135,8 @@ private extension PreviewRemoteImageLoader {
     }
 
     func dispatch(_ localURL: URL?, completion: @escaping PreviewRemoteImageLoadCompletion) {
-        let box = Unmanaged.passRetained(IdleCompletionBox(completion: completion, localURL: localURL)).toOpaque()
-        _ = g_idle_add_full(
-            G_PRIORITY_DEFAULT_IDLE,
-            { userData -> gboolean in
-                guard let userData else { return 0 }
-                let box = Unmanaged<IdleCompletionBox>.fromOpaque(userData).takeRetainedValue()
-                MainActor.assumeIsolated {
-                    box.completion(box.localURL)
-                }
-                return 0
-            },
-            box,
-            nil
-        )
-    }
-}
-
-private final class IdleCompletionBox: @unchecked Sendable {
-    let completion: PreviewRemoteImageLoadCompletion
-    let localURL: URL?
-
-    init(completion: @escaping PreviewRemoteImageLoadCompletion, localURL: URL?) {
-        self.completion = completion
-        self.localURL = localURL
+        MainContext.idle {
+            completion(localURL)
+        }
     }
 }

@@ -261,7 +261,7 @@ final class MarkdownPreview {
         outer.addCSSClass("preview-code-block")
         outer.hexpand = true
         outer.halign = .fill
-        outer.overflow = GTK_OVERFLOW_HIDDEN
+        outer.overflow = .hidden
 
         let inner = Box(orientation: .vertical, spacing: 10)
         inner.setMargins(14)
@@ -284,7 +284,7 @@ final class MarkdownPreview {
         codeLabel.addCSSClass("monospace")
 
         let scroll = ScrolledWindow(child: codeLabel)
-        scroll.setPolicy(horizontal: GTK_POLICY_AUTOMATIC, vertical: GTK_POLICY_NEVER)
+        scroll.setPolicy(horizontal: .automatic, vertical: .never)
         scroll.propagateNaturalHeight = true
         scroll.propagateNaturalWidth = false
         scroll.hexpand = true
@@ -403,7 +403,7 @@ final class MarkdownPreview {
         wrapper.vexpand = false
         wrapper.halign = .fill
         wrapper.valign = .start
-        wrapper.overflow = GTK_OVERFLOW_HIDDEN
+        wrapper.overflow = .hidden
 
         let inner = Box(orientation: .vertical, spacing: 10)
         inner.setMargins(14)
@@ -561,7 +561,7 @@ final class MarkdownPreview {
         clamp.hexpand = true
         clamp.halign = .fill
         clamp.child = picture
-        clamp.overflow = GTK_OVERFLOW_HIDDEN
+        clamp.overflow = .hidden
 
         switch resolved {
         case let .local(localURL):
@@ -681,8 +681,8 @@ final class MarkdownPreview {
         let label = Label("")
         label.markup = markup
         label.wrap = true
-        label.naturalWrapMode = GTK_NATURAL_WRAP_WORD
-        label.pangoWrapMode = PANGO_WRAP_WORD_CHAR
+        label.naturalWrapMode = .word
+        label.pangoWrapMode = .wordChar
         label.xalign = 0
         label.justify = .left
         label.selectable = true

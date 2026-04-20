@@ -1,5 +1,4 @@
 import Adwaita
-import CAdwaita
 import Foundation
 
 #if DEBUG
@@ -18,15 +17,15 @@ extension MainWindow {
     }
 
     func debugEmitNewNoteClicked() {
-        g_signal_emit_by_name_no_args(UnsafeMutableRawPointer(newNoteButton.opaquePointer), "clicked")
+        newNoteButton.emitClicked()
     }
 
     func debugEmitSaveClicked() {
-        g_signal_emit_by_name_no_args(UnsafeMutableRawPointer(saveNoteButton.opaquePointer), "clicked")
+        saveNoteButton.emitClicked()
     }
 
     func debugEmitSidebarToggleClicked() {
-        g_signal_emit_by_name_no_args(UnsafeMutableRawPointer(sidebarToggle.opaquePointer), "clicked")
+        sidebarToggle.emitClicked()
     }
 
     func debugSelectViewMode(_ mode: EditorViewMode) {
@@ -41,7 +40,7 @@ extension MainWindow {
     }
 
     func debugEmitSortButtonClicked() {
-        g_signal_emit_by_name_no_args(UnsafeMutableRawPointer(sidebar.sortButton.opaquePointer), "clicked")
+        sidebar.sortButton.emitClicked()
     }
 
     func debugSetEditorText(_ text: String) {
@@ -54,12 +53,12 @@ extension MainWindow {
 
     func debugEmitEditorFormattingButtonClicked(_ action: MarkdownFormattingAction) {
         guard let button = editorFormattingButtons[action] else { return }
-        g_signal_emit_by_name_no_args(UnsafeMutableRawPointer(button.opaquePointer), "clicked")
+        button.emitClicked()
     }
 
     func debugSetSearchQuery(_ text: String) {
         sidebar.searchEntry.text = text
-        g_signal_emit_by_name_no_args(UnsafeMutableRawPointer(sidebar.searchEntry.opaquePointer), "search-changed")
+        sidebar.searchEntry.emitSearchChanged()
     }
 
     var debugNotesCount: Int {
@@ -233,7 +232,7 @@ extension MainWindow {
     }
 
     func debugActivateOpenNotesFolderAction() {
-        g_action_activate(OpaquePointer(openNotesFolderAction.pointer), nil)
+        openNotesFolderAction.activate()
     }
 
     func debugOpenNotesFolder() {
@@ -249,11 +248,11 @@ extension MainWindow {
     }
 
     func debugActivateAboutAction() {
-        g_action_activate(OpaquePointer(aboutAction.pointer), nil)
+        aboutAction.activate()
     }
 
     func debugActivateSettingsAction() {
-        g_action_activate(OpaquePointer(settingsAction.pointer), nil)
+        settingsAction.activate()
     }
 
     func debugChangeNotesDirectory(to directory: URL) throws {
