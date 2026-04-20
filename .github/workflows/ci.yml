@@ -35,6 +35,7 @@ jobs:
             libadwaita-1-dev \
             libgtk-4-dev \
             libgtksourceview-5-dev \
+            webp-pixbuf-loader \
             xvfb
 
       - name: Build project
