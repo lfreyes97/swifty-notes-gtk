@@ -407,9 +407,13 @@ private func runWaylandUIScript(
         return None
 
     def walk(node):
+        if node is None:
+            return
         try:
             for index in range(node.childCount):
                 child = node.getChildAtIndex(index)
+                if child is None:
+                    continue
                 yield child
                 yield from walk(child)
         except Exception:
@@ -417,7 +421,7 @@ private func runWaylandUIScript(
 
     def visible_names(root):
         names = []
-        if root.name:
+        if root is not None and root.name:
             names.append(root.name)
         for child in walk(root):
             if child.name:
@@ -456,6 +460,8 @@ private func runWaylandUIScript(
         return wait_until(locate, "Swifty Notes frame appears", timeout=40)
 
     def find_named(root, name):
+        if root is None:
+            return None
         if (root.name or "") == name:
             return root
         for child in walk(root):
