@@ -499,7 +499,7 @@ struct MainWindowActionsTests {
         #expect(window.debugHasAboutDialog)
         #expect(window.debugAboutDialogSnapshot == .init(
             applicationName: "Swifty Notes",
-            version: "1.1.0",
+            version: "1.1.1",
             developerName: "Sergey Armodin",
             copyright: "© 2026 Sergey Armodin",
             website: "https://github.com/makoni/swifty-notes-gtk",

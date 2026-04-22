@@ -63,6 +63,18 @@
   <releases>
     <release version="@VERSION@" date="@DATE@">
       <description>
+        <p>This update brings back a few things that quietly stopped working on some setups in 1.1.0, and polishes exporting and window handling.</p>
+        <ul>
+          <li>Import, Open Markdown File, Export, Save As, and Choose Notes Folder dialogs now open reliably. On some systems they were silently doing nothing after upgrading to 1.1.0.</li>
+          <li>Images attached to notes show up in the preview again — previously they could quietly fail to load after launching the app.</li>
+          <li>Notes and folders whose paths contain spaces — for example a cloud-synced folder called "Cloud Disk" or "My Notes" — can now be imported, opened, and exported without "file not found" errors.</li>
+          <li>Exporting a note with images now writes an "assets" folder next to the Markdown file, so the exported bundle stays self-contained when you move it into a blog repository or a backup.</li>
+          <li>Right-clicking the Swifty Notes icon in your dock or app grid now offers a "New Window" action, so you can open the notes library even when you're already editing an external Markdown document.</li>
+        </ul>
+      </description>
+    </release>
+    <release version="1.1.0" date="2026-04-21">
+      <description>
         <p>This update makes the Markdown preview feel richer for notes that mix in online images, badges, and animations.</p>
         <ul>
           <li>Images loaded from the web — including animated GIFs and WebP animations — now render directly in the preview instead of showing a placeholder.</li>
