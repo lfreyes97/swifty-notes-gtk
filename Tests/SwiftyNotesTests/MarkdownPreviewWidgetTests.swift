@@ -2,7 +2,6 @@ import Foundation
 import Testing
 @testable import SwiftyNotes
 import Adwaita
-import CAdwaita
 
 // Widget-backed MarkdownPreview tests live in their own suite so the CI step
 // that runs them gets a dedicated process. When they share a process with
@@ -119,7 +118,7 @@ struct MarkdownPreviewWidgetTests {
         }
 
         let size = child.sizeRequest
-        let buttonNaturalHeight = measuredNaturalSize(of: button, orientation: GTK_ORIENTATION_VERTICAL)
+        let buttonNaturalHeight = measuredNaturalSize(of: button, orientation: .vertical)
 
         #expect(child.isInstance(of: Picture.self))
         #expect(size.width == -1)
@@ -198,7 +197,7 @@ struct MarkdownPreviewWidgetTests {
             return
         }
 
-        let measurement = badgeRow.measure(orientation: GTK_ORIENTATION_HORIZONTAL, forSize: 18)
+        let measurement = badgeRow.measure(orientation: .horizontal, forSize: 18)
 
         #expect(measurement.minimum > 0)
         #expect(measurement.natural >= measurement.minimum)
@@ -237,7 +236,7 @@ struct MarkdownPreviewWidgetTests {
             return
         }
 
-        let measurement = block.measure(orientation: GTK_ORIENTATION_HORIZONTAL)
+        let measurement = block.measure(orientation: .horizontal)
 
         #expect(measurement.minimum <= 320)
     }
@@ -260,7 +259,7 @@ struct MarkdownPreviewWidgetTests {
             return
         }
 
-        let measurement = block.measure(orientation: GTK_ORIENTATION_HORIZONTAL)
+        let measurement = block.measure(orientation: .horizontal)
 
         #expect(measurement.minimum <= 320)
     }
@@ -283,7 +282,7 @@ struct MarkdownPreviewWidgetTests {
             return
         }
 
-        let measurement = block.measure(orientation: GTK_ORIENTATION_HORIZONTAL)
+        let measurement = block.measure(orientation: .horizontal)
 
         #expect(measurement.minimum <= 320)
     }
@@ -370,7 +369,7 @@ struct MarkdownPreviewWidgetTests {
         #expect(await waitForPaintable(picture, timeout: .seconds(3)))
 
         #expect(firstClamp(in: preview.container).map {
-            measuredNaturalSize(of: $0, orientation: GTK_ORIENTATION_VERTICAL, forSize: 300)
+            measuredNaturalSize(of: $0, orientation: .vertical, forSize: 300)
         } ?? 0 > 0)
     }
 
@@ -468,7 +467,7 @@ struct MarkdownPreviewWidgetTests {
         #expect(pictureHasPaintable(picture))
         #expect(preview.debugAnimatedImagePlayerCount == 1)
         #expect(firstClamp(in: preview.container).map {
-            measuredNaturalSize(of: $0, orientation: GTK_ORIENTATION_VERTICAL, forSize: 300)
+            measuredNaturalSize(of: $0, orientation: .vertical, forSize: 300)
         } ?? 0 > 0)
     }
 
@@ -689,7 +688,7 @@ struct MarkdownPreviewWidgetTests {
 
     @MainActor
     private func firstHBox(in widget: Widget) -> Box? {
-        if let box = widget.tryCast(Box.self), box.orientation == GTK_ORIENTATION_HORIZONTAL {
+        if let box = widget.tryCast(Box.self), box.orientation == .horizontal {
             return box
         }
         for child in widget.children() {
@@ -773,9 +772,9 @@ struct MarkdownPreviewWidgetTests {
         }
         let effectiveWidth = min(
             clamp.maximumSize,
-            measuredNaturalSize(of: clamp, orientation: GTK_ORIENTATION_HORIZONTAL)
+            measuredNaturalSize(of: clamp, orientation: .horizontal)
         )
-        let effectiveHeight = measuredNaturalSize(of: clamp, orientation: GTK_ORIENTATION_VERTICAL, forSize: effectiveWidth)
+        let effectiveHeight = measuredNaturalSize(of: clamp, orientation: .vertical, forSize: effectiveWidth)
         return (effectiveWidth, effectiveHeight)
     }
 
