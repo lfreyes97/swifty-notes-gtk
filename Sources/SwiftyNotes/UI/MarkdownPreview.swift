@@ -135,9 +135,9 @@ final class MarkdownPreview {
         }
         blockImageRefreshTimerID = MainContext.timeout(every: .milliseconds(120)) { [weak self] in
             guard let self else { return false }
-            self.blockImageRefreshTimerID = nil
-            self.lastRefreshedPreviewWidth = self.rootScroll.width
-            self.refreshBlockImageHeights()
+            blockImageRefreshTimerID = nil
+            lastRefreshedPreviewWidth = rootScroll.width
+            refreshBlockImageHeights()
             return false
         }
     }
@@ -202,23 +202,23 @@ final class MarkdownPreview {
     private func makeWidget(for block: RenderedBlock) -> Widget {
         switch block {
         case let .heading(level, text):
-            return makeHeading(level: level, text: text)
+            makeHeading(level: level, text: text)
         case let .paragraph(text):
-            return makeParagraph(text: text)
+            makeParagraph(text: text)
         case let .codeBlock(code, language):
-            return makeCodeBlock(code: code, language: language)
+            makeCodeBlock(code: code, language: language)
         case let .blockquote(text):
-            return makeBlockquote(text: text)
+            makeBlockquote(text: text)
         case .listItem:
-            return Box()
+            Box()
         case .thematicBreak:
-            return makeSeparator()
+            makeSeparator()
         case let .table(headers, rows, alignments):
-            return makeTable(headers: headers, rows: rows, alignments: alignments)
+            makeTable(headers: headers, rows: rows, alignments: alignments)
         case let .image(alt, source, title):
-            return makeImageBlock(alt: alt, source: source, title: title)
+            makeImageBlock(alt: alt, source: source, title: title)
         case let .imageGroup(items):
-            return makeImageGroup(items)
+            makeImageGroup(items)
         }
     }
 
@@ -292,8 +292,43 @@ final class MarkdownPreview {
         scroll.addCSSClass("preview-code-scroll")
         inner.append(scroll)
 
-        outer.append(inner)
+        let overlay = Overlay()
+        overlay.child = inner
+        overlay.addOverlay(makeCodeBlockCopyButton(for: code))
+
+        outer.append(overlay)
         return outer
+    }
+
+    private func makeCodeBlockCopyButton(for code: String) -> Button {
+        let button = Button(label: "Copy")
+        button.addCSSClass("osd")
+        button.addCSSClass("preview-code-copy")
+        button.halign = .end
+        button.valign = .start
+        button.marginTop = 8
+        button.marginEnd = 8
+        button.tooltipText = "Copy code to clipboard"
+        // Outer capture is strong on purpose: GTK owns the underlying
+        // widget but nothing else holds the Swift Button wrapper, so a
+        // weak capture here would dangle by the time the signal fires.
+        // The retain breaks naturally when GTK disposes the widget —
+        // that disconnects the signal and frees the ClosureBox that
+        // retains the wrapper.
+        //
+        // The nested `task(after:)` must capture the button weakly: it
+        // outlives the click handler and can fire on a timeline where
+        // the widget has already been destroyed (for example when the
+        // preview unmounts mid-test). A weak grab there keeps the
+        // timeout a no-op instead of writing to a freed GtkButton.
+        button.onClicked { [button, code] in
+            button.clipboard.setText(code)
+            button.label = "Copied"
+            MainContext.task(after: .seconds(1)) { [weak button] in
+                button?.label = "Copy"
+            }
+        }
+        return button
     }
 
     private func makeBlockquote(text: RenderedText) -> Widget {
@@ -324,7 +359,7 @@ final class MarkdownPreview {
                 text: item.text,
                 depth: item.depth,
                 marker: item.marker,
-                compact: !isTaskListMarker(item.marker)
+                compact: !isTaskListMarker(item.marker),
             ))
         }
         return list
@@ -363,13 +398,13 @@ final class MarkdownPreview {
     private func displayMarker(for marker: String, depth: Int) -> String {
         switch marker {
         case "[x]":
-            return "☑"
+            "☑"
         case "[ ]":
-            return "☐"
+            "☐"
         case "-":
-            return depth == 0 ? "•" : "◦"
+            depth == 0 ? "•" : "◦"
         default:
-            return marker
+            marker
         }
     }
 
@@ -380,11 +415,11 @@ final class MarkdownPreview {
     private func markerWidth(for marker: String) -> Int {
         switch marker {
         case "-":
-            return 1
+            1
         case "[x]", "[ ]":
-            return 2
+            2
         default:
-            return max(marker.count, 2)
+            max(marker.count, 2)
         }
     }
 
@@ -492,18 +527,19 @@ final class MarkdownPreview {
             source: item.source,
             title: item.title,
             preferredHeight: PreviewMetrics.badgeImageHeight,
-            expandsHorizontally: false
+            expandsHorizontally: false,
         )
 
         if let source = item.source,
-           let resolved = resolveImageSource(source) {
+           let resolved = resolveImageSource(source)
+        {
             switch resolved {
             case let .local(localURL):
                 PreviewImagePaintableLoader.loadImage(
                     at: localURL,
                     into: picture,
                     preferredHeight: PreviewMetrics.badgeImageHeight,
-                    constrainWidthToAspectRatio: true
+                    constrainWidthToAspectRatio: true,
                 )
             case let .remote(remoteURL):
                 remoteImageLoader(remoteURL) { [picture] localURL in
@@ -512,14 +548,15 @@ final class MarkdownPreview {
                         at: localURL,
                         into: picture,
                         preferredHeight: PreviewMetrics.badgeImageHeight,
-                        constrainWidthToAspectRatio: true
+                        constrainWidthToAspectRatio: true,
                     )
                 }
             }
         }
 
         if let link = item.linkDestination?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !link.isEmpty {
+           !link.isEmpty
+        {
             let button = Button(label: "")
             button.hasFrame = false
             button.addCSSClass(.flat)
@@ -541,7 +578,8 @@ final class MarkdownPreview {
 
     private func makeBlockImageWidget(alt: String, source: String?, title: String?) -> Widget? {
         guard let source,
-              let resolved = resolveImageSource(source) else {
+              let resolved = resolveImageSource(source)
+        else {
             return nil
         }
 
@@ -550,7 +588,7 @@ final class MarkdownPreview {
             source: source,
             title: title,
             preferredHeight: nil,
-            expandsHorizontally: true
+            expandsHorizontally: true,
         )
         picture.tooltipText = imageAlternativeText(alt: alt, source: source, title: title)
 
@@ -580,7 +618,7 @@ final class MarkdownPreview {
         source: String?,
         title: String?,
         preferredHeight: Int?,
-        expandsHorizontally: Bool
+        expandsHorizontally: Bool,
     ) -> Picture {
         let picture = Picture()
         picture.alternativeText = imageAlternativeText(alt: alt, source: source, title: title)
@@ -598,10 +636,11 @@ final class MarkdownPreview {
 
     private func loadBlockImage(at localURL: URL, into picture: Picture, clamp: Clamp) {
         if isAnimatedGIF(localURL),
-            let player = PreviewAnimatedImagePlayer(
-                localURL: localURL,
-                picture: picture
-            ) {
+           let player = PreviewAnimatedImagePlayer(
+               localURL: localURL,
+               picture: picture,
+           )
+        {
             animatedImagePlayers.append(player)
             updateBlockImageSize(of: picture, clamp: clamp)
             return
@@ -650,17 +689,18 @@ final class MarkdownPreview {
         return true
     }
 
-
     private func imageAlternativeText(alt: String, source: String?, title: String?) -> String {
         if !alt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return alt
         }
         if let title,
-           !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+           !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        {
             return title
         }
         if let source,
-           !source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+           !source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        {
             return source
         }
         return "Image"
@@ -714,7 +754,8 @@ final class MarkdownPreview {
     private func resolveImageSource(_ source: String) -> ResolvedImageSource? {
         if let remoteURL = URL(string: source),
            let scheme = remoteURL.scheme?.lowercased(),
-           scheme == "http" || scheme == "https" {
+           scheme == "http" || scheme == "https"
+        {
             return .remote(remoteURL)
         }
         let expanded = (source as NSString).expandingTildeInPath
@@ -729,7 +770,8 @@ final class MarkdownPreview {
 
             let sharedNotesURL = baseDirectory.deletingLastPathComponent().appendingPathComponent(expanded)
             if baseDirectory.lastPathComponent != "notes",
-               FileManager.default.fileExists(atPath: sharedNotesURL.path()) {
+               FileManager.default.fileExists(atPath: sharedNotesURL.path())
+            {
                 return .local(sharedNotesURL)
             }
             return .local(noteLocalURL)
@@ -750,7 +792,6 @@ final class MarkdownPreview {
         return nil
     }
 
-
     private func refreshBlockImageHeights() {
         for child in container.children() {
             guard let (clamp, picture) = firstClampWithPicture(in: child) else { continue }
@@ -760,7 +801,8 @@ final class MarkdownPreview {
 
     private func firstClampWithPicture(in widget: Widget) -> (Clamp, Picture)? {
         if let clamp = widget.tryCast(Clamp.self),
-           let picture = firstPicture(in: widget) {
+           let picture = firstPicture(in: widget)
+        {
             return (clamp, picture)
         }
         for child in widget.children() {
@@ -775,5 +817,4 @@ final class MarkdownPreview {
         if measured > 0 { return measured }
         return max(rootScroll.minContentWidth - horizontalInsets, 1)
     }
-
 }

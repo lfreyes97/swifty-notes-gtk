@@ -267,6 +267,47 @@ struct MarkdownPreviewWidgetTests {
     }
 
     @Test @MainActor
+    func `preview code block exposes a Copy button`() throws {
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.code-block-copy-button")
+        try app.register()
+
+        let preview = MarkdownPreview(remoteImageLoader: { _, _ in })
+        preview.render(blocks: [
+            .codeBlock(code: "let answer = 42\n", language: "swift"),
+        ])
+
+        guard let copyButton = firstButton(in: preview.container) else {
+            Issue.record("Expected a Copy button on the rendered code block")
+            return
+        }
+        #expect(copyButton.label == "Copy")
+        #expect(copyButton.hasCSSClass("preview-code-copy"))
+    }
+
+    @Test @MainActor
+    func `preview code block Copy button flips label to Copied after click and restores`() throws {
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.code-block-copy-feedback")
+        try app.register()
+
+        let preview = MarkdownPreview(remoteImageLoader: { _, _ in })
+        preview.render(blocks: [
+            .codeBlock(code: "print(\"hello\")\n", language: "swift"),
+        ])
+        guard let copyButton = firstButton(in: preview.container) else {
+            Issue.record("Expected a Copy button on the rendered code block")
+            return
+        }
+
+        copyButton.emitClicked()
+        #expect(copyButton.label == "Copied")
+
+        // Label should restore after roughly one second. Pump the main loop
+        // a touch longer to stay robust on slower CI VMs.
+        MainContext.pump(for: .milliseconds(1400))
+        #expect(copyButton.label == "Copy")
+    }
+
+    @Test @MainActor
     func `preview code block horizontal minimum fits inside narrow preview`() throws {
         let app = Application(id: "me.spaceinbox.swiftynotes.tests.code-block-horizontal-shrink")
         try app.register()
