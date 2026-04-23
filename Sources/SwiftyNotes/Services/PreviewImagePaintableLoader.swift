@@ -48,6 +48,27 @@ enum PreviewImagePaintableLoader {
     }
 }
 
+extension PreviewImagePaintableLoader {
+    /// Parses `width` / `height` attributes from the first 4 KB of an SVG
+    /// file. Returns `nil` for non-SVG paths or when either attribute is
+    /// missing. Used as a layout fallback when GTK's built-in SVG loader
+    /// reports the wrong intrinsic size (some glycin / pixbuf loader
+    /// versions return a square default ignoring the `width`/`height`
+    /// attributes even when both are present).
+    static func svgDimensions(from localURL: URL) -> (width: Double, height: Double)? {
+        let ext = localURL.pathExtension.lowercased()
+        guard ext == "svg" || ext == "svgz",
+              let data = try? Data(contentsOf: localURL),
+              let content = String(data: data.prefix(4096), encoding: .utf8),
+              let width = extractSVGDimension(named: "width", from: content),
+              let height = extractSVGDimension(named: "height", from: content)
+        else {
+            return nil
+        }
+        return (width, height)
+    }
+}
+
 private extension PreviewImagePaintableLoader {
     static func applyPreferredSizing(
         to picture: Picture,
@@ -85,19 +106,6 @@ private extension PreviewImagePaintableLoader {
         }
 
         picture.setSizeRequest(width: -1, height: preferredHeight)
-    }
-
-    static func svgDimensions(from localURL: URL) -> (width: Double, height: Double)? {
-        let ext = localURL.pathExtension.lowercased()
-        guard ext == "svg" || ext == "svgz",
-              let data = try? Data(contentsOf: localURL),
-              let content = String(data: data.prefix(4096), encoding: .utf8),
-              let width = extractSVGDimension(named: "width", from: content),
-              let height = extractSVGDimension(named: "height", from: content)
-        else {
-            return nil
-        }
-        return (width, height)
     }
 
     static func extractSVGDimension(named name: String, from content: String) -> Double? {

@@ -657,23 +657,63 @@ final class MarkdownPreview {
     private func updateBlockImageSize(of picture: Picture, clamp: Clamp) {
         let availableWidth = resolvedBlockImageWidth()
 
-        guard let intrinsic = picture.intrinsicSize else {
+        let intrinsicWidth: Int
+        let intrinsicHeight: Int
+        // Prefer the SVG's declared width/height over Picture.intrinsicSize:
+        // some GdkPixbuf / glycin SVG loaders return a square default
+        // regardless of the `width` and `height` attributes in the XML,
+        // which breaks aspect-ratio layout.
+        let svgDims: (width: Double, height: Double)? = picture.fileURL
+            .flatMap { PreviewImagePaintableLoader.svgDimensions(from: $0) }
+        if let svgDims {
+            intrinsicWidth = max(Int(svgDims.width.rounded()), 1)
+            intrinsicHeight = max(Int(svgDims.height.rounded()), 1)
+        } else if let intrinsic = picture.intrinsicSize {
+            intrinsicWidth = intrinsic.width
+            intrinsicHeight = intrinsic.height
+        } else {
             applyClampSize(clamp, targetSize: availableWidth)
             return
         }
 
-        let intrinsicWidth = intrinsic.width
-        let intrinsicHeight = intrinsic.height
         let displayWidth = min(intrinsicWidth, availableWidth)
         let aspectRatio = Double(intrinsicWidth) / Double(intrinsicHeight)
         let displayHeight = max(Int((Double(displayWidth) / aspectRatio).rounded()), 1)
 
         let clampChanged = applyClampSize(clamp, targetSize: displayWidth)
 
-        let pictureChanged = picture.sizeRequest.height != displayHeight
-        if pictureChanged {
+        // For SVG wrap the picture in an AspectFrame that pins the
+        // declared ratio — some GdkPixbuf / glycin SVG loaders report a
+        // square intrinsic aspect regardless of the <svg width/height>
+        // attributes, which would otherwise make the preview card square.
+        // We only insert the frame lazily here (after parsing the XML)
+        // to keep raster-image allocation unchanged.
+        let pictureChanged: Bool
+        if svgDims != nil, clamp.child?.tryCast(AspectFrame.self) == nil {
+            let frame = AspectFrame(ratio: Float(aspectRatio), obeyChild: false)
+            frame.hexpand = true
+            frame.halign = .fill
+            clamp.child = nil
+            frame.child = picture
+            clamp.child = frame
             picture.setSizeRequest(width: -1, height: displayHeight)
+            pictureChanged = true
+        } else if let frame = clamp.child?.tryCast(AspectFrame.self) {
+            let desiredRatio = Float(aspectRatio)
+            if abs(frame.ratio - desiredRatio) > 0.001 {
+                frame.ratio = desiredRatio
+            }
+            pictureChanged = picture.sizeRequest.height != displayHeight
+            if pictureChanged {
+                picture.setSizeRequest(width: -1, height: displayHeight)
+            }
+        } else {
+            pictureChanged = picture.sizeRequest.height != displayHeight
+            if pictureChanged {
+                picture.setSizeRequest(width: -1, height: displayHeight)
+            }
         }
+
         if clampChanged || pictureChanged {
             clamp.queueResize()
         }
