@@ -83,7 +83,8 @@ let package = Package(
                 .product(name: "Markdown", package: "swift-markdown")
             ],
             resources: [
-                .process("Resources")
+                .process("Resources"),
+                .copy("Icons")
             ]
         ),
         .executableTarget(

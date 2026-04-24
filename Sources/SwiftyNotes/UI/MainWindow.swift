@@ -191,7 +191,6 @@ final class MainWindow {
     }
 
     func present() {
-        Self.registerBundledIconSearchPath(for: window.display)
         window.present()
         restorePreviewPaneLayout()
         loadInitialNotes()
@@ -425,23 +424,19 @@ final class MainWindow {
     static let editorFormattingCompactWidthThreshold = 520
     static let previewAnimationDuration = 220
 
-    private static var registeredIconSearchPaths: Set<String> = []
-
-    /// Registers the app's bundled icon directory with the display's
-    /// icon theme so custom symbolic icons (for example `table-symbolic`,
-    /// which doesn't ship in every system Adwaita release) resolve from
-    /// the Flatpak / SwiftPM resource bundle. Idempotent per display.
-    static func registerBundledIconSearchPath(for display: Display) {
+    /// Returns the on-disk path to a bundled icon SVG (e.g. `table-symbolic`)
+    /// shipped under the resource bundle's `Icons/` directory. Used for
+    /// custom icons that don't ship in the system Adwaita theme. Returns
+    /// `nil` when the file isn't present.
+    static func bundledIconFilePath(for iconName: String) -> String? {
         guard let iconsURL = Bundle.module.resourceURL?
-            .appendingPathComponent("icons", isDirectory: true),
-            FileManager.default.fileExists(atPath: iconsURL.path)
-        else { return }
-
-        let path = iconsURL.path
-        let key = "\(ObjectIdentifier(display)):\(path)"
-        guard !registeredIconSearchPaths.contains(key) else { return }
-        registeredIconSearchPaths.insert(key)
-        display.iconTheme.addSearchPath(path)
+            .appendingPathComponent("Icons", isDirectory: true)
+        else { return nil }
+        let fileURL = iconsURL.appendingPathComponent("\(iconName).svg")
+        guard FileManager.default.fileExists(atPath: fileURL.path) else {
+            return nil
+        }
+        return fileURL.path
     }
 
     struct DirectoryOpenFailure: LocalizedError {

@@ -279,7 +279,12 @@ extension MainWindow {
         box.marginEnd = horizontalMargin
 
         if let iconName = configuration.iconName {
-            let image = Image(iconName: iconName)
+            let image: Image
+            if let bundledPath = MainWindow.bundledIconFilePath(for: iconName) {
+                image = Image(filename: bundledPath)
+            } else {
+                image = Image(iconName: iconName)
+            }
             image.pixelSize = 16
             box.append(image)
         }

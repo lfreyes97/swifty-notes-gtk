@@ -180,7 +180,6 @@ final class ExternalDocumentWindow {
     }
 
     func present() {
-        MainWindow.registerBundledIconSearchPath(for: window.display)
         window.present()
         guard !hasPresented else { return }
         hasPresented = true
