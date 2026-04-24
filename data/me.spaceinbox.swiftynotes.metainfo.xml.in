@@ -63,6 +63,18 @@
   <releases>
     <release version="@VERSION@" date="@DATE@">
       <description>
+        <p>This update focuses on making the Markdown editor and preview more productive day to day.</p>
+        <ul>
+          <li>Fenced code blocks in the preview now show a quick Copy button, so you can grab a snippet in one click instead of selecting it by hand.</li>
+          <li>Code blocks are now syntax-highlighted in the preview for popular languages, making longer snippets much easier to scan.</li>
+          <li>A new Insert Table button in the formatting toolbar lets you pick a size from a visual grid and set per-column alignment, then drops a ready-to-edit Markdown table into the note.</li>
+          <li>The formatting toolbar now collapses to its compact layout based on its own content width, so buttons no longer disappear behind the header menu on narrower editor widths.</li>
+          <li>The Table button and other bundled formatting icons now render correctly on systems where the active icon theme doesn't ship a matching symbolic.</li>
+        </ul>
+      </description>
+    </release>
+    <release version="1.1.1" date="2026-04-22">
+      <description>
         <p>This update brings back a few things that quietly stopped working on some setups in 1.1.0, and polishes exporting and window handling.</p>
         <ul>
           <li>Import, Open Markdown File, Export, Save As, and Choose Notes Folder dialogs now open reliably. On some systems they were silently doing nothing after upgrading to 1.1.0.</li>
