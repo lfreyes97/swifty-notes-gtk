@@ -17,7 +17,7 @@ private enum CLIHelpTopic {
 enum NotesCLI {
     static func runIfRequested(
         arguments: [String],
-        stdin: Data? = nil
+        stdin: Data? = nil,
     ) -> NotesCLIExecutionResult? {
         guard arguments.first == "cli" else { return nil }
         return run(arguments: Array(arguments.dropFirst()), stdin: stdin)
@@ -25,12 +25,12 @@ enum NotesCLI {
 
     private static func run(
         arguments: [String],
-        stdin: Data?
+        stdin: Data?,
     ) -> NotesCLIExecutionResult {
         do {
             let parsed = try ParsedInvocation(arguments: arguments, stdin: stdin)
             let repository = NotesRepository(
-                notesDirectory: parsed.notesDirectory ?? CLINotesDirectoryResolver.resolve()
+                notesDirectory: parsed.notesDirectory ?? CLINotesDirectoryResolver.resolve(),
             )
 
             let output: String
@@ -56,7 +56,7 @@ enum NotesCLI {
             return .init(
                 exitCode: 0,
                 stdout: output.hasSuffix("\n") ? output : "\(output)\n",
-                stderr: ""
+                stderr: "",
             )
         } catch let error as NotesCLIError {
             return .init(exitCode: error.exitCode, stdout: "", stderr: "\(error.message)\n")
@@ -73,7 +73,7 @@ enum NotesCLI {
         return note
     }
 
-    private static func encodeJSON<T: Encodable>(_ value: T) throws -> String {
+    private static func encodeJSON(_ value: some Encodable) throws -> String {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
@@ -271,7 +271,7 @@ private struct ParsedInvocation {
                 command = .help(.create)
                 return
             }
-            command = .create(try Self.parseContentSource(args, stdin: stdin, contentRequired: false))
+            command = try .create(Self.parseContentSource(args, stdin: stdin, contentRequired: false))
         case "update":
             if Self.containsHelpFlag(args) {
                 command = .help(.update)
@@ -373,7 +373,7 @@ private struct ParsedInvocation {
     private static func parseContentSource(
         _ arguments: [String],
         stdin: Data?,
-        contentRequired: Bool
+        contentRequired: Bool,
     ) throws -> String {
         var inlineContent: String?
         var contentFile: String?
@@ -408,7 +408,7 @@ private struct ParsedInvocation {
             }
         }
 
-        let selectedSources = [inlineContent != nil, contentFile != nil, useStdin].filter { $0 }.count
+        let selectedSources = [inlineContent != nil, contentFile != nil, useStdin].count(where: { $0 })
         if selectedSources > 1 {
             let topic: CLIHelpTopic = contentRequired ? .update : .create
             throw NotesCLIError.usage("Use only one of --content, --content-file, or --stdin.\n\n\(NotesCLI.help(for: topic))")
@@ -441,7 +441,7 @@ private enum CLINotesDirectoryResolver {
 
     static func resolve(
         fileManager: FileManager = .default,
-        environment: [String: String] = ProcessInfo.processInfo.environment
+        environment: [String: String] = ProcessInfo.processInfo.environment,
     ) -> URL {
         let hostDataHome = dataHome(in: environment, fileManager: fileManager)
         let hostConfigHome = configHome(in: environment, fileManager: fileManager)
@@ -474,7 +474,7 @@ private enum CLINotesDirectoryResolver {
 
     private static func loadSettings(
         from configHome: URL,
-        fileManager: FileManager
+        fileManager: FileManager,
     ) -> AppSettings? {
         let settingsURL = AppIdentity.applicationDirectory(in: configHome)
             .appendingPathComponent(settingsFilename, isDirectory: false)
@@ -484,13 +484,13 @@ private enum CLINotesDirectoryResolver {
 
     private static func hasStoredNotes(
         in dataHome: URL,
-        fileManager: FileManager
+        fileManager: FileManager,
     ) -> Bool {
         let applicationIdentifiers = [AppIdentity.identifier] + AppIdentity.legacyIdentifiers
         for applicationIdentifier in applicationIdentifiers {
             let notesDirectory = AppIdentity.applicationDirectory(
                 in: dataHome,
-                identifier: applicationIdentifier
+                identifier: applicationIdentifier,
             )
             .appendingPathComponent(notesDirectoryName, isDirectory: true)
 
@@ -498,7 +498,7 @@ private enum CLINotesDirectoryResolver {
             guard let contents = try? fileManager.contentsOfDirectory(
                 at: notesDirectory,
                 includingPropertiesForKeys: [.isDirectoryKey],
-                options: [.skipsHiddenFiles]
+                options: [.skipsHiddenFiles],
             ) else {
                 continue
             }
@@ -512,11 +512,11 @@ private enum CLINotesDirectoryResolver {
 
     private static func isStoredNoteEntry(
         _ entryURL: URL,
-        fileManager: FileManager
+        fileManager: FileManager,
     ) -> Bool {
         if entryURL.hasDirectoryPath {
             return fileManager.fileExists(
-                atPath: entryURL.appendingPathComponent(noteFilename, isDirectory: false).path(percentEncoded: false)
+                atPath: entryURL.appendingPathComponent(noteFilename, isDirectory: false).path(percentEncoded: false),
             )
         }
         return entryURL.pathExtension == "md"
@@ -529,7 +529,7 @@ private enum CLINotesDirectoryResolver {
     }
 
     private static func hasExplicitXDGOverride(
-        in environment: [String: String]
+        in environment: [String: String],
     ) -> Bool {
         (environment["XDG_DATA_HOME"]?.isEmpty == false)
             || (environment["XDG_CONFIG_HOME"]?.isEmpty == false)
@@ -537,25 +537,25 @@ private enum CLINotesDirectoryResolver {
 
     private static func dataHome(
         in environment: [String: String],
-        fileManager: FileManager
+        fileManager: FileManager,
     ) -> URL {
         xdgHome(
             variable: "XDG_DATA_HOME",
             fallbackComponents: [".local", "share"],
             environment: environment,
-            fileManager: fileManager
+            fileManager: fileManager,
         )
     }
 
     private static func configHome(
         in environment: [String: String],
-        fileManager: FileManager
+        fileManager: FileManager,
     ) -> URL {
         xdgHome(
             variable: "XDG_CONFIG_HOME",
             fallbackComponents: [".config"],
             environment: environment,
-            fileManager: fileManager
+            fileManager: fileManager,
         )
     }
 
@@ -563,7 +563,7 @@ private enum CLINotesDirectoryResolver {
         variable: String,
         fallbackComponents: [String],
         environment: [String: String],
-        fileManager: FileManager
+        fileManager: FileManager,
     ) -> URL {
         if let configuredPath = environment[variable], !configuredPath.isEmpty {
             return URL(fileURLWithPath: configuredPath, isDirectory: true).standardizedFileURL
@@ -578,7 +578,7 @@ private enum CLINotesDirectoryResolver {
 
     private static func flatpakRootDirectory(
         in environment: [String: String],
-        fileManager: FileManager
+        fileManager: FileManager,
     ) -> URL {
         homeDirectory(in: environment, fileManager: fileManager)
             .appendingPathComponent(".var", isDirectory: true)
@@ -589,7 +589,7 @@ private enum CLINotesDirectoryResolver {
 
     private static func homeDirectory(
         in environment: [String: String],
-        fileManager: FileManager
+        fileManager: FileManager,
     ) -> URL {
         if let homePath = environment["HOME"], !homePath.isEmpty {
             return URL(fileURLWithPath: homePath, isDirectory: true).standardizedFileURL

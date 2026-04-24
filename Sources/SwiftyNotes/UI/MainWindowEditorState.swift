@@ -83,7 +83,7 @@ extension MainWindow {
 
         let dialog = AlertDialog(
             heading: "Rename note",
-            body: "The note title is derived from the first meaningful line."
+            body: "The note title is derived from the first meaningful line.",
         )
         dialog.extraChild = entry
         dialog.addResponse("cancel", label: "Cancel")
@@ -95,12 +95,12 @@ extension MainWindow {
         entry.onChanged {
             dialog.setResponseEnabled(
                 "rename",
-                enabled: !entry.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                enabled: !entry.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
             )
         }
         dialog.onResponse { [weak self] response in
             guard let self, response == "rename" else { return }
-            self.renameSelectedNote(to: entry.text)
+            renameSelectedNote(to: entry.text)
         }
         dialog.present(window)
         MainContext.idle {
@@ -122,7 +122,7 @@ extension MainWindow {
         } catch {
             presentError(
                 heading: "Could not rename note",
-                body: error.localizedDescription
+                body: error.localizedDescription,
             )
         }
     }

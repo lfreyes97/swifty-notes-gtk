@@ -53,6 +53,8 @@ public enum EditorViewMode: String, Codable, CaseIterable, Sendable {
 public struct WorkspaceState: Codable, Equatable, Sendable {
     public static let legacyDefaultPreviewWidth = 440
     public static let defaultPreviewWidth = 560
+    public static let defaultLastTableRows = 3
+    public static let defaultLastTableCols = 3
 
     public var selectedNoteID: UUID?
     public var isSidebarVisible: Bool
@@ -62,6 +64,9 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
     public var windowWidth: Int
     public var windowHeight: Int
     public var previewWidth: Int
+    public var lastTableRows: Int
+    public var lastTableCols: Int
+    public var lastTableAlignments: [MarkdownTableAlignment]
 
     public var isPreviewVisible: Bool {
         viewMode.isPreviewVisible
@@ -76,7 +81,10 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
         sortMode: NotesSortMode = .newestFirst,
         windowWidth: Int = 1200,
         windowHeight: Int = 800,
-        previewWidth: Int = WorkspaceState.defaultPreviewWidth
+        previewWidth: Int = WorkspaceState.defaultPreviewWidth,
+        lastTableRows: Int = WorkspaceState.defaultLastTableRows,
+        lastTableCols: Int = WorkspaceState.defaultLastTableCols,
+        lastTableAlignments: [MarkdownTableAlignment] = [],
     ) {
         self.selectedNoteID = selectedNoteID
         self.isSidebarVisible = isSidebarVisible
@@ -86,6 +94,9 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
         self.windowWidth = windowWidth
         self.windowHeight = windowHeight
         self.previewWidth = previewWidth
+        self.lastTableRows = max(1, lastTableRows)
+        self.lastTableCols = max(1, lastTableCols)
+        self.lastTableAlignments = lastTableAlignments
     }
 
     public static let `default` = WorkspaceState()
@@ -100,6 +111,9 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
         case windowWidth
         case windowHeight
         case previewWidth
+        case lastTableRows
+        case lastTableCols
+        case lastTableAlignments
     }
 
     public init(from decoder: any Decoder) throws {
@@ -109,13 +123,16 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
         if let viewMode = try container.decodeIfPresent(EditorViewMode.self, forKey: .viewMode) {
             self.viewMode = viewMode
         } else {
-            self.viewMode = (try container.decodeIfPresent(Bool.self, forKey: .isPreviewVisible) ?? true) ? .split : .editor
+            viewMode = try (container.decodeIfPresent(Bool.self, forKey: .isPreviewVisible) ?? true) ? .split : .editor
         }
         searchQuery = try container.decodeIfPresent(String.self, forKey: .searchQuery) ?? ""
         sortMode = try container.decodeIfPresent(NotesSortMode.self, forKey: .sortMode) ?? .newestFirst
         windowWidth = try container.decodeIfPresent(Int.self, forKey: .windowWidth) ?? 1200
         windowHeight = try container.decodeIfPresent(Int.self, forKey: .windowHeight) ?? 800
         previewWidth = try container.decodeIfPresent(Int.self, forKey: .previewWidth) ?? WorkspaceState.defaultPreviewWidth
+        lastTableRows = try max(1, container.decodeIfPresent(Int.self, forKey: .lastTableRows) ?? WorkspaceState.defaultLastTableRows)
+        lastTableCols = try max(1, container.decodeIfPresent(Int.self, forKey: .lastTableCols) ?? WorkspaceState.defaultLastTableCols)
+        lastTableAlignments = try container.decodeIfPresent([MarkdownTableAlignment].self, forKey: .lastTableAlignments) ?? []
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -129,5 +146,8 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
         try container.encode(windowWidth, forKey: .windowWidth)
         try container.encode(windowHeight, forKey: .windowHeight)
         try container.encode(previewWidth, forKey: .previewWidth)
+        try container.encode(lastTableRows, forKey: .lastTableRows)
+        try container.encode(lastTableCols, forKey: .lastTableCols)
+        try container.encode(lastTableAlignments, forKey: .lastTableAlignments)
     }
 }

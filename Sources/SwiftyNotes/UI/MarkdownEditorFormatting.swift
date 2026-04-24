@@ -20,13 +20,14 @@ extension MarkdownEditor {
     /// ``MarkdownTableScaffold/insertion(into:at:rows:cols:)`` — blank
     /// lines are preserved, non-empty lines get a line break so the
     /// scaffold lands on its own fresh line.
-    func insertTable(rows: Int, cols: Int) {
+    func insertTable(rows: Int, cols: Int, alignments: [MarkdownTableAlignment] = []) {
         guard rows > 0, cols > 0 else { return }
         let insertion = MarkdownTableScaffold.insertion(
             into: buffer.text,
             at: selectedRange().lowerBound,
             rows: rows,
             cols: cols,
+            alignments: alignments,
         )
         apply(
             MarkdownFormattingEdit(

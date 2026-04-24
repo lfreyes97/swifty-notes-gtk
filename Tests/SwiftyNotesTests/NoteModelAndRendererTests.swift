@@ -1,34 +1,34 @@
-import Foundation
-import Testing
-@testable import SwiftyNotes
 import Adwaita
+import Foundation
+@testable import SwiftyNotes
+import Testing
 
 struct NoteModelAndRendererTests {
     @Test
-    func derivedTitleUsesFirstMeaningfulLine() {
+    func `derived title uses first meaningful line`() {
         let title = Note.derivedTitle(from: "\n\n# Hello world\nBody")
         #expect(title == "Hello world")
     }
 
     @Test
-    func derivedTitleSkipsLeadingStandaloneImage() {
+    func `derived title skips leading standalone image`() {
         let title = Note.derivedTitle(from: "![Cover](assets/cover.png)\n\n# Hello world\nBody")
         #expect(title == "Hello world")
     }
 
     @Test
-    func derivedTitleFallsBackForEmptyNote() {
+    func `derived title falls back for empty note`() {
         #expect(Note.derivedTitle(from: " \n\n ") == "New Note")
     }
 
     @Test
-    func noteRetitleReplacesFirstMeaningfulLine() {
+    func `note retitle replaces first meaningful line`() {
         let note = Note(
             id: UUID(),
             filename: "note.md",
             createdAt: Date(),
             updatedAt: Date(),
-            content: "Shopping list\n- eggs"
+            content: "Shopping list\n- eggs",
         )
 
         let renamed = note.retitled("Groceries")
@@ -37,13 +37,13 @@ struct NoteModelAndRendererTests {
     }
 
     @Test
-    func noteRetitlePreservesLeadingImageAndReplacesHeadingAfterIt() {
+    func `note retitle preserves leading image and replaces heading after it`() {
         let note = Note(
             id: UUID(),
             filename: "note.md",
             createdAt: Date(),
             updatedAt: Date(),
-            content: "![Cover](assets/cover.png)\n\n# Original\n\nBody"
+            content: "![Cover](assets/cover.png)\n\n# Original\n\nBody",
         )
 
         let renamed = note.retitled("Updated")
@@ -52,13 +52,13 @@ struct NoteModelAndRendererTests {
     }
 
     @Test
-    func noteSearchAndExportFilenameUseReadableTitle() {
+    func `note search and export filename use readable title`() {
         let note = Note(
             id: UUID(),
             filename: "note.md",
             createdAt: Date(),
             updatedAt: Date(),
-            content: "# Hello, Swift GTK!"
+            content: "# Hello, Swift GTK!",
         )
 
         #expect(note.matches(searchQuery: "swift gtk"))
@@ -67,7 +67,7 @@ struct NoteModelAndRendererTests {
     }
 
     @Test
-    func rendererBuildsHeadingAndParagraphBlocks() {
+    func `renderer builds heading and paragraph blocks`() {
         let renderer = MarkdownRenderer()
         let blocks = renderer.blocks(for: "# Title\n\nParagraph", darkAppearance: false)
         #expect(blocks.count >= 2)
@@ -76,7 +76,7 @@ struct NoteModelAndRendererTests {
     }
 
     @Test
-    func rendererBuildsTaskListMarkers() {
+    func `renderer builds task list markers`() {
         let renderer = MarkdownRenderer()
         let blocks = renderer.blocks(for: """
         - [x] Done
@@ -89,7 +89,7 @@ struct NoteModelAndRendererTests {
     }
 
     @Test
-    func rendererPreservesTaskListMarkersWhenItemContainsInlineMarkdown() {
+    func `renderer preserves task list markers when item contains inline markdown`() {
         let renderer = MarkdownRenderer()
         let blocks = renderer.blocks(for: """
         - [ ] Если было выделено **слово**, то после нажатия должно быть `код`
@@ -107,13 +107,14 @@ struct NoteModelAndRendererTests {
     }
 
     @Test
-    func rendererUsesThemeAwareInlineCodeBackground() {
+    func `renderer uses theme aware inline code background`() {
         let renderer = MarkdownRenderer()
         let lightBlocks = renderer.blocks(for: "Use `code` here", darkAppearance: false)
         let darkBlocks = renderer.blocks(for: "Use `code` here", darkAppearance: true)
 
         guard case let .paragraph(lightText) = lightBlocks.first,
-              case let .paragraph(darkText) = darkBlocks.first else {
+              case let .paragraph(darkText) = darkBlocks.first
+        else {
             Issue.record("Expected paragraph blocks")
             return
         }
@@ -125,41 +126,41 @@ struct NoteModelAndRendererTests {
     }
 
     @Test
-    func rendererBuildsStandaloneImageBlock() {
+    func `renderer builds standalone image block`() {
         let renderer = MarkdownRenderer()
         let blocks = renderer.blocks(
             for: "![Swift and Adwaita showcase artwork](markdown-demo-image.png)",
-            darkAppearance: false
+            darkAppearance: false,
         )
 
         #expect(blocks == [
             .image(
                 alt: "Swift and Adwaita showcase artwork",
                 source: "markdown-demo-image.png",
-                title: nil
-            )
+                title: nil,
+            ),
         ])
     }
 
     @Test
-    func rendererBuildsStandaloneHTMLImageBlock() {
+    func `renderer builds standalone HTML image block`() {
         let renderer = MarkdownRenderer()
         let blocks = renderer.blocks(
             for: #"<img alt="Swift Adwaita" src="https://spaceinbox.me/images/swift-adwaita-2.webp">"#,
-            darkAppearance: false
+            darkAppearance: false,
         )
 
         #expect(blocks == [
             .image(
                 alt: "Swift Adwaita",
                 source: "https://spaceinbox.me/images/swift-adwaita-2.webp",
-                title: nil
-            )
+                title: nil,
+            ),
         ])
     }
 
     @Test @MainActor
-    func rendererBuildsImageGroupForLinkedBadgeImages() {
+    func `renderer builds image group for linked badge images`() {
         let renderer = MarkdownRenderer()
         let blocks = renderer.blocks(for: """
         [![CI](https://github.com/makoni/swift-adwaita/actions/workflows/ci.yml/badge.svg)](https://github.com/makoni/swift-adwaita/actions/workflows/ci.yml)
@@ -172,20 +173,20 @@ struct NoteModelAndRendererTests {
                     alt: "CI",
                     source: "https://github.com/makoni/swift-adwaita/actions/workflows/ci.yml/badge.svg",
                     title: nil,
-                    linkDestination: "https://github.com/makoni/swift-adwaita/actions/workflows/ci.yml"
+                    linkDestination: "https://github.com/makoni/swift-adwaita/actions/workflows/ci.yml",
                 ),
                 .init(
                     alt: "Swift 6.0+",
                     source: "https://img.shields.io/badge/Swift-6.0+-F05138.svg",
                     title: nil,
-                    linkDestination: "https://swift.org"
-                )
-            ])
+                    linkDestination: "https://swift.org",
+                ),
+            ]),
         ])
     }
 
     @Test
-    func rendererBuildsAlignedTableBlock() {
+    func `renderer builds aligned table block`() {
         let renderer = MarkdownRenderer()
         let blocks = renderer.blocks(for: """
         | Feature | Example | Result |
@@ -207,17 +208,17 @@ struct NoteModelAndRendererTests {
     }
 
     @Test
-    func htmlSubsetParserTreatsUnsupportedTagsAsLiteralText() {
+    func `html subset parser treats unsupported tags as literal text`() {
         let nodes = HTMLSubsetParser().parse("<pre><code>swiftynotes cli get <note-id></code></pre>")
         let blocks = HTMLPreviewDocumentBuilder(darkAppearance: false).blocks(from: nodes, listDepth: 0)
 
         #expect(blocks == [
-            .codeBlock(code: "swiftynotes cli get <note-id>", language: nil)
+            .codeBlock(code: "swiftynotes cli get <note-id>", language: nil),
         ])
     }
 
     @Test
-    func rendererBuildsBlocksForCLISeedNote() {
+    func `renderer builds blocks for CLI seed note`() {
         let renderer = MarkdownRenderer()
         let blocks = renderer.blocks(for: SwiftyNotesCLISeed.content, darkAppearance: false)
 
@@ -237,7 +238,7 @@ struct NoteModelAndRendererTests {
     }
 
     @Test
-    func previewRenderDeferralWaitsForVisibleAllocatedPreviewPane() {
+    func `preview render deferral waits for visible allocated preview pane`() {
         #expect(MainWindow.shouldDeferPreviewRender(
             isPreviewPresented: true,
             windowWidth: 1200,
@@ -245,7 +246,7 @@ struct NoteModelAndRendererTests {
             hasParent: true,
             hasRoot: true,
             width: 0,
-            height: 320
+            height: 320,
         ))
         #expect(!MainWindow.shouldDeferPreviewRender(
             isPreviewPresented: true,
@@ -254,12 +255,12 @@ struct NoteModelAndRendererTests {
             hasParent: true,
             hasRoot: false,
             width: 540,
-            height: 320
+            height: 320,
         ))
     }
 
     @Test
-    func previewRenderDeferralSkipsDetachedOrHiddenPreviewPane() {
+    func `preview render deferral skips detached or hidden preview pane`() {
         #expect(!MainWindow.shouldDeferPreviewRender(
             isPreviewPresented: true,
             windowWidth: 1200,
@@ -267,7 +268,7 @@ struct NoteModelAndRendererTests {
             hasParent: false,
             hasRoot: false,
             width: 0,
-            height: 0
+            height: 0,
         ))
         #expect(!MainWindow.shouldDeferPreviewRender(
             isPreviewPresented: false,
@@ -276,12 +277,12 @@ struct NoteModelAndRendererTests {
             hasParent: true,
             hasRoot: false,
             width: 0,
-            height: 0
+            height: 0,
         ))
     }
 
     @Test @MainActor
-    func autosaveCoordinatorRunsLatestTask() async {
+    func `autosave coordinator runs latest task`() {
         let scheduler = TestMainActorScheduler()
         let autosave = AutosaveCoordinator(taskScheduler: scheduler.schedule(after:operation:))
         var values: [Int] = []

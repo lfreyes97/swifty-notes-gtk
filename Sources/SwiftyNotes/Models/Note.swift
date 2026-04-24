@@ -12,7 +12,7 @@ public struct Note: Identifiable, Sendable, Equatable {
         filename: String,
         createdAt: Date,
         updatedAt: Date,
-        content: String
+        content: String,
     ) {
         self.id = id
         self.filename = filename

@@ -62,7 +62,7 @@ enum MarkdownShowcaseSeed {
     static func imageData() throws -> Data {
         guard let url = Bundle.module.url(
             forResource: "markdown-demo-image",
-            withExtension: "png"
+            withExtension: "png",
         ) else {
             throw CocoaError(.fileNoSuchFile)
         }

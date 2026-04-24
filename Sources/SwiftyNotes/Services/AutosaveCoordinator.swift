@@ -12,14 +12,14 @@ public final class AutosaveCoordinator {
                 operation()
             }
             return { task.cancel() }
-        }
+        },
     ) {
         self.taskScheduler = taskScheduler
     }
 
     public func scheduleSave(
         after delay: Duration = .milliseconds(400),
-        operation: @escaping @MainActor () -> Void
+        operation: @escaping @MainActor () -> Void,
     ) {
         cancel()
         cancelCurrentTask = taskScheduler(delay) { [weak self] in

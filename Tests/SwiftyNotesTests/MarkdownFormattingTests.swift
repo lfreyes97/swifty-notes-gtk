@@ -17,6 +17,38 @@ struct MarkdownFormattingTests {
     }
 
     @Test
+    func `table scaffold encodes alignment row per column`() {
+        let scaffold = MarkdownTableScaffold.generate(
+            rows: 1,
+            cols: 3,
+            alignments: [.left, .center, .right],
+        )
+
+        #expect(scaffold == """
+        | Column 1 | Column 2 | Column 3 |
+        | :------- | :------: | -------: |
+        |          |          |          |
+        """)
+    }
+
+    @Test
+    func `table scaffold pads alignment array to match column count`() {
+        // Short alignment arrays extend with .left so callers that only
+        // care about the first few columns still get valid output.
+        let scaffold = MarkdownTableScaffold.generate(
+            rows: 1,
+            cols: 4,
+            alignments: [.right],
+        )
+
+        #expect(scaffold == """
+        | Column 1 | Column 2 | Column 3 | Column 4 |
+        | -------: | -------- | -------- | -------- |
+        |          |          |          |          |
+        """)
+    }
+
+    @Test
     func `table scaffold single row single column`() {
         let scaffold = MarkdownTableScaffold.generate(rows: 1, cols: 1)
 

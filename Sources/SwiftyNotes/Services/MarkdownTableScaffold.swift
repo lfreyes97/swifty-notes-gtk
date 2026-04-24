@@ -1,5 +1,23 @@
 import Foundation
 
+/// Per-column alignment for a markdown table. Maps onto the GFM
+/// alignment-row syntax: `:---` (left), `:---:` (centre), `---:` (right).
+public enum MarkdownTableAlignment: String, Codable, Equatable, Sendable, CaseIterable {
+    case left
+    case center
+    case right
+
+    /// Cycles through the three alignments in L → C → R → L order.
+    /// Used by the table picker's per-column toggle.
+    func next() -> MarkdownTableAlignment {
+        switch self {
+        case .left: .center
+        case .center: .right
+        case .right: .left
+        }
+    }
+}
+
 /// Builds ready-to-insert GitHub-Flavored-Markdown table skeletons.
 ///
 /// Exposed as a plain helper so the UI picker and the editor insert code
@@ -18,23 +36,67 @@ enum MarkdownTableScaffold {
     ///
     /// The returned string has no leading or trailing newline — callers
     /// decide how it should be embedded in the surrounding text (see
-    /// ``insertion(into:at:rows:cols:)``).
-    static func generate(rows: Int, cols: Int) -> String? {
+    /// ``insertion(into:at:rows:cols:alignments:)``). Per-column
+    /// alignments default to ``MarkdownTableAlignment/left`` and shorter
+    /// `alignments` arrays are padded with `.left` so the argument is
+    /// always safe to pass.
+    static func generate(
+        rows: Int,
+        cols: Int,
+        alignments: [MarkdownTableAlignment] = [],
+    ) -> String? {
         guard rows > 0, cols > 0 else { return nil }
 
         let headers = (1 ... cols).map { "\(headerPlaceholderPrefix) \($0)" }
         let cellWidths = headers.map(\.count)
+        // When the caller didn't supply any alignments we emit plain
+        // `---` runs to keep the output byte-identical to the pre-
+        // per-column-alignment world. Once the caller engages the
+        // feature by passing an array, missing entries are padded with
+        // explicit `.left` markers (`:---`) so the selection the user
+        // saw in the picker is faithfully reflected in the source.
+        let paddedAlignments: [MarkdownTableAlignment?] = alignments.isEmpty
+            ? Array(repeating: nil, count: cols)
+            : padded(explicitAlignments: alignments, cols: cols)
 
         func row(_ cells: [String]) -> String {
             "| " + cells.joined(separator: " | ") + " |"
         }
 
         let headerRow = row(headers)
-        let alignmentRow = row(cellWidths.map { String(repeating: "-", count: max($0, 3)) })
+        let alignmentCells = zip(cellWidths, paddedAlignments).map { width, alignment in
+            alignmentMarker(width: max(width, 3), alignment: alignment)
+        }
+        let alignmentRow = row(alignmentCells)
         let emptyCells = cellWidths.map { String(repeating: " ", count: $0) }
         let dataRows = Array(repeating: row(emptyCells), count: rows)
 
         return ([headerRow, alignmentRow] + dataRows).joined(separator: "\n")
+    }
+
+    private static func padded(
+        explicitAlignments alignments: [MarkdownTableAlignment],
+        cols: Int,
+    ) -> [MarkdownTableAlignment?] {
+        if alignments.count >= cols { return alignments.prefix(cols).map { $0 as MarkdownTableAlignment? } }
+        // Pad with nil (implicit default) so callers who only specified a
+        // few leading columns don't get the remaining columns over-decor-
+        // ated with `:---` markers.
+        return alignments.map { $0 as MarkdownTableAlignment? }
+            + Array(repeating: nil as MarkdownTableAlignment?, count: cols - alignments.count)
+    }
+
+    private static func alignmentMarker(width: Int, alignment: MarkdownTableAlignment?) -> String {
+        switch alignment {
+        case .none:
+            String(repeating: "-", count: width)
+        case .left:
+            ":" + String(repeating: "-", count: width - 1)
+        case .center:
+            ":" + String(repeating: "-", count: max(width - 2, 3)) + ":"
+        case .right:
+            String(repeating: "-", count: width - 1) + ":"
+        }
     }
 
     /// A single scaffold insertion ready to hand to the editor's edit
@@ -65,8 +127,9 @@ enum MarkdownTableScaffold {
         at cursor: Int,
         rows: Int,
         cols: Int,
+        alignments: [MarkdownTableAlignment] = [],
     ) -> Insertion {
-        let scaffold = generate(rows: rows, cols: cols) ?? ""
+        let scaffold = generate(rows: rows, cols: cols, alignments: alignments) ?? ""
         let clampedCursor = max(0, min(cursor, text.count))
         let onBlankLine = isCursorOnBlankLine(in: text, at: clampedCursor)
 

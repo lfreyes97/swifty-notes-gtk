@@ -8,7 +8,7 @@ public final class AppSettingsStore {
 
     public init(
         settingsFileURL: URL = AppSettingsStore.defaultSettingsFileURL(),
-        fileManager: FileManager = .default
+        fileManager: FileManager = .default,
     ) {
         self.settingsFileURL = settingsFileURL
         self.fileManager = fileManager
@@ -35,11 +35,10 @@ public final class AppSettingsStore {
     public static func defaultSettingsFileURL() -> URL {
         let env = ProcessInfo.processInfo.environment
         let fileManager = FileManager.default
-        let base: URL
-        if let xdgConfigHome = env["XDG_CONFIG_HOME"], !xdgConfigHome.isEmpty {
-            base = URL(fileURLWithPath: xdgConfigHome, isDirectory: true)
+        let base: URL = if let xdgConfigHome = env["XDG_CONFIG_HOME"], !xdgConfigHome.isEmpty {
+            URL(fileURLWithPath: xdgConfigHome, isDirectory: true)
         } else {
-            base = fileManager.homeDirectoryForCurrentUser
+            fileManager.homeDirectoryForCurrentUser
                 .appendingPathComponent(".config", isDirectory: true)
         }
         return AppIdentity.applicationDirectory(in: base)

@@ -1,78 +1,78 @@
-import Foundation
-import Testing
-@testable import SwiftyNotes
 import Adwaita
+import Foundation
+@testable import SwiftyNotes
+import Testing
 
 struct CLICommandTests {
     @Test
-    func cliCreateListGetAndUpdateNoteByID() throws {
+    func `cli create list get and update note by ID`() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
         let createResult = NotesCLI.runIfRequested(
-            arguments: ["cli", "create", "--notes-dir", temp.path(), "--content", "# CLI Title\n\nBody"]
+            arguments: ["cli", "create", "--notes-dir", temp.path(), "--content", "# CLI Title\n\nBody"],
         )
         #expect(createResult != nil)
         #expect(createResult?.exitCode == 0)
 
         let created = try JSONDecoder.swiftyNotesCLI.decode(
             CLITestDocument.self,
-            from: Data((createResult?.stdout ?? "").utf8)
+            from: Data((createResult?.stdout ?? "").utf8),
         )
         #expect(created.title == "CLI Title")
         #expect(created.filename.hasSuffix("/note.md"))
 
         let listResult = NotesCLI.runIfRequested(
-            arguments: ["cli", "list", "--notes-dir", temp.path()]
+            arguments: ["cli", "list", "--notes-dir", temp.path()],
         )
         #expect(listResult?.exitCode == 0)
         let listed = try JSONDecoder.swiftyNotesCLI.decode(
             [CLITestSummary].self,
-            from: Data((listResult?.stdout ?? "").utf8)
+            from: Data((listResult?.stdout ?? "").utf8),
         )
         #expect(listed.count == 1)
         #expect(listed.first?.id == created.id)
         #expect(listed.first?.filename.hasSuffix("/note.md") == true)
 
         let getResult = NotesCLI.runIfRequested(
-            arguments: ["cli", "get", "--notes-dir", temp.path(), created.id]
+            arguments: ["cli", "get", "--notes-dir", temp.path(), created.id],
         )
         #expect(getResult?.exitCode == 0)
         let fetched = try JSONDecoder.swiftyNotesCLI.decode(
             CLITestDocument.self,
-            from: Data((getResult?.stdout ?? "").utf8)
+            from: Data((getResult?.stdout ?? "").utf8),
         )
         #expect(fetched.content.contains("Body"))
 
         let updateResult = NotesCLI.runIfRequested(
-            arguments: ["cli", "update", "--notes-dir", temp.path(), created.id, "--content", "# Updated\n\nReplaced"]
+            arguments: ["cli", "update", "--notes-dir", temp.path(), created.id, "--content", "# Updated\n\nReplaced"],
         )
         #expect(updateResult?.exitCode == 0)
         let updated = try JSONDecoder.swiftyNotesCLI.decode(
             CLITestDocument.self,
-            from: Data((updateResult?.stdout ?? "").utf8)
+            from: Data((updateResult?.stdout ?? "").utf8),
         )
         #expect(updated.title == "Updated")
         #expect(updated.content == "# Updated\n\nReplaced")
         #expect(updated.filename == created.filename)
 
         let rawGetResult = NotesCLI.runIfRequested(
-            arguments: ["cli", "get", "--notes-dir", temp.path(), created.id, "--raw"]
+            arguments: ["cli", "get", "--notes-dir", temp.path(), created.id, "--raw"],
         )
         #expect(rawGetResult?.stdout == "# Updated\n\nReplaced\n")
     }
 
     @Test
-    func cliRejectsUnknownID() {
+    func `cli rejects unknown ID`() {
         let result = NotesCLI.runIfRequested(
-            arguments: ["cli", "get", UUID().uuidString.lowercased()]
+            arguments: ["cli", "get", UUID().uuidString.lowercased()],
         )
         #expect(result?.exitCode == 3)
         #expect(result?.stderr.contains("No note found") == true)
     }
 
     @Test
-    func cliGeneralHelpIsAvailable() {
+    func `cli general help is available`() {
         let result = NotesCLI.runIfRequested(arguments: ["cli"])
         #expect(result?.exitCode == 0)
         #expect(result?.stdout.contains("SwiftyNotes CLI") == true)
@@ -82,7 +82,7 @@ struct CLICommandTests {
     }
 
     @Test
-    func cliCommandHelpIsAvailable() {
+    func `cli command help is available`() {
         let result = NotesCLI.runIfRequested(arguments: ["cli", "help", "update"])
         #expect(result?.exitCode == 0)
         #expect(result?.stdout.contains("swiftynotes cli update <note-id>") == true)
@@ -91,7 +91,7 @@ struct CLICommandTests {
     }
 
     @Test
-    func cliSubcommandHelpFlagIsAvailable() {
+    func `cli subcommand help flag is available`() {
         let result = NotesCLI.runIfRequested(arguments: ["cli", "get", "--help"])
         #expect(result?.exitCode == 0)
         #expect(result?.stdout.contains("swiftynotes cli get <note-id>") == true)

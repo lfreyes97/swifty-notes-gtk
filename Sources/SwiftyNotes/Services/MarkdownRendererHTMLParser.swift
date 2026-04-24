@@ -6,7 +6,7 @@ struct HTMLSubsetParser {
     let supportedTags: Set<String> = [
         "a", "aside", "blockquote", "br", "code", "del", "em", "h1", "h2", "h3", "h4", "h5", "h6",
         "hr", "img", "input", "li", "ol", "p", "pre", "span", "strong", "table", "tbody", "td",
-        "th", "thead", "tr", "ul"
+        "th", "thead", "tr", "ul",
     ]
 
     func parse(_ html: String) -> [HTMLNode] {
@@ -18,7 +18,7 @@ struct HTMLSubsetParser {
             if html[index] == "<" {
                 if let tagRange = html[index...].firstIndex(of: ">") {
                     let end = html.index(after: tagRange)
-                    let token = String(html[index..<end])
+                    let token = String(html[index ..< end])
                     if let tag = parseTag(token) {
                         switch tag.kind {
                         case .opening:
@@ -29,7 +29,7 @@ struct HTMLSubsetParser {
                             }
                         case .closing:
                             if let matchedIndex = stack.lastIndex(where: { $0.name == tag.name }) {
-                                stack.removeSubrange((matchedIndex + 1)..<stack.count)
+                                stack.removeSubrange((matchedIndex + 1) ..< stack.count)
                                 stack.removeLast()
                             }
                         }
@@ -44,7 +44,7 @@ struct HTMLSubsetParser {
             }
 
             let nextTag = html[index...].firstIndex(of: "<") ?? html.endIndex
-            let text = String(html[index..<nextTag])
+            let text = String(html[index ..< nextTag])
             if !text.isEmpty {
                 stack[stack.count - 1].children.append(.text(text))
             }
@@ -94,17 +94,16 @@ struct HTMLSubsetParser {
             return [:]
         }
 
-        let range = NSRange(input.startIndex..<input.endIndex, in: input)
+        let range = NSRange(input.startIndex ..< input.endIndex, in: input)
         var attributes: [String: String] = [:]
         regex.enumerateMatches(in: input, options: [], range: range) { match, _, _ in
             guard let match,
                   let keyRange = Range(match.range(at: 1), in: input) else { return }
             let key = String(input[keyRange]).lowercased()
-            let value: String
-            if let valueRange = Range(match.range(at: 2), in: input) {
-                value = String(input[valueRange])
+            let value = if let valueRange = Range(match.range(at: 2), in: input) {
+                String(input[valueRange])
             } else {
-                value = ""
+                ""
             }
             attributes[key] = value
         }

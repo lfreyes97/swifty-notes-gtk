@@ -30,11 +30,11 @@ extension MainWindow {
         activeSettingsWindow?.update(
             settings: settings,
             currentNotesDirectory: repository.notesDirectoryURL,
-            defaultNotesDirectory: NotesRepository.fallbackNotesDirectory()
+            defaultNotesDirectory: NotesRepository.fallbackNotesDirectory(),
         )
 
         guard shouldRefreshPreview else { return }
-        self.refreshPreview()
+        refreshPreview()
     }
 }
 

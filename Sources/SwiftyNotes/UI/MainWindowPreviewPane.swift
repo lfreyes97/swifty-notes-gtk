@@ -27,17 +27,17 @@ extension MainWindow {
     private func scheduleDebugLaunchEdit(suffix: String, after delayMilliseconds: Int, remainingAttempts: Int) {
         MainContext.delay(for: .milliseconds(delayMilliseconds)) { [weak self] in
             guard let self else { return }
-            guard self.state.selectedNote != nil else {
+            guard state.selectedNote != nil else {
                 guard remainingAttempts > 0 else { return }
-                self.scheduleDebugLaunchEdit(
+                scheduleDebugLaunchEdit(
                     suffix: suffix,
                     after: 200,
-                    remainingAttempts: remainingAttempts - 1
+                    remainingAttempts: remainingAttempts - 1,
                 )
                 return
             }
             FileHandle.standardError.write(Data("SwiftyNotes debug launch edit: \(suffix)\n".utf8))
-            self.editor.buffer.text += "\n\n\(suffix)"
+            editor.buffer.text += "\n\n\(suffix)"
         }
     }
 
@@ -49,7 +49,7 @@ extension MainWindow {
         MainContext.delay(for: .milliseconds(max(delayMilliseconds, 0))) { [weak self] in
             guard let self else { return }
             FileHandle.standardError.write(
-                Data("SwiftyNotes debug header subtitle: \(self.headerTitle.subtitle)\n".utf8)
+                Data("SwiftyNotes debug header subtitle: \(headerTitle.subtitle)\n".utf8),
             )
         }
     }
@@ -95,7 +95,7 @@ extension MainWindow {
         MainContext.delay(for: .milliseconds(max(delayMilliseconds, 0))) { [weak self] in
             guard let self else { return }
             FileHandle.standardError.write(Data("SwiftyNotes debug launch select note: \(index)\n".utf8))
-            self.requestSelectNote(at: index)
+            requestSelectNote(at: index)
         }
     }
 
@@ -108,7 +108,7 @@ extension MainWindow {
         pendingPreviewBaseDirectory = baseDirectory
         previewRefreshID = MainContext.timeout(every: .milliseconds(1)) { [weak self] in
             guard let self else { return false }
-            self.flushPendingPreviewRefresh()
+            flushPendingPreviewRefresh()
             return false
         }
     }
@@ -125,8 +125,8 @@ extension MainWindow {
             if previewRefreshRetryID == nil {
                 previewRefreshRetryID = MainContext.timeout(every: .milliseconds(16)) { [weak self] in
                     guard let self else { return false }
-                    self.previewRefreshRetryID = nil
-                    self.flushPendingPreviewRefresh()
+                    previewRefreshRetryID = nil
+                    flushPendingPreviewRefresh()
                     return false
                 }
             }
@@ -154,7 +154,7 @@ extension MainWindow {
             hasParent: preview.rootScroll.parent != nil,
             hasRoot: preview.rootScroll.root != nil,
             width: preview.rootScroll.width,
-            height: preview.rootScroll.height
+            height: preview.rootScroll.height,
         )
     }
 
@@ -165,7 +165,7 @@ extension MainWindow {
         hasParent: Bool,
         hasRoot: Bool,
         width: Int,
-        height: Int
+        height: Int,
     ) -> Bool {
         guard isPreviewPresented, hasParent else { return false }
         guard windowWidth > 0, windowHeight > 0 else { return false }
@@ -217,11 +217,11 @@ extension MainWindow {
                 "Open Markdown File…",
                 "Import into Library…",
                 "Reload from disk",
-                "Open notes folder"
+                "Open notes folder",
             ],
             "Help": [
-                "About Swifty Notes"
-            ]
+                "About Swifty Notes",
+            ],
         ]
         menuButton.setMenuModel(menu)
         updateActionAvailability()
@@ -413,15 +413,15 @@ extension MainWindow {
             let progress = min(max(elapsed / duration, 0), 1)
             let easedProgress = 1 - pow(1 - progress, 3)
             let position = Double(startPosition) + (Double(targetPosition - startPosition) * easedProgress)
-            self.editorPreviewPane.position = Int(position.rounded())
+            editorPreviewPane.position = Int(position.rounded())
             if progress < 1 {
                 return true
             }
 
-            self.previewAnimationID = nil
-            self.isRestoringPreviewPaneLayout = false
-            if self.state.viewMode != .split {
-                self.schedulePreviewDetachIfNeeded()
+            previewAnimationID = nil
+            isRestoringPreviewPaneLayout = false
+            if state.viewMode != .split {
+                schedulePreviewDetachIfNeeded()
             }
             return false
         }
@@ -429,8 +429,8 @@ extension MainWindow {
 
     func schedulePreviewDetachIfNeeded() {
         MainContext.delay(for: .milliseconds(1)) { [weak self] in
-            guard let self, self.state.viewMode != .split else { return }
-            self.detachPreviewPane()
+            guard let self, state.viewMode != .split else { return }
+            detachPreviewPane()
         }
     }
 
@@ -446,7 +446,7 @@ extension MainWindow {
             editorPreviewPane.width,
             window.width > 0 ? window.width - currentSidebarWidth : 0,
             window.defaultWidth - 280,
-            state.preferredWindowWidth - 280
+            state.preferredWindowWidth - 280,
         )
     }
 
@@ -457,10 +457,11 @@ extension MainWindow {
     func resolvedVisiblePreviewPosition(totalWidth: Int) -> Int {
         let previewWidth = Self.resolvedPreviewWidth(
             storedWidth: state.preferredPreviewWidth,
-            availableWidth: totalWidth
+            availableWidth: totalWidth,
         )
         if state.preferredPreviewWidth == WorkspaceState.legacyDefaultPreviewWidth,
-           previewWidth > state.preferredPreviewWidth {
+           previewWidth > state.preferredPreviewWidth
+        {
             state.setPreferredPreviewWidth(previewWidth)
         }
         preview.rootScroll.minContentWidth = Self.minimumPreviewWidth

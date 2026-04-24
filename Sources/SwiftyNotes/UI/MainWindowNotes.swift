@@ -31,7 +31,7 @@ extension MainWindow {
         } catch {
             presentError(
                 heading: "Could not load notes",
-                body: error.localizedDescription
+                body: error.localizedDescription,
             )
         }
     }
@@ -57,7 +57,7 @@ extension MainWindow {
         } catch {
             presentError(
                 heading: "Could not create note",
-                body: error.localizedDescription
+                body: error.localizedDescription,
             )
         }
     }
@@ -75,7 +75,7 @@ extension MainWindow {
         } catch {
             presentError(
                 heading: "Could not duplicate note",
-                body: error.localizedDescription
+                body: error.localizedDescription,
             )
         }
     }
@@ -88,7 +88,7 @@ extension MainWindow {
     func presentDeleteConfirmation(for note: Note) {
         let dialog = AlertDialog(
             heading: "Delete note?",
-            body: "\"\(note.title)\" will be permanently removed."
+            body: "\"\(note.title)\" will be permanently removed.",
         )
         dialog.addResponse("cancel", label: "Cancel")
         dialog.addResponse("delete", label: "Delete")
@@ -97,7 +97,7 @@ extension MainWindow {
         dialog.setResponseAppearance("delete", appearance: .destructive)
         dialog.onResponse { [weak self] response in
             guard let self, response == "delete" else { return }
-            self.delete(note: note)
+            delete(note: note)
         }
         dialog.present(window)
     }
@@ -114,7 +114,7 @@ extension MainWindow {
         } catch {
             presentError(
                 heading: "Could not delete note",
-                body: error.localizedDescription
+                body: error.localizedDescription,
             )
         }
     }
@@ -151,16 +151,16 @@ extension MainWindow {
             selectedID: state.selectedNoteID,
             totalCount: state.notes.count,
             searchQuery: state.searchQuery,
-            sortMode: state.sortMode
+            sortMode: state.sortMode,
         )
         for (index, note) in displayedNotes.enumerated() {
             guard let row = sidebar.list.rowAt(index) else { continue }
             row.onRightClick { [weak self] x, y in
                 guard let self else { return }
-                self.state.select(noteID: note.id)
-                self.renderSelection()
-                self.persistWorkspaceState()
-                self.presentNoteContextMenu(forNoteID: note.id, x: Int(x), y: Int(y))
+                state.select(noteID: note.id)
+                renderSelection()
+                persistWorkspaceState()
+                presentNoteContextMenu(forNoteID: note.id, x: Int(x), y: Int(y))
             }
         }
     }

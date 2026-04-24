@@ -1,11 +1,11 @@
 import Adwaita
 import Foundation
-import Testing
 @testable import SwiftyNotes
+import Testing
 
 struct SwiftyNotesLauncherTests {
     @Test @MainActor
-    func appControllerOpenDocumentsCreatesExternalWindowsWithoutMainWindow() throws {
+    func `app controller open documents creates external windows without main window`() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
         try FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
@@ -20,14 +20,14 @@ struct SwiftyNotesLauncherTests {
 
         let controller = AppController(
             stateStore: WorkspaceStateStore(
-                stateFileURL: temp.appendingPathComponent("workspace.json", isDirectory: false)
+                stateFileURL: temp.appendingPathComponent("workspace.json", isDirectory: false),
             ),
             appSettingsStore: AppSettingsStore(
                 settingsFileURL: temp
                     .appendingPathComponent("config", isDirectory: true)
-                    .appendingPathComponent("settings.json", isDirectory: false)
+                    .appendingPathComponent("settings.json", isDirectory: false),
             ),
-            allowsWindowPresentation: false
+            allowsWindowPresentation: false,
         )
 
         controller.openDocuments(at: [firstURL, secondURL], application: app)
@@ -35,12 +35,12 @@ struct SwiftyNotesLauncherTests {
         #expect(!controller.debugHasMainWindow)
         #expect(controller.debugExternalDocumentFileURLs == [
             firstURL.standardizedFileURL,
-            secondURL.standardizedFileURL
+            secondURL.standardizedFileURL,
         ])
     }
 
     @Test @MainActor
-    func appControllerOpenDocumentsReusesExistingExternalWindowForSameFile() throws {
+    func `app controller open documents reuses existing external window for same file`() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
         try FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
@@ -53,14 +53,14 @@ struct SwiftyNotesLauncherTests {
 
         let controller = AppController(
             stateStore: WorkspaceStateStore(
-                stateFileURL: temp.appendingPathComponent("workspace.json", isDirectory: false)
+                stateFileURL: temp.appendingPathComponent("workspace.json", isDirectory: false),
             ),
             appSettingsStore: AppSettingsStore(
                 settingsFileURL: temp
                     .appendingPathComponent("config", isDirectory: true)
-                    .appendingPathComponent("settings.json", isDirectory: false)
+                    .appendingPathComponent("settings.json", isDirectory: false),
             ),
-            allowsWindowPresentation: false
+            allowsWindowPresentation: false,
         )
 
         controller.openDocuments(at: [fileURL], application: app)

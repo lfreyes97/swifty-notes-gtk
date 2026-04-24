@@ -781,8 +781,8 @@ private extension ExternalDocumentWindow {
     private func ensureTableSizePicker() -> TableSizePicker {
         if let picker = tableSizePicker { return picker }
         let picker = TableSizePicker()
-        picker.onSelect = { [weak self] rows, cols in
-            self?.editor.insertTable(rows: rows, cols: cols)
+        picker.onSelect = { [weak self] rows, cols, alignments in
+            self?.editor.insertTable(rows: rows, cols: cols, alignments: alignments)
         }
         tableSizePicker = picker
         return picker

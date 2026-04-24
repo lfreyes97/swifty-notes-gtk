@@ -8,7 +8,7 @@ public final class WorkspaceStateStore {
 
     public init(
         stateFileURL: URL = WorkspaceStateStore.defaultStateFileURL(),
-        fileManager: FileManager = .default
+        fileManager: FileManager = .default,
     ) {
         self.stateFileURL = stateFileURL
         self.fileManager = fileManager
@@ -35,11 +35,10 @@ public final class WorkspaceStateStore {
     public static func defaultStateFileURL() -> URL {
         let env = ProcessInfo.processInfo.environment
         let fileManager = FileManager.default
-        let base: URL
-        if let xdgStateHome = env["XDG_STATE_HOME"], !xdgStateHome.isEmpty {
-            base = URL(fileURLWithPath: xdgStateHome, isDirectory: true)
+        let base: URL = if let xdgStateHome = env["XDG_STATE_HOME"], !xdgStateHome.isEmpty {
+            URL(fileURLWithPath: xdgStateHome, isDirectory: true)
         } else {
-            base = fileManager.homeDirectoryForCurrentUser
+            fileManager.homeDirectoryForCurrentUser
                 .appendingPathComponent(".local", isDirectory: true)
                 .appendingPathComponent("state", isDirectory: true)
         }

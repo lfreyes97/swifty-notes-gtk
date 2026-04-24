@@ -1,7 +1,7 @@
-import Foundation
-import Testing
-@testable import SwiftyNotes
 import Adwaita
+import Foundation
+@testable import SwiftyNotes
+import Testing
 
 actor SaveRecorder {
     private var values: [Int] = []

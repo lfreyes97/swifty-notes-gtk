@@ -8,9 +8,9 @@ private enum DroppedImageImportError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .noSelectedNote:
-            return "Open or create a note before dropping images."
+            "Open or create a note before dropping images."
         case let .unsupportedFile(filename):
-            return "Unsupported image type for \(filename)."
+            "Unsupported image type for \(filename)."
         }
     }
 }
@@ -30,11 +30,12 @@ extension MainWindow {
         x: Int,
         y: Int,
         requestID: UInt,
-        remainingAttempts: Int = 20
+        remainingAttempts: Int = 20,
     ) {
         guard requestID == noteContextMenuRequestID,
               let rowIndex = displayedNotes.firstIndex(where: { $0.id == noteID }),
-              let row = sidebar.list.rowAt(rowIndex) else {
+              let row = sidebar.list.rowAt(rowIndex)
+        else {
             return
         }
         guard row.root != nil, row.width > 0, row.height > 0 else {
@@ -45,7 +46,7 @@ extension MainWindow {
                     x: x,
                     y: y,
                     requestID: requestID,
-                    remainingAttempts: remainingAttempts - 1
+                    remainingAttempts: remainingAttempts - 1,
                 )
             }
             return
@@ -61,11 +62,11 @@ extension MainWindow {
             if popover.root != nil {
                 popover.unparent()
             }
-            if self.noteContextMenu === popover {
-                self.noteContextMenu = nil
+            if noteContextMenu === popover {
+                noteContextMenu = nil
             }
-            self.noteContextHandlers = [:]
-            self.noteContextMenuLabels = []
+            noteContextHandlers = [:]
+            noteContextMenuLabels = []
         }
         guard popover.present(from: row, x: x, y: y) else {
             guard remainingAttempts > 0 else { return }
@@ -75,7 +76,7 @@ extension MainWindow {
                     x: x,
                     y: y,
                     requestID: requestID,
-                    remainingAttempts: remainingAttempts - 1
+                    remainingAttempts: remainingAttempts - 1,
                 )
             }
             return
@@ -117,7 +118,7 @@ extension MainWindow {
             "Duplicate note",
             "Export note…",
             "Copy note ID",
-            "Delete…"
+            "Delete…",
         ]
 
         let content = Box(orientation: .vertical, spacing: 2)
@@ -161,7 +162,7 @@ extension MainWindow {
             "Duplicate note": duplicateAction,
             "Export note…": exportAction,
             "Copy note ID": copyIDAction,
-            "Delete…": deleteAction
+            "Delete…": deleteAction,
         ]
         return content
     }
@@ -169,7 +170,7 @@ extension MainWindow {
     func makeNoteContextButton(
         label: String,
         destructive: Bool = false,
-        handler: @escaping @MainActor () -> Void
+        handler: @escaping @MainActor () -> Void,
     ) -> Button {
         let button = Button()
         button.addCSSClass(.flat)
@@ -210,12 +211,12 @@ extension MainWindow {
         dropTarget.onDropFiles { [weak self] urls in
             guard let self, !urls.isEmpty else { return false }
             do {
-                try self.importDroppedImages(from: urls)
+                try importDroppedImages(from: urls)
                 return true
             } catch {
-                self.presentError(
+                presentError(
                     heading: "Could not add image",
-                    body: error.localizedDescription
+                    body: error.localizedDescription,
                 )
                 return false
             }
@@ -248,36 +249,36 @@ extension MainWindow {
         dialog.acceptLabel = "Import"
         dialog.setFilters([
             FileFilter(name: "Markdown", suffixes: ["md", "markdown", "txt"]),
-            FileFilter(name: "All files", patterns: ["*"])
+            FileFilter(name: "All files", patterns: ["*"]),
         ])
         activeFileDialog = dialog
         dialog.open(parent: window.root ?? window) { [weak self] result in
             guard let self else { return }
-            self.activeFileDialog = nil
+            activeFileDialog = nil
             let path: String?
             switch result {
             case let .success(value):
                 path = value
             case let .failure(error):
-                self.presentError(
+                presentError(
                     heading: "Could not open import dialog",
-                    body: error.message
+                    body: error.message,
                 )
                 return
             }
             guard let path else { return }
             do {
-                self.clearSearchIfNeeded()
-                let note = try self.repository.importNote(from: URL(fileURLWithPath: path))
-                self.state.upsert(note)
-                self.refreshDirectorySnapshot()
-                self.renderSelection()
-                self.persistWorkspaceState()
-                self.toastOverlay.showToast("Imported \(note.title)")
+                clearSearchIfNeeded()
+                let note = try repository.importNote(from: URL(fileURLWithPath: path))
+                state.upsert(note)
+                refreshDirectorySnapshot()
+                renderSelection()
+                persistWorkspaceState()
+                toastOverlay.showToast("Imported \(note.title)")
             } catch {
-                self.presentError(
+                presentError(
                     heading: "Could not import note",
-                    body: error.localizedDescription
+                    body: error.localizedDescription,
                 )
             }
         }
@@ -290,30 +291,30 @@ extension MainWindow {
         dialog.acceptLabel = "Open"
         dialog.setFilters([
             FileFilter(name: "Markdown", suffixes: ["md", "markdown", "txt"]),
-            FileFilter(name: "All files", patterns: ["*"])
+            FileFilter(name: "All files", patterns: ["*"]),
         ])
         activeFileDialog = dialog
         dialog.open(parent: window.root ?? window) { [weak self] result in
             guard let self else { return }
-            self.activeFileDialog = nil
+            activeFileDialog = nil
             let path: String?
             switch result {
             case let .success(value):
                 path = value
             case let .failure(error):
-                self.presentError(
+                presentError(
                     heading: "Could not open file dialog",
-                    body: error.message
+                    body: error.message,
                 )
                 return
             }
             guard let path else { return }
             do {
-                try self.openExternalDocumentHandler(URL(fileURLWithPath: path))
+                try openExternalDocumentHandler(URL(fileURLWithPath: path))
             } catch {
-                self.presentError(
+                presentError(
                     heading: "Could not open markdown file",
-                    body: error.localizedDescription
+                    body: error.localizedDescription,
                 )
             }
         }
@@ -328,28 +329,28 @@ extension MainWindow {
         dialog.initialName = selected.suggestedExportFilename
         dialog.setFilters([
             FileFilter(name: "Markdown", suffixes: ["md", "markdown", "txt"]),
-            FileFilter(name: "All files", patterns: ["*"])
+            FileFilter(name: "All files", patterns: ["*"]),
         ])
         activeFileDialog = dialog
         dialog.save(parent: window.root ?? window) { [weak self] result in
             guard let self else { return }
-            self.activeFileDialog = nil
+            activeFileDialog = nil
             let path: String?
             switch result {
             case let .success(value):
                 path = value
             case let .failure(error):
-                self.presentError(
+                presentError(
                     heading: "Could not open export dialog",
-                    body: error.message
+                    body: error.message,
                 )
                 return
             }
             guard let path else { return }
-            self.performExport(
+            performExport(
                 of: selected,
                 to: URL(fileURLWithPath: path),
-                assetsCollision: .fail
+                assetsCollision: .fail,
             )
         }
     }
@@ -357,13 +358,13 @@ extension MainWindow {
     private func performExport(
         of note: Note,
         to destinationURL: URL,
-        assetsCollision: NoteExportAssetCollision
+        assetsCollision: NoteExportAssetCollision,
     ) {
         do {
             let outcome = try repository.export(
                 note: note,
                 to: destinationURL,
-                assetsCollision: assetsCollision
+                assetsCollision: assetsCollision,
             )
             toastOverlay.showToast(exportSuccessMessage(for: note, outcome: outcome))
         } catch let error as NoteExportError {
@@ -374,7 +375,7 @@ extension MainWindow {
         } catch {
             presentError(
                 heading: "Could not export note",
-                body: error.localizedDescription
+                body: error.localizedDescription,
             )
         }
     }
@@ -390,7 +391,7 @@ extension MainWindow {
     private func presentAssetsCollisionConfirmation(for note: Note, destination: URL) {
         let dialog = AlertDialog(
             heading: "Replace existing assets?",
-            body: "An \"assets\" folder already exists alongside the export. Merging will overwrite files with the same name."
+            body: "An \"assets\" folder already exists alongside the export. Merging will overwrite files with the same name.",
         )
         dialog.addResponse("cancel", label: "Cancel")
         dialog.addResponse("merge", label: "Merge")
@@ -399,7 +400,7 @@ extension MainWindow {
         dialog.setResponseAppearance("merge", appearance: .destructive)
         dialog.onResponse { [weak self] response in
             guard let self, response == "merge" else { return }
-            self.performExport(of: note, to: destination, assetsCollision: .merge)
+            performExport(of: note, to: destination, assetsCollision: .merge)
         }
         dialog.present(window)
     }
@@ -411,7 +412,7 @@ extension MainWindow {
         } catch {
             presentError(
                 heading: "Could not open notes folder",
-                body: error.localizedDescription
+                body: error.localizedDescription,
             )
         }
     }
@@ -431,14 +432,14 @@ extension MainWindow {
             website: "https://github.com/makoni/swifty-notes-gtk",
             issueUrl: "https://github.com/makoni/swifty-notes-gtk/issues",
             copyright: "© 2026 Sergey Armodin",
-            licenseType: .mit
+            licenseType: .mit,
         )
         about.comments = "A native GTK markdown notes app written in Swift using swift-adwaita."
         about.supportUrl = "https://github.com/makoni/swifty-notes-gtk"
         about.addLink("Source Code", url: "https://github.com/makoni/swifty-notes-gtk")
         about.onClosed { [weak self, weak about] in
-            guard let self, let about, self.activeAboutDialog === about else { return }
-            self.activeAboutDialog = nil
+            guard let self, let about, activeAboutDialog === about else { return }
+            activeAboutDialog = nil
         }
         activeAboutDialog = about
         about.present(menuButton.root ?? window)
@@ -452,7 +453,7 @@ extension MainWindow {
         guard let application = Application.current else {
             presentError(
                 heading: "Could not open settings",
-                body: "The application instance is not available."
+                body: "The application instance is not available.",
             )
             return
         }
@@ -467,24 +468,24 @@ extension MainWindow {
                 guard let self else {
                     throw CocoaError(.userCancelled)
                 }
-                return try self.changeNotesDirectory(to: directory)
+                return try changeNotesDirectory(to: directory)
             },
             applySettingsChange: { [weak self] settings in
                 guard let self else {
                     throw CocoaError(.userCancelled)
                 }
-                return try self.updateAppSettings(settings)
+                return try updateAppSettings(settings)
             },
             openDirectory: { [weak self] url in
                 guard let self else {
                     throw CocoaError(.userCancelled)
                 }
-                try self.openDirectoryFromSettings(url)
-            }
+                try openDirectoryFromSettings(url)
+            },
         )
         settingsWindow.window.onDestroy { [weak self, weak settingsWindow] in
-            guard let self, let settingsWindow, self.activeSettingsWindow === settingsWindow else { return }
-            self.activeSettingsWindow = nil
+            guard let self, let settingsWindow, activeSettingsWindow === settingsWindow else { return }
+            activeSettingsWindow = nil
         }
         activeSettingsWindow = settingsWindow
         settingsWindow.present()
@@ -496,15 +497,15 @@ extension MainWindow {
 
     func changeNotesDirectory(
         to directory: URL,
-        targetSettings explicitTargetSettings: AppSettings? = nil
+        targetSettings explicitTargetSettings: AppSettings? = nil,
     ) throws -> URL {
         let defaultDirectory = NotesRepository.fallbackNotesDirectory()
         let targetSettings = (
             explicitTargetSettings
-            ?? appSettings.updatingNotesDirectory(
-                directory.standardizedFileURL,
-                defaultDirectory: defaultDirectory
-            )
+                ?? appSettings.updatingNotesDirectory(
+                    directory.standardizedFileURL,
+                    defaultDirectory: defaultDirectory,
+                ),
         ).normalized(defaultDirectory: defaultDirectory)
         let targetDirectory = targetSettings.resolvedNotesDirectory(defaultDirectory: defaultDirectory)
         let currentDirectory = repository.notesDirectoryURL.standardizedFileURL
@@ -524,8 +525,8 @@ extension MainWindow {
                     throw MainWindow.DirectoryOpenFailure(
                         message: [
                             error.localizedDescription,
-                            "Rollback failed: \(rollbackError.localizedDescription)"
-                        ].joined(separator: "\n")
+                            "Rollback failed: \(rollbackError.localizedDescription)",
+                        ].joined(separator: "\n"),
                     )
                 }
                 throw error
@@ -557,12 +558,12 @@ extension MainWindow {
     }
 
     func reloadFromDisk(announce: Bool, forceDiscardingUnsavedChanges: Bool = false) {
-        if editor.buffer.modified && !forceDiscardingUnsavedChanges {
+        if editor.buffer.modified, !forceDiscardingUnsavedChanges {
             if !externalReloadDeferred {
                 externalReloadDeferred = true
                 toastOverlay.showToast(
                     "Notes changed on disk. Save or reload to sync.",
-                    button: "Reload"
+                    button: "Reload",
                 ) { [weak self] in
                     self?.reloadFromDisk(announce: true, forceDiscardingUnsavedChanges: true)
                 }
@@ -584,7 +585,7 @@ extension MainWindow {
         } catch {
             presentError(
                 heading: "Could not reload notes",
-                body: error.localizedDescription
+                body: error.localizedDescription,
             )
         }
     }
@@ -593,7 +594,7 @@ extension MainWindow {
         stopExternalChangeMonitor()
         externalChangeMonitorID = MainContext.timeout(every: .milliseconds(1500)) { [weak self] in
             guard let self else { return false }
-            self.pollForExternalChanges()
+            pollForExternalChanges()
             return true
         }
     }
@@ -629,7 +630,7 @@ extension MainWindow {
                     externalReloadDeferred = true
                     toastOverlay.showToast(
                         "Notes changed on disk. Save or reload to sync.",
-                        button: "Reload"
+                        button: "Reload",
                     ) { [weak self] in
                         self?.reloadFromDisk(announce: true, forceDiscardingUnsavedChanges: true)
                     }
@@ -684,5 +685,4 @@ extension MainWindow {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         return normalized.isEmpty ? "Image" : normalized
     }
-
 }

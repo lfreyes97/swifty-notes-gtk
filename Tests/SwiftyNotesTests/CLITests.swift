@@ -1,16 +1,16 @@
 import Foundation
-import Testing
 @testable import SwiftyNotes
+import Testing
 
 struct CLITests {
     @Test
-    func cliRunIfRequestedIgnoresNonCLIArguments() {
+    func `cli run if requested ignores non CLI arguments`() {
         #expect(NotesCLI.runIfRequested(arguments: ["list"]) == nil)
         #expect(NotesCLI.runIfRequested(arguments: []) == nil)
     }
 
     @Test
-    func cliSupportsStdinAndContentFileSources() throws {
+    func `cli supports stdin and content file sources`() throws {
         let temp = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: temp) }
         try FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
@@ -21,7 +21,7 @@ struct CLITests {
 
         let createFromStdin = NotesCLI.runIfRequested(
             arguments: ["cli", "create", "--notes-dir", notesDirectory.path(), "--stdin"],
-            stdin: Data("# From Stdin\n\nBody from stdin".utf8)
+            stdin: Data("# From Stdin\n\nBody from stdin".utf8),
         )
         #expect(createFromStdin?.exitCode == 0)
         let stdinDocument = try decodeDocument(from: createFromStdin?.stdout ?? "")
@@ -29,7 +29,7 @@ struct CLITests {
         #expect(stdinDocument.filename.hasSuffix("/note.md"))
 
         let createFromFile = NotesCLI.runIfRequested(
-            arguments: ["cli", "create", "--notes-dir", notesDirectory.path(), "--content-file", contentFile.path()]
+            arguments: ["cli", "create", "--notes-dir", notesDirectory.path(), "--content-file", contentFile.path()],
         )
         #expect(createFromFile?.exitCode == 0)
         let fileDocument = try decodeDocument(from: createFromFile?.stdout ?? "")
@@ -37,7 +37,7 @@ struct CLITests {
         #expect(fileDocument.filename.hasSuffix("/note.md"))
 
         let updateFromFile = NotesCLI.runIfRequested(
-            arguments: ["cli", "update", "--notes-dir", notesDirectory.path(), stdinDocument.id, "--content-file", contentFile.path()]
+            arguments: ["cli", "update", "--notes-dir", notesDirectory.path(), stdinDocument.id, "--content-file", contentFile.path()],
         )
         #expect(updateFromFile?.exitCode == 0)
         let updatedFromFile = try decodeDocument(from: updateFromFile?.stdout ?? "")
@@ -45,7 +45,7 @@ struct CLITests {
 
         let updateFromStdin = NotesCLI.runIfRequested(
             arguments: ["cli", "update", "--notes-dir", notesDirectory.path(), fileDocument.id, "--stdin"],
-            stdin: Data("# Updated From Stdin\n\nReplacement".utf8)
+            stdin: Data("# Updated From Stdin\n\nReplacement".utf8),
         )
         #expect(updateFromStdin?.exitCode == 0)
         let updatedFromStdin = try decodeDocument(from: updateFromStdin?.stdout ?? "")
@@ -60,20 +60,20 @@ struct CLITests {
     }
 
     @Test
-    func cliReportsUsageAndRuntimeErrors() {
+    func `cli reports usage and runtime errors`() {
         let unknownCommand = NotesCLI.runIfRequested(arguments: ["cli", "unknown"])
         #expect(unknownCommand?.exitCode == 2)
         #expect(unknownCommand?.stderr.contains("Unknown CLI command") == true)
 
         let conflictingSources = NotesCLI.runIfRequested(
             arguments: ["cli", "create", "--content", "inline", "--stdin"],
-            stdin: Data("stdin".utf8)
+            stdin: Data("stdin".utf8),
         )
         #expect(conflictingSources?.exitCode == 2)
         #expect(conflictingSources?.stderr.contains("Use only one of --content, --content-file, or --stdin.") == true)
 
         let missingReplacement = NotesCLI.runIfRequested(
-            arguments: ["cli", "update", UUID().uuidString.lowercased()]
+            arguments: ["cli", "update", UUID().uuidString.lowercased()],
         )
         #expect(missingReplacement?.exitCode == 2)
         #expect(missingReplacement?.stderr.contains("Replacement content is required.") == true)
@@ -84,14 +84,14 @@ struct CLITests {
 
         let invalidUTF8Stdin = NotesCLI.runIfRequested(
             arguments: ["cli", "create", "--stdin"],
-            stdin: Data([0xFF])
+            stdin: Data([0xFF]),
         )
         #expect(invalidUTF8Stdin?.exitCode == 1)
         #expect(invalidUTF8Stdin?.stderr.contains("Could not read UTF-8 content from stdin") == true)
     }
 
     @Test
-    func cliExecutableRoundTripsNotesAcrossProcesses() throws {
+    func `cli executable round trips notes across processes`() throws {
         let temp = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: temp) }
         try FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
@@ -102,7 +102,7 @@ struct CLITests {
 
         let createResult = try runCLIExecutable(
             arguments: ["cli", "--notes-dir", notesDirectory.path(), "create", "--stdin"],
-            stdin: "# Process Note\n\nCreated via stdin"
+            stdin: "# Process Note\n\nCreated via stdin",
         )
         #expect(createResult.exitCode == 0)
         #expect(createResult.stderr.isEmpty)
@@ -116,13 +116,13 @@ struct CLITests {
         #expect(listed.first?.id == created.id)
 
         let rawGetResult = try runCLIExecutable(
-            arguments: ["cli", "get", created.id, "--raw", "--notes-dir", notesDirectory.path()]
+            arguments: ["cli", "get", created.id, "--raw", "--notes-dir", notesDirectory.path()],
         )
         #expect(rawGetResult.exitCode == 0)
         #expect(rawGetResult.stdout == "# Process Note\n\nCreated via stdin\n")
 
         let updateResult = try runCLIExecutable(
-            arguments: ["cli", "update", created.id, "--content-file", updateFile.path(), "--notes-dir", notesDirectory.path()]
+            arguments: ["cli", "update", created.id, "--content-file", updateFile.path(), "--notes-dir", notesDirectory.path()],
         )
         #expect(updateResult.exitCode == 0)
         let updated = try decodeDocument(from: updateResult.stdout)
@@ -135,7 +135,7 @@ struct CLITests {
     }
 
     @Test
-    func cliExecutableUsesDefaultXDGNotesDirectory() throws {
+    func `cli executable uses default XDG notes directory`() throws {
         let temp = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: temp) }
         try FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
@@ -144,12 +144,12 @@ struct CLITests {
         let xdgConfigHome = temp.appendingPathComponent("xdg-config", isDirectory: true)
         let environment = [
             "XDG_DATA_HOME": xdgDataHome.path(),
-            "XDG_CONFIG_HOME": xdgConfigHome.path()
+            "XDG_CONFIG_HOME": xdgConfigHome.path(),
         ]
 
         let createResult = try runCLIExecutable(
             arguments: ["cli", "create", "--content", "# Default Path\n\nBody"],
-            environment: environment
+            environment: environment,
         )
         #expect(createResult.exitCode == 0)
 
@@ -169,7 +169,7 @@ struct CLITests {
     }
 
     @Test
-    func cliExecutableUsesConfiguredNotesDirectoryFromSettings() throws {
+    func `cli executable uses configured notes directory from settings`() throws {
         let temp = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: temp) }
         try FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
@@ -180,18 +180,18 @@ struct CLITests {
         let settingsStore = AppSettingsStore(
             settingsFileURL: xdgConfigHome
                 .appendingPathComponent(AppIdentity.identifier, isDirectory: true)
-                .appendingPathComponent("settings.json", isDirectory: false)
+                .appendingPathComponent("settings.json", isDirectory: false),
         )
         try settingsStore.save(AppSettings(customNotesDirectoryPath: customNotesDirectory.path()))
 
         let environment = [
             "XDG_DATA_HOME": xdgDataHome.path(),
-            "XDG_CONFIG_HOME": xdgConfigHome.path()
+            "XDG_CONFIG_HOME": xdgConfigHome.path(),
         ]
 
         let createResult = try runCLIExecutable(
             arguments: ["cli", "create", "--content", "# Configured Path\n\nBody"],
-            environment: environment
+            environment: environment,
         )
         #expect(createResult.exitCode == 0)
 
@@ -206,7 +206,7 @@ struct CLITests {
     }
 
     @Test
-    func cliExecutableFallsBackToFlatpakDefaultNotesDirectoryWhenHostStorageIsEmpty() throws {
+    func `cli executable falls back to flatpak default notes directory when host storage is empty`() throws {
         let temp = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: temp) }
         try FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
@@ -226,12 +226,12 @@ struct CLITests {
             "HOME": temp.path(),
             "XDG_DATA_HOME": "",
             "XDG_CONFIG_HOME": "",
-            "XDG_STATE_HOME": ""
+            "XDG_STATE_HOME": "",
         ]
 
         let getResult = try runCLIExecutable(
             arguments: ["cli", "get", note.stableID],
-            environment: environment
+            environment: environment,
         )
         #expect(getResult.exitCode == 0)
         let fetched = try decodeDocument(from: getResult.stdout)
@@ -240,7 +240,7 @@ struct CLITests {
     }
 
     @Test
-    func cliExecutableFallsBackToFlatpakConfiguredNotesDirectoryWhenHostStorageIsEmpty() throws {
+    func `cli executable falls back to flatpak configured notes directory when host storage is empty`() throws {
         let temp = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: temp) }
         try FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
@@ -254,7 +254,7 @@ struct CLITests {
         let settingsStore = AppSettingsStore(
             settingsFileURL: flatpakConfigHome
                 .appendingPathComponent(AppIdentity.identifier, isDirectory: true)
-                .appendingPathComponent("settings.json", isDirectory: false)
+                .appendingPathComponent("settings.json", isDirectory: false),
         )
         try settingsStore.save(AppSettings(customNotesDirectoryPath: customNotesDirectory.path()))
         let note = try NotesRepository(notesDirectory: customNotesDirectory)
@@ -264,12 +264,12 @@ struct CLITests {
             "HOME": temp.path(),
             "XDG_DATA_HOME": "",
             "XDG_CONFIG_HOME": "",
-            "XDG_STATE_HOME": ""
+            "XDG_STATE_HOME": "",
         ]
 
         let getResult = try runCLIExecutable(
             arguments: ["cli", "get", note.stableID],
-            environment: environment
+            environment: environment,
         )
         #expect(getResult.exitCode == 0)
         let fetched = try decodeDocument(from: getResult.stdout)
@@ -278,21 +278,21 @@ struct CLITests {
     }
 
     @Test
-    func cliExecutableSurfacesHelpAndExitCodes() throws {
+    func `cli executable surfaces help and exit codes`() throws {
         let helpResult = try runCLIExecutable(arguments: ["cli", "help", "create"])
         #expect(helpResult.exitCode == 0)
         #expect(helpResult.stdout.contains("swiftynotes cli create"))
         #expect(helpResult.stderr.isEmpty)
 
         let invalidIDResult = try runCLIExecutable(
-            arguments: ["cli", "update", "not-a-uuid", "--content", "Hello"]
+            arguments: ["cli", "update", "not-a-uuid", "--content", "Hello"],
         )
         #expect(invalidIDResult.exitCode == 2)
         #expect(invalidIDResult.stdout.isEmpty)
         #expect(invalidIDResult.stderr.contains("Invalid note ID: not-a-uuid"))
 
         let notFoundResult = try runCLIExecutable(
-            arguments: ["cli", "get", UUID().uuidString.lowercased(), "--notes-dir", temporaryDirectory().path()]
+            arguments: ["cli", "get", UUID().uuidString.lowercased(), "--notes-dir", temporaryDirectory().path()],
         )
         #expect(notFoundResult.exitCode == 3)
         #expect(notFoundResult.stderr.contains("No note found") == true)
@@ -343,7 +343,7 @@ private func cliJSONDecoder() -> JSONDecoder {
 private func runCLIExecutable(
     arguments: [String],
     stdin: String? = nil,
-    environment: [String: String] = [:]
+    environment: [String: String] = [:],
 ) throws -> CLIProcessResult {
     let process = Process()
     process.executableURL = swiftyNotesExecutableURL()
@@ -379,7 +379,7 @@ private func runCLIExecutable(
     return CLIProcessResult(
         exitCode: process.terminationStatus,
         stdout: String(decoding: stdoutData, as: UTF8.self),
-        stderr: String(decoding: stderrData, as: UTF8.self)
+        stderr: String(decoding: stderrData, as: UTF8.self),
     )
 }
 

@@ -44,9 +44,9 @@ final class SettingsWindow {
         defaultNotesDirectory: URL,
         applyNotesDirectoryChange: @escaping (URL) throws -> URL,
         applySettingsChange: @escaping (AppSettings) throws -> AppSettings,
-        openDirectory: @escaping (URL) throws -> Void
+        openDirectory: @escaping (URL) throws -> Void,
     ) {
-        self.window = ApplicationWindow(application: application)
+        window = ApplicationWindow(application: application)
         self.currentSettings = currentSettings
         self.currentNotesDirectory = currentNotesDirectory.standardizedFileURL
         self.defaultNotesDirectory = defaultNotesDirectory.standardizedFileURL
@@ -76,7 +76,7 @@ final class SettingsWindow {
             editorTabWidth: currentSettings.editorTabWidth,
             editorIndentStyle: currentSettings.editorIndentStyle,
             autosaveDelaySeconds: currentSettings.autosaveDelaySeconds,
-            appearanceMode: currentSettings.appearanceMode
+            appearanceMode: currentSettings.appearanceMode,
         )
     }
 
@@ -97,7 +97,7 @@ final class SettingsWindow {
 
         let storageGroup = PreferencesGroup(
             title: "Storage",
-            description: "Choose where Swifty Notes stores markdown files and companion assets."
+            description: "Choose where Swifty Notes stores markdown files and companion assets.",
         )
 
         notesFolderRow.subtitleSelectable = true
@@ -132,7 +132,7 @@ final class SettingsWindow {
 
         let editorGroup = PreferencesGroup(
             title: "Editor",
-            description: "Control wrapping, indentation, and editor text size."
+            description: "Control wrapping, indentation, and editor text size.",
         )
 
         wrapLinesRow.subtitle = "Wrap markdown paragraphs instead of scrolling horizontally."
@@ -166,7 +166,7 @@ final class SettingsWindow {
 
         let savingGroup = PreferencesGroup(
             title: "Saving",
-            description: "Autosave runs after the last edit using the configured delay."
+            description: "Autosave runs after the last edit using the configured delay.",
         )
         autosaveDelayRow.subtitle = "Seconds"
         autosaveDelayRow.digits = 0
@@ -178,7 +178,7 @@ final class SettingsWindow {
 
         let appearanceGroup = PreferencesGroup(
             title: "Appearance",
-            description: "Override the application theme or follow the system."
+            description: "Override the application theme or follow the system.",
         )
         appearanceRow.setModel(StringList(AppearanceMode.allCases.map(\.displayName)))
         appearanceRow.onNotify(.selected) { [weak self] in
@@ -209,22 +209,22 @@ final class SettingsWindow {
         activeFileDialog = dialog
         dialog.selectFolder(parent: window) { [weak self, weak dialog] result in
             guard let self, let dialog else { return }
-            if self.activeFileDialog === dialog {
-                self.activeFileDialog = nil
+            if activeFileDialog === dialog {
+                activeFileDialog = nil
             }
             let path: String?
             switch result {
             case let .success(value):
                 path = value
             case let .failure(error):
-                self.presentError(
+                presentError(
                     heading: "Could not choose a notes folder",
-                    body: error.message
+                    body: error.message,
                 )
                 return
             }
             guard let path else { return }
-            self.applyNotesFolderChange(URL(fileURLWithPath: path, isDirectory: true))
+            applyNotesFolderChange(URL(fileURLWithPath: path, isDirectory: true))
         }
     }
 
@@ -235,12 +235,12 @@ final class SettingsWindow {
             updateNotesDirectory(activeFolder)
             currentSettings = currentSettings.updatingNotesDirectory(
                 activeFolder,
-                defaultDirectory: defaultNotesDirectory
+                defaultDirectory: defaultNotesDirectory,
             )
         } catch {
             presentError(
                 heading: "Could not change the notes folder",
-                body: error.localizedDescription
+                body: error.localizedDescription,
             )
         }
     }
@@ -251,7 +251,7 @@ final class SettingsWindow {
         } catch {
             presentError(
                 heading: "Could not open notes folder",
-                body: error.localizedDescription
+                body: error.localizedDescription,
             )
         }
     }
@@ -280,10 +280,10 @@ final class SettingsWindow {
         guard !isUpdatingControls else { return }
 
         let indentStyle = EditorIndentStyle.allCases[
-            min(max(indentStyleRow.selected, 0), EditorIndentStyle.allCases.count - 1)
+            min(max(indentStyleRow.selected, 0), EditorIndentStyle.allCases.count - 1),
         ]
         let appearanceMode = AppearanceMode.allCases[
-            min(max(appearanceRow.selected, 0), AppearanceMode.allCases.count - 1)
+            min(max(appearanceRow.selected, 0), AppearanceMode.allCases.count - 1),
         ]
         let updatedSettings = AppSettings(
             customNotesDirectoryPath: currentSettings.customNotesDirectoryPath,
@@ -292,20 +292,20 @@ final class SettingsWindow {
             editorTabWidth: Int(tabWidthRow.value.rounded()),
             editorIndentStyle: indentStyle,
             autosaveDelaySeconds: Int(autosaveDelayRow.value.rounded()),
-            appearanceMode: appearanceMode
+            appearanceMode: appearanceMode,
         )
 
         do {
             let appliedSettings = try applySettingsChange(updatedSettings)
             updateSettings(appliedSettings)
             updateNotesDirectory(
-                appliedSettings.resolvedNotesDirectory(defaultDirectory: defaultNotesDirectory)
+                appliedSettings.resolvedNotesDirectory(defaultDirectory: defaultNotesDirectory),
             )
         } catch {
             updateSettings(currentSettings)
             presentError(
                 heading: "Could not update settings",
-                body: error.localizedDescription
+                body: error.localizedDescription,
             )
         }
     }
@@ -320,40 +320,40 @@ final class SettingsWindow {
 }
 
 #if DEBUG
-@MainActor
-extension SettingsWindow {
-    var debugDefaultHeight: Int {
-        window.defaultHeight
-    }
+    @MainActor
+    extension SettingsWindow {
+        var debugDefaultHeight: Int {
+            window.defaultHeight
+        }
 
-    func debugSetWrapLines(_ value: Bool) {
-        wrapLinesRow.active = value
-        handleInlinePreferenceChange()
-    }
+        func debugSetWrapLines(_ value: Bool) {
+            wrapLinesRow.active = value
+            handleInlinePreferenceChange()
+        }
 
-    func debugSetFontSize(_ value: Int) {
-        fontSizeRow.value = Double(value)
-        handleInlinePreferenceChange()
-    }
+        func debugSetFontSize(_ value: Int) {
+            fontSizeRow.value = Double(value)
+            handleInlinePreferenceChange()
+        }
 
-    func debugSetTabWidth(_ value: Int) {
-        tabWidthRow.value = Double(value)
-        handleInlinePreferenceChange()
-    }
+        func debugSetTabWidth(_ value: Int) {
+            tabWidthRow.value = Double(value)
+            handleInlinePreferenceChange()
+        }
 
-    func debugSetIndentStyle(_ value: EditorIndentStyle) {
-        indentStyleRow.selected = EditorIndentStyle.allCases.firstIndex(of: value) ?? 0
-        handleInlinePreferenceChange()
-    }
+        func debugSetIndentStyle(_ value: EditorIndentStyle) {
+            indentStyleRow.selected = EditorIndentStyle.allCases.firstIndex(of: value) ?? 0
+            handleInlinePreferenceChange()
+        }
 
-    func debugSetAutosaveDelaySeconds(_ value: Int) {
-        autosaveDelayRow.value = Double(value)
-        handleInlinePreferenceChange()
-    }
+        func debugSetAutosaveDelaySeconds(_ value: Int) {
+            autosaveDelayRow.value = Double(value)
+            handleInlinePreferenceChange()
+        }
 
-    func debugSetAppearanceMode(_ value: AppearanceMode) {
-        appearanceRow.selected = AppearanceMode.allCases.firstIndex(of: value) ?? 0
-        handleInlinePreferenceChange()
+        func debugSetAppearanceMode(_ value: AppearanceMode) {
+            appearanceRow.selected = AppearanceMode.allCases.firstIndex(of: value) ?? 0
+            handleInlinePreferenceChange()
+        }
     }
-}
 #endif

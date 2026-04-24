@@ -1,11 +1,11 @@
-import Foundation
-import Testing
-@testable import SwiftyNotes
 import Adwaita
+import Foundation
+@testable import SwiftyNotes
+import Testing
 
 struct RepositoryStateTests {
     @Test
-    func repositoryCreatesAndLoadsNotesSortedNewestFirst() async throws {
+    func `repository creates and loads notes sorted newest first`() async throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         let repository = NotesRepository(notesDirectory: temp)
         defer { try? FileManager.default.removeItem(at: temp) }
@@ -21,7 +21,7 @@ struct RepositoryStateTests {
     }
 
     @Test
-    func repositorySupportsDuplicateImportExportAndSnapshots() throws {
+    func `repository supports duplicate import export and snapshots`() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         let importURL = temp.appendingPathComponent("import.md")
         let exportURL = temp.appendingPathComponent("export.md")
@@ -49,7 +49,7 @@ struct RepositoryStateTests {
     }
 
     @Test
-    func repositoryImportsNoteWhenSourcePathContainsSpaces() throws {
+    func `repository imports note when source path contains spaces`() throws {
         // Regression test for https://github.com/makoni/swifty-notes-gtk/issues/2
         // A filename (or any path component) with spaces previously triggered
         // "file not found" because URL.path() percent-encodes — FileManager
@@ -74,7 +74,7 @@ struct RepositoryStateTests {
     }
 
     @Test
-    func repositoryOperatesWhenNotesDirectoryPathContainsSpaces() throws {
+    func `repository operates when notes directory path contains spaces`() throws {
         // Regression test for https://github.com/makoni/swifty-notes-gtk/issues/2
         // If the user points the notes library at e.g. ~/My Notes, every
         // FileManager call that reads a URL via .path() would fail because
@@ -99,7 +99,7 @@ struct RepositoryStateTests {
     }
 
     @Test
-    func hasExportableAssetsReturnsTrueOnlyWhenAssetDirectoryContainsFiles() throws {
+    func `has exportable assets returns true only when asset directory contains files`() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -112,13 +112,13 @@ struct RepositoryStateTests {
         try FileManager.default.createDirectory(at: assetsDirectory, withIntermediateDirectories: true)
         try Data("png-bytes".utf8).write(
             to: assetsDirectory.appendingPathComponent("pic.png", isDirectory: false),
-            options: .atomic
+            options: .atomic,
         )
         #expect(repository.hasExportableAssets(note: withAssets))
     }
 
     @Test
-    func exportReturnsOutcomeWithoutAssetsForNoteWithoutImages() throws {
+    func `export returns outcome without assets for note without images`() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -135,7 +135,7 @@ struct RepositoryStateTests {
     }
 
     @Test
-    func exportCopiesAssetsFolderAlongsideMarkdown() throws {
+    func `export copies assets folder alongside markdown`() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -145,11 +145,11 @@ struct RepositoryStateTests {
         try FileManager.default.createDirectory(at: assetsDirectory, withIntermediateDirectories: true)
         try Data("png-bytes".utf8).write(
             to: assetsDirectory.appendingPathComponent("pic.png", isDirectory: false),
-            options: .atomic
+            options: .atomic,
         )
         try Data("cover-bytes".utf8).write(
             to: assetsDirectory.appendingPathComponent("cover.jpg", isDirectory: false),
-            options: .atomic
+            options: .atomic,
         )
 
         let exportDirectory = temp.appendingPathComponent("export", isDirectory: true)
@@ -166,7 +166,7 @@ struct RepositoryStateTests {
     }
 
     @Test
-    func exportFailsWhenAssetsDestinationAlreadyExists() throws {
+    func `export fails when assets destination already exists`() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -176,7 +176,7 @@ struct RepositoryStateTests {
         try FileManager.default.createDirectory(at: assetsDirectory, withIntermediateDirectories: true)
         try Data("new".utf8).write(
             to: assetsDirectory.appendingPathComponent("pic.png", isDirectory: false),
-            options: .atomic
+            options: .atomic,
         )
 
         let exportDirectory = temp.appendingPathComponent("export", isDirectory: true)
@@ -184,7 +184,7 @@ struct RepositoryStateTests {
         try FileManager.default.createDirectory(at: existingAssetsURL, withIntermediateDirectories: true)
         try Data("keep".utf8).write(
             to: existingAssetsURL.appendingPathComponent("existing.png", isDirectory: false),
-            options: .atomic
+            options: .atomic,
         )
 
         let destinationURL = exportDirectory.appendingPathComponent("my-post.md", isDirectory: false)
@@ -206,7 +206,7 @@ struct RepositoryStateTests {
     }
 
     @Test
-    func exportMergesAssetsIntoExistingDestinationWhenRequested() throws {
+    func `export merges assets into existing destination when requested`() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -216,11 +216,11 @@ struct RepositoryStateTests {
         try FileManager.default.createDirectory(at: assetsDirectory, withIntermediateDirectories: true)
         try Data("new".utf8).write(
             to: assetsDirectory.appendingPathComponent("pic.png", isDirectory: false),
-            options: .atomic
+            options: .atomic,
         )
         try Data("fresh".utf8).write(
             to: assetsDirectory.appendingPathComponent("cover.jpg", isDirectory: false),
-            options: .atomic
+            options: .atomic,
         )
 
         let exportDirectory = temp.appendingPathComponent("export", isDirectory: true)
@@ -228,11 +228,11 @@ struct RepositoryStateTests {
         try FileManager.default.createDirectory(at: existingAssetsURL, withIntermediateDirectories: true)
         try Data("old-to-replace".utf8).write(
             to: existingAssetsURL.appendingPathComponent("pic.png", isDirectory: false),
-            options: .atomic
+            options: .atomic,
         )
         try Data("keep-me".utf8).write(
             to: existingAssetsURL.appendingPathComponent("other.png", isDirectory: false),
-            options: .atomic
+            options: .atomic,
         )
 
         let destinationURL = exportDirectory.appendingPathComponent("my-post.md", isDirectory: false)
@@ -247,7 +247,7 @@ struct RepositoryStateTests {
     }
 
     @Test
-    func repositorySeedsDefaultNotesOnlyForEmptyStorage() throws {
+    func `repository seeds default notes only for empty storage`() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -277,7 +277,7 @@ struct RepositoryStateTests {
     }
 
     @Test
-    func repositoryMigratesLegacyFlatNotesIntoPerNoteDirectories() throws {
+    func `repository migrates legacy flat notes into per note directories`() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -305,14 +305,14 @@ struct RepositoryStateTests {
             atPath: repository
                 .noteAssetsDirectoryURL(for: notes[0])
                 .appendingPathComponent(MarkdownShowcaseSeed.imageFilename, isDirectory: false)
-                .path()
+                .path(),
         ))
         #expect(!FileManager.default.fileExists(atPath: legacyNoteURL.path()))
         #expect(!FileManager.default.fileExists(atPath: legacyImageURL.path()))
     }
 
     @Test
-    func repositoryRepairsMissingBundledShowcaseAssetForDirectoryBackedNote() throws {
+    func `repository repairs missing bundled showcase asset for directory backed note`() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -323,7 +323,7 @@ struct RepositoryStateTests {
         try MarkdownShowcaseSeed.content.write(
             to: noteDirectory.appendingPathComponent("note.md", isDirectory: false),
             atomically: true,
-            encoding: .utf8
+            encoding: .utf8,
         )
 
         let metadata = """
@@ -337,7 +337,7 @@ struct RepositoryStateTests {
         try metadata.write(
             to: noteDirectory.appendingPathComponent("meta.json", isDirectory: false),
             atomically: true,
-            encoding: .utf8
+            encoding: .utf8,
         )
 
         let notes = try repository.loadNotes()
@@ -352,7 +352,7 @@ struct RepositoryStateTests {
     }
 
     @Test
-    func repositoryMigratesLegacyDefaultStoragePrefix() throws {
+    func `repository migrates legacy default storage prefix`() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -363,13 +363,13 @@ struct RepositoryStateTests {
         try "# Legacy".write(
             to: legacyNotesDirectory.appendingPathComponent("legacy.md", isDirectory: false),
             atomically: true,
-            encoding: .utf8
+            encoding: .utf8,
         )
 
         let migratedRepository = NotesRepository(
             notesDirectory: temp
                 .appendingPathComponent(AppIdentity.identifier, isDirectory: true)
-                .appendingPathComponent("notes", isDirectory: true)
+                .appendingPathComponent("notes", isDirectory: true),
         )
 
         let notes = try migratedRepository.loadNotes()
@@ -379,15 +379,15 @@ struct RepositoryStateTests {
             atPath: temp
                 .appendingPathComponent(AppIdentity.identifier, isDirectory: true)
                 .appendingPathComponent("notes", isDirectory: true)
-                .path()
+                .path(),
         ))
         #expect(!FileManager.default.fileExists(
-            atPath: temp.appendingPathComponent(AppIdentity.legacyIdentifier, isDirectory: true).path()
+            atPath: temp.appendingPathComponent(AppIdentity.legacyIdentifier, isDirectory: true).path(),
         ))
     }
 
     @Test
-    func repositoryMigratesOldestLegacyDefaultStoragePrefix() throws {
+    func `repository migrates oldest legacy default storage prefix`() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -398,13 +398,13 @@ struct RepositoryStateTests {
         try "# Oldest Legacy".write(
             to: legacyNotesDirectory.appendingPathComponent("legacy.md", isDirectory: false),
             atomically: true,
-            encoding: .utf8
+            encoding: .utf8,
         )
 
         let migratedRepository = NotesRepository(
             notesDirectory: temp
                 .appendingPathComponent(AppIdentity.identifier, isDirectory: true)
-                .appendingPathComponent("notes", isDirectory: true)
+                .appendingPathComponent("notes", isDirectory: true),
         )
 
         let notes = try migratedRepository.loadNotes()
@@ -414,22 +414,22 @@ struct RepositoryStateTests {
             atPath: temp
                 .appendingPathComponent(AppIdentity.identifier, isDirectory: true)
                 .appendingPathComponent("notes", isDirectory: true)
-                .path()
+                .path(),
         ))
         #expect(!FileManager.default.fileExists(
-            atPath: temp.appendingPathComponent(AppIdentity.oldestLegacyIdentifier, isDirectory: true).path()
+            atPath: temp.appendingPathComponent(AppIdentity.oldestLegacyIdentifier, isDirectory: true).path(),
         ))
     }
 
     @Test
-    func workspaceStateStoreMigratesLegacyDefaultStatePrefix() throws {
+    func `workspace state store migrates legacy default state prefix`() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
         let legacyStateDirectory = temp.appendingPathComponent(AppIdentity.legacyIdentifier, isDirectory: true)
         try FileManager.default.createDirectory(at: legacyStateDirectory, withIntermediateDirectories: true)
         let legacyStateStore = WorkspaceStateStore(
-            stateFileURL: legacyStateDirectory.appendingPathComponent("workspace.json", isDirectory: false)
+            stateFileURL: legacyStateDirectory.appendingPathComponent("workspace.json", isDirectory: false),
         )
         let storedState = WorkspaceState(
             selectedNoteID: UUID(),
@@ -439,14 +439,14 @@ struct RepositoryStateTests {
             sortMode: .title,
             windowWidth: 1111,
             windowHeight: 777,
-            previewWidth: 515
+            previewWidth: 515,
         )
         try legacyStateStore.save(storedState)
 
         let migratedStateStore = WorkspaceStateStore(
             stateFileURL: temp
                 .appendingPathComponent(AppIdentity.identifier, isDirectory: true)
-                .appendingPathComponent("workspace.json", isDirectory: false)
+                .appendingPathComponent("workspace.json", isDirectory: false),
         )
         let loadedState = try migratedStateStore.load()
 
@@ -455,18 +455,18 @@ struct RepositoryStateTests {
             atPath: temp
                 .appendingPathComponent(AppIdentity.identifier, isDirectory: true)
                 .appendingPathComponent("workspace.json", isDirectory: false)
-                .path()
+                .path(),
         ))
         #expect(!FileManager.default.fileExists(
             atPath: temp
                 .appendingPathComponent(AppIdentity.legacyIdentifier, isDirectory: true)
                 .appendingPathComponent("workspace.json", isDirectory: false)
-                .path()
+                .path(),
         ))
     }
 
     @Test
-    func duplicateNotesKeepDistinctStableIDsAndDeleteIndependently() throws {
+    func `duplicate notes keep distinct stable I ds and delete independently`() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -492,7 +492,7 @@ struct RepositoryStateTests {
     }
 
     @Test
-    func duplicateNotesCopyNoteLocalAssets() throws {
+    func `duplicate notes copy note local assets`() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -516,7 +516,7 @@ struct RepositoryStateTests {
     }
 
     @Test
-    func repositoryImportsImageAssetsIntoNoteLocalDirectoryWithUniqueNames() throws {
+    func `repository imports image assets into note local directory with unique names`() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -543,7 +543,7 @@ struct RepositoryStateTests {
     }
 
     @Test
-    func repositoryStagesUnreferencedAssetsUntilNextSessionThenPrunesThem() throws {
+    func `repository stages unreferenced assets until next session then prunes them`() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -565,7 +565,7 @@ struct RepositoryStateTests {
     }
 
     @Test
-    func repositoryKeepsStagedAssetWhenReferenceReturnsBeforeNextSession() throws {
+    func `repository keeps staged asset when reference returns before next session`() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -588,7 +588,7 @@ struct RepositoryStateTests {
     }
 
     @Test
-    func directorySnapshotChangesWhenContentChangesWithoutSizeChange() throws {
+    func `directory snapshot changes when content changes without size change`() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -609,7 +609,7 @@ struct RepositoryStateTests {
     }
 
     @Test
-    func directorySnapshotChangesWhenAssetChangesWithoutSizeChange() throws {
+    func `directory snapshot changes when asset changes without size change`() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -632,10 +632,10 @@ struct RepositoryStateTests {
     }
 
     @Test
-    func workspaceStateStoreRoundTripsState() throws {
+    func `workspace state store round trips state`() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         let store = WorkspaceStateStore(
-            stateFileURL: temp.appendingPathComponent("workspace.json", isDirectory: false)
+            stateFileURL: temp.appendingPathComponent("workspace.json", isDirectory: false),
         )
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -647,7 +647,7 @@ struct RepositoryStateTests {
             sortMode: .title,
             windowWidth: 900,
             windowHeight: 700,
-            previewWidth: 520
+            previewWidth: 520,
         )
         try store.save(expected)
 
@@ -656,10 +656,10 @@ struct RepositoryStateTests {
     }
 
     @Test
-    func workspaceStateStoreRoundTripsPreviewOnlyMode() throws {
+    func `workspace state store round trips preview only mode`() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         let store = WorkspaceStateStore(
-            stateFileURL: temp.appendingPathComponent("workspace.json", isDirectory: false)
+            stateFileURL: temp.appendingPathComponent("workspace.json", isDirectory: false),
         )
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -671,7 +671,7 @@ struct RepositoryStateTests {
             sortMode: .newestFirst,
             windowWidth: 1100,
             windowHeight: 760,
-            previewWidth: 600
+            previewWidth: 600,
         )
         try store.save(expected)
 
@@ -681,7 +681,7 @@ struct RepositoryStateTests {
     }
 
     @Test
-    func workspaceStateDecodesOlderPayloadWithoutPreviewWidth() throws {
+    func `workspace state decodes older payload without preview width`() throws {
         let data = Data("""
         {
           "selectedNoteID": null,
@@ -701,7 +701,7 @@ struct RepositoryStateTests {
     }
 
     @Test @MainActor
-    func previewWidthResolutionExpandsLegacyDefaultButPreservesCustomWidths() {
+    func `preview width resolution expands legacy default but preserves custom widths`() {
         #expect(MainWindow.resolvedPreviewWidth(storedWidth: WorkspaceState.legacyDefaultPreviewWidth, availableWidth: 1600) == 560)
         #expect(MainWindow.resolvedPreviewWidth(storedWidth: 720, availableWidth: 1600) == 720)
         #expect(MainWindow.resolvedPreviewWidth(storedWidth: 720, availableWidth: 900) == 540)

@@ -2,7 +2,7 @@ import Adwaita
 import Foundation
 
 #if canImport(FoundationNetworking)
-import FoundationNetworking
+    import FoundationNetworking
 #endif
 
 typealias PreviewRemoteImageLoadCompletion = @MainActor @Sendable (URL?) -> Void
@@ -23,7 +23,7 @@ final class PreviewRemoteImageLoader: @unchecked Sendable {
         fileManager: FileManager = .default,
         cacheDirectory: URL = FileManager.default.temporaryDirectory
             .appendingPathComponent(AppIdentity.identifier, isDirectory: true)
-            .appendingPathComponent("preview-image-cache", isDirectory: true)
+            .appendingPathComponent("preview-image-cache", isDirectory: true),
     ) {
         self.session = session
         self.fileManager = fileManager
@@ -33,7 +33,8 @@ final class PreviewRemoteImageLoader: @unchecked Sendable {
     func loadImage(_ remoteURL: URL, completion: @escaping PreviewRemoteImageLoadCompletion) {
         lock.lock()
         if let cachedFile = cachedFiles[remoteURL],
-           fileManager.fileExists(atPath: cachedFile.path()) {
+           fileManager.fileExists(atPath: cachedFile.path())
+        {
             lock.unlock()
             dispatch(cachedFile, completion: completion)
             return
@@ -55,20 +56,20 @@ private extension PreviewRemoteImageLoader {
     func startDownload(for remoteURL: URL) {
         session.downloadTask(with: remoteURL) { [weak self] temporaryURL, response, _ in
             guard let self else { return }
-            let localURL = self.persistDownloadedImage(
+            let localURL = persistDownloadedImage(
                 from: temporaryURL,
                 remoteURL: remoteURL,
-                response: response
+                response: response,
             )
-            self.lock.lock()
-            let completions = self.inFlight.removeValue(forKey: remoteURL) ?? []
+            lock.lock()
+            let completions = inFlight.removeValue(forKey: remoteURL) ?? []
             if let localURL {
-                self.cachedFiles[remoteURL] = localURL
+                cachedFiles[remoteURL] = localURL
             }
-            self.lock.unlock()
+            lock.unlock()
 
             for completion in completions {
-                self.dispatch(localURL, completion: completion)
+                dispatch(localURL, completion: completion)
             }
         }.resume()
     }
@@ -97,7 +98,8 @@ private extension PreviewRemoteImageLoader {
 
     func preferredExtension(for remoteURL: URL, response: URLResponse?) -> String {
         if let suggestedFilename = response?.suggestedFilename?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !suggestedFilename.isEmpty {
+           !suggestedFilename.isEmpty
+        {
             let ext = URL(fileURLWithPath: suggestedFilename).pathExtension.lowercased()
             if !ext.isEmpty {
                 return ext

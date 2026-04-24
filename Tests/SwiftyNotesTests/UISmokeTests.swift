@@ -1,10 +1,10 @@
 import Foundation
-import Testing
 @testable import SwiftyNotes
+import Testing
 
 struct UISmokeTests {
     @Test
-    func appLaunchesUnderHeadlessWaylandWithAccessibleWindowAndSeededControls() throws {
+    func `app launches under headless wayland with accessible window and seeded controls`() throws {
         let result = try runWaylandUIScript("""
         frame = wait_for_frame()
         require_named(frame, "Hide Notes Sidebar")
@@ -42,7 +42,7 @@ struct UISmokeTests {
     }
 
     @Test
-    func appRestoresWorkspaceStateUnderHeadlessWayland() throws {
+    func `app restores workspace state under headless wayland`() throws {
         let result = try runWaylandUIScript(
             """
             frame = wait_for_frame()
@@ -82,15 +82,15 @@ struct UISmokeTests {
                     sortMode: .title,
                     windowWidth: 1200,
                     windowHeight: 800,
-                    previewWidth: 560
+                    previewWidth: 560,
                 ))
-            }
+            },
         )
         expectUIScriptSucceeded(result)
     }
 
     @Test
-    func appEditingDoesNotEmitSnapshotWarningsUnderHeadlessWayland() throws {
+    func `app editing does not emit snapshot warnings under headless wayland`() throws {
         let result = try runWaylandUIScript(
             """
             frame = wait_for_frame()
@@ -106,14 +106,14 @@ struct UISmokeTests {
             assert "Trying to snapshot" not in stderr, stderr
             """,
             environment: [
-                "SWIFTY_NOTES_DEBUG_APPEND_TEXT_ON_LAUNCH": "Smoke edit from launch hook"
-            ]
+                "SWIFTY_NOTES_DEBUG_APPEND_TEXT_ON_LAUNCH": "Smoke edit from launch hook",
+            ],
         )
         expectUIScriptSucceeded(result)
     }
 
     @Test
-    func appAutosaveClearsUnsavedStatusUnderHeadlessWayland() throws {
+    func `app autosave clears unsaved status under headless wayland`() throws {
         let result = try runWaylandUIScript(
             """
             frame = wait_for_frame()
@@ -157,14 +157,14 @@ struct UISmokeTests {
             environment: [
                 "SWIFTY_NOTES_DEBUG_APPEND_TEXT_ON_LAUNCH": "Smoke autosave edit",
                 "SWIFTY_NOTES_DEBUG_EDIT_DELAY_MS": "200",
-                "SWIFTY_NOTES_DEBUG_LOG_HEADER_SUBTITLE_DELAY_MS": "3200"
-            ]
+                "SWIFTY_NOTES_DEBUG_LOG_HEADER_SUBTITLE_DELAY_MS": "3200",
+            ],
         )
         expectUIScriptSucceeded(result)
     }
 
     @Test
-    func appCreatingNoteDoesNotEmitSnapshotWarningsUnderHeadlessWayland() throws {
+    func `app creating note does not emit snapshot warnings under headless wayland`() throws {
         let result = try runWaylandUIScript(
             """
             frame = wait_for_frame()
@@ -180,14 +180,14 @@ struct UISmokeTests {
             assert "Trying to snapshot" not in stderr, stderr
             """,
             environment: [
-                "SWIFTY_NOTES_DEBUG_CREATE_NOTE_ON_LAUNCH": "1"
-            ]
+                "SWIFTY_NOTES_DEBUG_CREATE_NOTE_ON_LAUNCH": "1",
+            ],
         )
         expectUIScriptSucceeded(result)
     }
 
     @Test
-    func appSwitchingNotesDoesNotEmitSnapshotWarningsUnderHeadlessWayland() throws {
+    func `app switching notes does not emit snapshot warnings under headless wayland`() throws {
         let result = try runWaylandUIScript(
             """
             app_stderr_log = os.environ["APP_STDERR_LOG"]
@@ -209,15 +209,15 @@ struct UISmokeTests {
                 _ = try repository.createNote(initialContent: "# Beta\n\nSecond")
             },
             environment: [
-                "SWIFTY_NOTES_DEBUG_SELECT_NOTE_INDEX_ON_LAUNCH": "1"
+                "SWIFTY_NOTES_DEBUG_SELECT_NOTE_INDEX_ON_LAUNCH": "1",
             ],
-            requiresAccessibility: false
+            requiresAccessibility: false,
         )
         expectUIScriptSucceeded(result)
     }
 
     @Test
-    func settingsWindowOpensUnderHeadlessWaylandAndShowsControls() throws {
+    func `settings window opens under headless wayland and shows controls`() throws {
         let result = try runWaylandUIScript(
             """
             def wait_for_named_frame(name):
@@ -246,8 +246,8 @@ struct UISmokeTests {
             require_named(settings_frame, "Appearance")
             """,
             environment: [
-                "SWIFTY_NOTES_DEBUG_OPEN_SETTINGS_ON_LAUNCH": "1"
-            ]
+                "SWIFTY_NOTES_DEBUG_OPEN_SETTINGS_ON_LAUNCH": "1",
+            ],
         )
         expectUIScriptSucceeded(result)
     }
@@ -261,7 +261,7 @@ private struct UIScriptResult {
 
 private func runUIScript(
     _ script: String,
-    environment: [String: String]
+    environment: [String: String],
 ) throws -> UIScriptResult {
     let process = Process()
     process.executableURL = URL(fileURLWithPath: "/usr/bin/timeout", isDirectory: false)
@@ -298,7 +298,7 @@ private func runUIScript(
     return UIScriptResult(
         exitCode: process.terminationStatus,
         stdout: String(decoding: stdoutData, as: UTF8.self),
-        stderr: String(decoding: stderrData, as: UTF8.self)
+        stderr: String(decoding: stderrData, as: UTF8.self),
     )
 }
 
@@ -306,7 +306,7 @@ private func runWaylandUIScript(
     _ pythonScript: String,
     prepare: ((URL, URL) throws -> Void)? = nil,
     environment: [String: String] = [:],
-    requiresAccessibility: Bool = true
+    requiresAccessibility: Bool = true,
 ) throws -> UIScriptResult {
     guard ProcessInfo.processInfo.environment["DBUS_SESSION_BUS_ADDRESS"] != nil else {
         return UIScriptResult(exitCode: 0, stdout: "", stderr: "")
@@ -391,7 +391,7 @@ private func runWaylandUIScript(
     import os
     import time
     \(pythonImport)
-    
+
     TARGET_PID = int(os.environ["APP_PID"])
     NOTES_DIR = os.environ["NOTES_DIR"]
     SETTINGS_FILE = os.environ["SETTINGS_FILE"]
@@ -490,8 +490,8 @@ private func runWaylandUIScript(
             "TEST_RUNTIME_DIR": runtimeDirectory.path(),
             "XDG_DATA_HOME": xdgDataHome.path(),
             "XDG_STATE_HOME": xdgStateHome.path(),
-            "XDG_CONFIG_HOME": xdgConfigHome.path()
-        ].merging(environment) { _, new in new }
+            "XDG_CONFIG_HOME": xdgConfigHome.path(),
+        ].merging(environment) { _, new in new },
     )
 }
 

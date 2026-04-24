@@ -16,7 +16,7 @@ public enum NotesDirectoryRelocator {
     public static func relocate(
         from sourceDirectory: URL,
         to destinationDirectory: URL,
-        fileManager: FileManager = .default
+        fileManager: FileManager = .default,
     ) throws {
         let sourceDirectory = sourceDirectory.standardizedFileURL
         let destinationDirectory = destinationDirectory.standardizedFileURL
@@ -25,13 +25,14 @@ public enum NotesDirectoryRelocator {
 
         if destinationDirectory.path(percentEncoded: false).hasPrefix(sourceDirectory.path(percentEncoded: false) + "/") {
             throw RelocationError(
-                message: "The new notes folder cannot be inside the current notes folder."
+                message: "The new notes folder cannot be inside the current notes folder.",
             )
         }
 
         var sourceIsDirectory: ObjCBool = false
         guard fileManager.fileExists(atPath: sourceDirectory.path(percentEncoded: false), isDirectory: &sourceIsDirectory),
-              sourceIsDirectory.boolValue else {
+              sourceIsDirectory.boolValue
+        else {
             throw RelocationError(message: "The current notes folder could not be found.")
         }
 
@@ -43,7 +44,7 @@ public enum NotesDirectoryRelocator {
             let destinationContents = try fileManager.contentsOfDirectory(
                 at: destinationDirectory,
                 includingPropertiesForKeys: nil,
-                options: []
+                options: [],
             )
             guard destinationContents.isEmpty else {
                 throw RelocationError(message: "Choose an empty destination folder for your notes.")
@@ -52,15 +53,15 @@ public enum NotesDirectoryRelocator {
             let sourceContents = try fileManager.contentsOfDirectory(
                 at: sourceDirectory,
                 includingPropertiesForKeys: nil,
-                options: []
+                options: [],
             )
             for item in sourceContents {
                 try fileManager.moveItem(
                     at: item,
                     to: destinationDirectory.appendingPathComponent(
                         item.lastPathComponent,
-                        isDirectory: item.hasDirectoryPath
-                    )
+                        isDirectory: item.hasDirectoryPath,
+                    ),
                 )
             }
             try fileManager.removeItem(at: sourceDirectory)
@@ -69,7 +70,7 @@ public enum NotesDirectoryRelocator {
 
         try fileManager.createDirectory(
             at: destinationDirectory.deletingLastPathComponent(),
-            withIntermediateDirectories: true
+            withIntermediateDirectories: true,
         )
         try fileManager.moveItem(at: sourceDirectory, to: destinationDirectory)
     }

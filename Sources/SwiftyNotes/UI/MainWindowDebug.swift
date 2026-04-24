@@ -61,25 +61,38 @@ import Foundation
         }
 
         /// Drives the table picker from tests: ensures the picker has
-        /// been built and simulates a click on the chosen grid cell.
+        /// been built, walks it through both phases (size → alignment
+        /// → insert), and cycles the requested per-column alignments
+        /// along the way.
         ///
         /// Skips the `popover.present(from:)` call on purpose — under
         /// headless test harnesses the host button isn't attached to a
         /// live root, which makes actually presenting the popover flaky
         /// (and sometimes crashes during teardown on certain GTK /
         /// platform combinations). The click path covered here is the
-        /// one that mutates the editor, which is what the test is about.
-        func debugPickTableSize(rows: Int, cols: Int) {
+        /// one that mutates the editor, which is what the test is
+        /// about.
+        func debugPickTableSize(
+            rows: Int,
+            cols: Int,
+            alignments: [MarkdownTableAlignment] = [],
+        ) {
             guard rows > 0, cols > 0 else { return }
-            let picker = tableSizePicker ?? {
-                let fresh = TableSizePicker()
-                fresh.onSelect = { [weak self] rows, cols in
-                    self?.editor.insertTable(rows: rows, cols: cols)
+            let picker = ensureTableSizePicker()
+            picker.prepareForPresentation(
+                rows: state.lastTableRows,
+                cols: state.lastTableCols,
+                alignments: state.lastTableAlignments,
+            )
+            picker.debugClickSize(row: rows - 1, col: cols - 1)
+            for (col, target) in alignments.enumerated() where col < cols {
+                var current = MarkdownTableAlignment.left
+                while current != target {
+                    picker.debugCycleAlignment(col: col)
+                    current = current.next()
                 }
-                tableSizePicker = fresh
-                return fresh
-            }()
-            picker.debugClick(row: rows - 1, col: cols - 1)
+            }
+            picker.debugConfirmInsert()
         }
 
         func debugSetSearchQuery(_ text: String) {

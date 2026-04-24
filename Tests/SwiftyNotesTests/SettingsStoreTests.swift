@@ -1,10 +1,10 @@
 import Foundation
-import Testing
 @testable import SwiftyNotes
+import Testing
 
 struct SettingsStoreTests {
     @Test
-    func appSettingsStoreRoundTripsCustomNotesDirectoryAndPreferences() throws {
+    func `app settings store round trips custom notes directory and preferences`() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -21,7 +21,7 @@ struct SettingsStoreTests {
             editorTabWidth: 2,
             editorIndentStyle: .tabs,
             autosaveDelaySeconds: 5,
-            appearanceMode: .dark
+            appearanceMode: .dark,
         ))
 
         let loaded = try store.load()
@@ -34,13 +34,13 @@ struct SettingsStoreTests {
         #expect(loaded.appearanceMode == .dark)
         #expect(
             loaded.resolvedNotesDirectory(
-                defaultDirectory: temp.appendingPathComponent("default-notes", isDirectory: true)
-            ).standardizedFileURL == customNotesDirectory.standardizedFileURL
+                defaultDirectory: temp.appendingPathComponent("default-notes", isDirectory: true),
+            ).standardizedFileURL == customNotesDirectory.standardizedFileURL,
         )
     }
 
     @Test
-    func appSettingsDecodeOlderPayloadWithNewPreferenceDefaults() throws {
+    func `app settings decode older payload with new preference defaults`() throws {
         let payload = """
         {
           "customNotesDirectoryPath": "/tmp/notes"
@@ -59,7 +59,7 @@ struct SettingsStoreTests {
     }
 
     @Test
-    func appSettingsStoreMigratesOldestLegacyDefaultSettingsPrefix() throws {
+    func `app settings store migrates oldest legacy default settings prefix`() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -67,14 +67,14 @@ struct SettingsStoreTests {
         try FileManager.default.createDirectory(at: legacyDirectory, withIntermediateDirectories: true)
         let customNotesDirectory = temp.appendingPathComponent("legacy-custom-notes", isDirectory: true)
         let legacyStore = AppSettingsStore(
-            settingsFileURL: legacyDirectory.appendingPathComponent("settings.json", isDirectory: false)
+            settingsFileURL: legacyDirectory.appendingPathComponent("settings.json", isDirectory: false),
         )
         try legacyStore.save(AppSettings(customNotesDirectoryPath: customNotesDirectory.path()))
 
         let migratedStore = AppSettingsStore(
             settingsFileURL: temp
                 .appendingPathComponent(AppIdentity.identifier, isDirectory: true)
-                .appendingPathComponent("settings.json", isDirectory: false)
+                .appendingPathComponent("settings.json", isDirectory: false),
         )
 
         let loaded = try migratedStore.load()
@@ -83,18 +83,18 @@ struct SettingsStoreTests {
             atPath: temp
                 .appendingPathComponent(AppIdentity.identifier, isDirectory: true)
                 .appendingPathComponent("settings.json", isDirectory: false)
-                .path()
+                .path(),
         ))
         #expect(!FileManager.default.fileExists(
             atPath: temp
                 .appendingPathComponent(AppIdentity.oldestLegacyIdentifier, isDirectory: true)
                 .appendingPathComponent("settings.json", isDirectory: false)
-                .path()
+                .path(),
         ))
     }
 
     @Test
-    func notesDirectoryRelocatorMovesNotesIntoExistingEmptyFolderAndRemovesOldPath() throws {
+    func `notes directory relocator moves notes into existing empty folder and removes old path`() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -105,10 +105,10 @@ struct SettingsStoreTests {
         try "# Moved\n".write(
             to: source.appendingPathComponent("note.md", isDirectory: false),
             atomically: true,
-            encoding: .utf8
+            encoding: .utf8,
         )
         try Data([0x01, 0x02, 0x03]).write(
-            to: source.appendingPathComponent("asset.bin", isDirectory: false)
+            to: source.appendingPathComponent("asset.bin", isDirectory: false),
         )
 
         try NotesDirectoryRelocator.relocate(from: source, to: destination)
@@ -119,7 +119,7 @@ struct SettingsStoreTests {
     }
 
     @Test
-    func notesDirectoryRelocatorRejectsNonEmptyDestination() throws {
+    func `notes directory relocator rejects non empty destination`() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -130,12 +130,12 @@ struct SettingsStoreTests {
         try "# Source\n".write(
             to: source.appendingPathComponent("note.md", isDirectory: false),
             atomically: true,
-            encoding: .utf8
+            encoding: .utf8,
         )
         try "occupied".write(
             to: destination.appendingPathComponent("existing.txt", isDirectory: false),
             atomically: true,
-            encoding: .utf8
+            encoding: .utf8,
         )
 
         do {

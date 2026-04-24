@@ -77,14 +77,22 @@ extension MainWindow {
     func presentTableSizePicker() {
         guard let button = editorFormattingButtons[.table] else { return }
         let picker = ensureTableSizePicker()
+        picker.prepareForPresentation(
+            rows: state.lastTableRows,
+            cols: state.lastTableCols,
+            alignments: state.lastTableAlignments,
+        )
         picker.popover.present(from: button)
     }
 
-    private func ensureTableSizePicker() -> TableSizePicker {
+    func ensureTableSizePicker() -> TableSizePicker {
         if let picker = tableSizePicker { return picker }
         let picker = TableSizePicker()
-        picker.onSelect = { [weak self] rows, cols in
-            self?.editor.insertTable(rows: rows, cols: cols)
+        picker.onSelect = { [weak self] rows, cols, alignments in
+            guard let self else { return }
+            state.setLastTableSize(rows: rows, cols: cols, alignments: alignments)
+            persistWorkspaceState()
+            editor.insertTable(rows: rows, cols: cols, alignments: alignments)
         }
         tableSizePicker = picker
         return picker

@@ -1,11 +1,11 @@
-import Foundation
-import Testing
-@testable import SwiftyNotes
 import Adwaita
+import Foundation
+@testable import SwiftyNotes
+import Testing
 
 struct MainWindowActionsTests {
     @Test @MainActor
-    func mainWindowSelectionChangeDismissesContextMenuBeforeSidebarRefresh() throws {
+    func `main window selection change dismisses context menu before sidebar refresh`() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -16,11 +16,11 @@ struct MainWindowActionsTests {
             application: app,
             state: AppState(),
             stateStore: WorkspaceStateStore(
-                stateFileURL: temp.appendingPathComponent("workspace.json", isDirectory: false)
+                stateFileURL: temp.appendingPathComponent("workspace.json", isDirectory: false),
             ),
             repository: NotesRepository(notesDirectory: temp),
             renderer: MarkdownRenderer(),
-            autosave: AutosaveCoordinator()
+            autosave: AutosaveCoordinator(),
         )
 
         window.debugLoadInitialNotes()
@@ -36,7 +36,7 @@ struct MainWindowActionsTests {
     }
 
     @Test @MainActor
-    func mainWindowCreateNoteDismissesExistingContextMenuBeforeSidebarRefresh() throws {
+    func `main window create note dismisses existing context menu before sidebar refresh`() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -47,11 +47,11 @@ struct MainWindowActionsTests {
             application: app,
             state: AppState(),
             stateStore: WorkspaceStateStore(
-                stateFileURL: temp.appendingPathComponent("workspace.json", isDirectory: false)
+                stateFileURL: temp.appendingPathComponent("workspace.json", isDirectory: false),
             ),
             repository: NotesRepository(notesDirectory: temp),
             renderer: MarkdownRenderer(),
-            autosave: AutosaveCoordinator()
+            autosave: AutosaveCoordinator(),
         )
 
         window.debugLoadInitialNotes()
@@ -65,7 +65,7 @@ struct MainWindowActionsTests {
     }
 
     @Test @MainActor
-    func mainWindowContextMenuActionsExecuteForSelectedRowAfterSidebarRefresh() throws {
+    func `main window context menu actions execute for selected row after sidebar refresh`() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -76,11 +76,11 @@ struct MainWindowActionsTests {
             application: app,
             state: AppState(),
             stateStore: WorkspaceStateStore(
-                stateFileURL: temp.appendingPathComponent("workspace.json", isDirectory: false)
+                stateFileURL: temp.appendingPathComponent("workspace.json", isDirectory: false),
             ),
             repository: NotesRepository(notesDirectory: temp),
             renderer: MarkdownRenderer(),
-            autosave: AutosaveCoordinator()
+            autosave: AutosaveCoordinator(),
         )
 
         window.present()
@@ -93,11 +93,11 @@ struct MainWindowActionsTests {
                 "Open Markdown File…",
                 "Import into Library…",
                 "Reload from disk",
-                "Open notes folder"
+                "Open notes folder",
             ],
             "Help": [
-                "About Swifty Notes"
-            ]
+                "About Swifty Notes",
+            ],
         ])
 
         window.debugOpenContextMenuForDisplayedNote(at: 1)
@@ -107,7 +107,7 @@ struct MainWindowActionsTests {
             "Duplicate note",
             "Export note…",
             "Copy note ID",
-            "Delete…"
+            "Delete…",
         ])
 
         let selectedStableID = window.debugSelectedNoteStableID()
@@ -125,7 +125,7 @@ struct MainWindowActionsTests {
     }
 
     @Test @MainActor
-    func mainWindowSettingsActionPresentsSettingsWindow() throws {
+    func `main window settings action presents settings window`() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -139,13 +139,13 @@ struct MainWindowActionsTests {
         let settingsStore = AppSettingsStore(
             settingsFileURL: temp
                 .appendingPathComponent("config", isDirectory: true)
-                .appendingPathComponent("settings.json", isDirectory: false)
+                .appendingPathComponent("settings.json", isDirectory: false),
         )
         let window = MainWindow(
             application: app,
             state: AppState(),
             stateStore: WorkspaceStateStore(
-                stateFileURL: temp.appendingPathComponent("workspace.json", isDirectory: false)
+                stateFileURL: temp.appendingPathComponent("workspace.json", isDirectory: false),
             ),
             repository: repository,
             renderer: MarkdownRenderer(),
@@ -157,8 +157,8 @@ struct MainWindowActionsTests {
                 editorTabWidth: 2,
                 editorIndentStyle: .tabs,
                 autosaveDelaySeconds: 5,
-                appearanceMode: .dark
-            )
+                appearanceMode: .dark,
+            ),
         )
 
         window.present()
@@ -173,12 +173,12 @@ struct MainWindowActionsTests {
             editorTabWidth: 2,
             editorIndentStyle: .tabs,
             autosaveDelaySeconds: 5,
-            appearanceMode: .dark
+            appearanceMode: .dark,
         ))
     }
 
     @Test @MainActor
-    func mainWindowChangingNotesDirectoryMovesNotesAndPersistsSetting() throws {
+    func `main window changing notes directory moves notes and persists setting`() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -192,7 +192,7 @@ struct MainWindowActionsTests {
         let settingsStore = AppSettingsStore(
             settingsFileURL: temp
                 .appendingPathComponent("config", isDirectory: true)
-                .appendingPathComponent("settings.json", isDirectory: false)
+                .appendingPathComponent("settings.json", isDirectory: false),
         )
         try settingsStore.save(AppSettings(customNotesDirectoryPath: sourceDirectory.path()))
 
@@ -203,13 +203,13 @@ struct MainWindowActionsTests {
             application: app,
             state: AppState(),
             stateStore: WorkspaceStateStore(
-                stateFileURL: temp.appendingPathComponent("workspace.json", isDirectory: false)
+                stateFileURL: temp.appendingPathComponent("workspace.json", isDirectory: false),
             ),
             repository: repository,
             renderer: MarkdownRenderer(),
             autosave: AutosaveCoordinator(),
             appSettingsStore: settingsStore,
-            appSettings: AppSettings(customNotesDirectoryPath: sourceDirectory.path())
+            appSettings: AppSettings(customNotesDirectoryPath: sourceDirectory.path()),
         )
 
         window.present()
@@ -224,7 +224,7 @@ struct MainWindowActionsTests {
     }
 
     @Test @MainActor
-    func mainWindowSettingsWindowControlsApplyAndPersistPreferences() throws {
+    func `main window settings window controls apply and persist preferences`() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -244,13 +244,13 @@ struct MainWindowActionsTests {
             application: app,
             state: AppState(),
             stateStore: WorkspaceStateStore(
-                stateFileURL: temp.appendingPathComponent("workspace.json", isDirectory: false)
+                stateFileURL: temp.appendingPathComponent("workspace.json", isDirectory: false),
             ),
             repository: NotesRepository(notesDirectory: temp),
             renderer: MarkdownRenderer(),
             autosave: AutosaveCoordinator(),
             appSettingsStore: settingsStore,
-            appSettings: initialSettings
+            appSettings: initialSettings,
         )
 
         window.present()
@@ -278,7 +278,7 @@ struct MainWindowActionsTests {
             editorTabWidth: 6,
             editorIndentStyle: .tabs,
             autosaveDelaySeconds: 9,
-            appearanceMode: .dark
+            appearanceMode: .dark,
         ))
 
         let stored = try settingsStore.load()
@@ -293,13 +293,13 @@ struct MainWindowActionsTests {
             application: app,
             state: AppState(),
             stateStore: WorkspaceStateStore(
-                stateFileURL: temp.appendingPathComponent("workspace-relaunch.json", isDirectory: false)
+                stateFileURL: temp.appendingPathComponent("workspace-relaunch.json", isDirectory: false),
             ),
             repository: NotesRepository(notesDirectory: temp),
             renderer: MarkdownRenderer(),
             autosave: AutosaveCoordinator(),
             appSettingsStore: settingsStore,
-            appSettings: stored
+            appSettings: stored,
         )
         #expect(relaunched.debugEditorWrapsLines == false)
         #expect(relaunched.debugEditorFontSize == 19)
@@ -310,7 +310,7 @@ struct MainWindowActionsTests {
     }
 
     @Test @MainActor
-    func mainWindowUpdatingPreferencesPersistsAndAppliesThemAtRuntime() throws {
+    func `main window updating preferences persists and applies them at runtime`() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -328,13 +328,13 @@ struct MainWindowActionsTests {
             application: app,
             state: AppState(),
             stateStore: WorkspaceStateStore(
-                stateFileURL: temp.appendingPathComponent("workspace.json", isDirectory: false)
+                stateFileURL: temp.appendingPathComponent("workspace.json", isDirectory: false),
             ),
             repository: NotesRepository(notesDirectory: temp),
             renderer: MarkdownRenderer(),
             autosave: AutosaveCoordinator(),
             appSettingsStore: settingsStore,
-            appSettings: .default
+            appSettings: .default,
         )
 
         window.present()
@@ -345,7 +345,7 @@ struct MainWindowActionsTests {
             editorTabWidth: 8,
             editorIndentStyle: .tabs,
             autosaveDelaySeconds: 7,
-            appearanceMode: .light
+            appearanceMode: .light,
         ))
 
         #expect(window.debugEditorWrapsLines == false)
@@ -367,7 +367,7 @@ struct MainWindowActionsTests {
     }
 
     @Test @MainActor
-    func mainWindowOpenNotesFolderUsesInjectedDirectoryOpener() throws {
+    func `main window open notes folder uses injected directory opener`() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -379,14 +379,14 @@ struct MainWindowActionsTests {
             application: app,
             state: AppState(),
             stateStore: WorkspaceStateStore(
-                stateFileURL: temp.appendingPathComponent("workspace.json", isDirectory: false)
+                stateFileURL: temp.appendingPathComponent("workspace.json", isDirectory: false),
             ),
             repository: NotesRepository(notesDirectory: temp),
             renderer: MarkdownRenderer(),
             autosave: AutosaveCoordinator(),
             directoryOpener: { url in
                 openedURL.set(url)
-            }
+            },
         )
 
         window.debugLoadInitialNotes()
@@ -400,7 +400,7 @@ struct MainWindowActionsTests {
     }
 
     @Test @MainActor
-    func mainWindowOpenNotesFolderMenuActionUsesInjectedDirectoryOpener() throws {
+    func `main window open notes folder menu action uses injected directory opener`() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -412,14 +412,14 @@ struct MainWindowActionsTests {
             application: app,
             state: AppState(),
             stateStore: WorkspaceStateStore(
-                stateFileURL: temp.appendingPathComponent("workspace.json", isDirectory: false)
+                stateFileURL: temp.appendingPathComponent("workspace.json", isDirectory: false),
             ),
             repository: NotesRepository(notesDirectory: temp),
             renderer: MarkdownRenderer(),
             autosave: AutosaveCoordinator(),
             directoryOpener: { url in
                 openedURL.set(url)
-            }
+            },
         )
 
         window.present()
@@ -429,7 +429,7 @@ struct MainWindowActionsTests {
     }
 
     @Test
-    func openDirectoryInSystemFileManagerUsesDefaultURIHandlerFirst() throws {
+    func `open directory in system file manager uses default URI handler first`() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         let expectedURI = temp.standardizedFileURL.absoluteString
 
@@ -443,7 +443,7 @@ struct MainWindowActionsTests {
             },
             fallbackOpenURI: { uri in
                 fallbackURIs.append(uri)
-            }
+            },
         )
 
         #expect(launchedURIs == [expectedURI])
@@ -451,7 +451,7 @@ struct MainWindowActionsTests {
     }
 
     @Test
-    func openDirectoryInSystemFileManagerFallsBackToXDGOpenWhenDefaultHandlerFails() throws {
+    func `open directory in system file manager falls back to XDG open when default handler fails`() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         let expectedURI = temp.standardizedFileURL.absoluteString
 
@@ -466,7 +466,7 @@ struct MainWindowActionsTests {
             },
             fallbackOpenURI: { uri in
                 fallbackURIs.append(uri)
-            }
+            },
         )
 
         #expect(launchedURIs == [expectedURI])
@@ -474,7 +474,7 @@ struct MainWindowActionsTests {
     }
 
     @Test @MainActor
-    func mainWindowAboutMenuActionPresentsAboutDialog() throws {
+    func `main window about menu action presents about dialog`() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -485,11 +485,11 @@ struct MainWindowActionsTests {
             application: app,
             state: AppState(),
             stateStore: WorkspaceStateStore(
-                stateFileURL: temp.appendingPathComponent("workspace.json", isDirectory: false)
+                stateFileURL: temp.appendingPathComponent("workspace.json", isDirectory: false),
             ),
             repository: NotesRepository(notesDirectory: temp),
             renderer: MarkdownRenderer(),
-            autosave: AutosaveCoordinator()
+            autosave: AutosaveCoordinator(),
         )
 
         window.present()
@@ -503,7 +503,7 @@ struct MainWindowActionsTests {
             copyright: "© 2026 Sergey Armodin",
             website: "https://github.com/makoni/swifty-notes-gtk",
             issueURL: "https://github.com/makoni/swifty-notes-gtk/issues",
-            comments: "A native GTK markdown notes app written in Swift using swift-adwaita."
+            comments: "A native GTK markdown notes app written in Swift using swift-adwaita.",
         ))
 
         window.debugCloseAboutDialog()
@@ -511,7 +511,7 @@ struct MainWindowActionsTests {
     }
 
     @Test @MainActor
-    func mainWindowAboutDialogUsesReleaseVersionEnvironmentWhenProvided() throws {
+    func `main window about dialog uses release version environment when provided`() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -532,11 +532,11 @@ struct MainWindowActionsTests {
             application: app,
             state: AppState(),
             stateStore: WorkspaceStateStore(
-                stateFileURL: temp.appendingPathComponent("workspace.json", isDirectory: false)
+                stateFileURL: temp.appendingPathComponent("workspace.json", isDirectory: false),
             ),
             repository: NotesRepository(notesDirectory: temp),
             renderer: MarkdownRenderer(),
-            autosave: AutosaveCoordinator()
+            autosave: AutosaveCoordinator(),
         )
 
         window.present()
@@ -548,7 +548,7 @@ struct MainWindowActionsTests {
     }
 
     @Test @MainActor
-    func mainWindowSwitchingBetweenNotesRefreshesPreview() async throws {
+    func `main window switching between notes refreshes preview`() async throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -558,14 +558,14 @@ struct MainWindowActionsTests {
             filename: "first.md",
             createdAt: Date(timeIntervalSince1970: 100),
             updatedAt: Date(timeIntervalSince1970: 100),
-            content: "# First\n\nOne"
+            content: "# First\n\nOne",
         )
         let second = Note(
             id: UUID(),
             filename: "second.md",
             createdAt: Date(timeIntervalSince1970: 200),
             updatedAt: Date(timeIntervalSince1970: 200),
-            content: "# Second\n\nTwo"
+            content: "# Second\n\nTwo",
         )
         _ = try repository.save(note: first)
         _ = try repository.save(note: second)
@@ -577,11 +577,11 @@ struct MainWindowActionsTests {
             application: app,
             state: AppState(),
             stateStore: WorkspaceStateStore(
-                stateFileURL: temp.appendingPathComponent("workspace.json", isDirectory: false)
+                stateFileURL: temp.appendingPathComponent("workspace.json", isDirectory: false),
             ),
             repository: repository,
             renderer: MarkdownRenderer(),
-            autosave: AutosaveCoordinator()
+            autosave: AutosaveCoordinator(),
         )
 
         window.debugLoadInitialNotes()
@@ -604,7 +604,7 @@ struct MainWindowActionsTests {
     }
 
     @Test @MainActor
-    func mainWindowSidebarSortControlReflectsAndChangesSortMode() throws {
+    func `main window sidebar sort control reflects and changes sort mode`() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -614,14 +614,14 @@ struct MainWindowActionsTests {
             filename: "alpha.md",
             createdAt: Date(timeIntervalSince1970: 100),
             updatedAt: Date(timeIntervalSince1970: 100),
-            content: "# Alpha\n"
+            content: "# Alpha\n",
         )
         let zeta = Note(
             id: UUID(),
             filename: "zeta.md",
             createdAt: Date(timeIntervalSince1970: 200),
             updatedAt: Date(timeIntervalSince1970: 200),
-            content: "# Zeta\n"
+            content: "# Zeta\n",
         )
         _ = try repository.save(note: alpha)
         _ = try repository.save(note: zeta)
@@ -633,11 +633,11 @@ struct MainWindowActionsTests {
             application: app,
             state: AppState(),
             stateStore: WorkspaceStateStore(
-                stateFileURL: temp.appendingPathComponent("workspace.json", isDirectory: false)
+                stateFileURL: temp.appendingPathComponent("workspace.json", isDirectory: false),
             ),
             repository: repository,
             renderer: MarkdownRenderer(),
-            autosave: AutosaveCoordinator()
+            autosave: AutosaveCoordinator(),
         )
 
         window.debugLoadInitialNotes()

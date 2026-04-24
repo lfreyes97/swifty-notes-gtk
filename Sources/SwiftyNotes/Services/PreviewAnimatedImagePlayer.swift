@@ -14,7 +14,7 @@ final class PreviewAnimatedImagePlayer {
         }
         guard let loaded else { return nil }
 
-        self.player = loaded
+        player = loaded
         Self.applyPreferredSizing(picture: picture, metadata: loaded.metadata, preferredHeight: preferredHeight)
         if autoSchedule {
             loaded.start()
@@ -32,13 +32,13 @@ final class PreviewAnimatedImagePlayer {
     private static func applyPreferredSizing(
         picture: Picture,
         metadata: AnimatedImagePlayer.Metadata,
-        preferredHeight: Int?
+        preferredHeight: Int?,
     ) {
         guard let preferredHeight, preferredHeight > 0 else { return }
         let width = PreviewImagePaintableLoader.scaledWidth(
             intrinsicWidth: Double(metadata.width),
             intrinsicHeight: Double(metadata.height),
-            preferredHeight: preferredHeight
+            preferredHeight: preferredHeight,
         )
         picture.setSizeRequest(width: width ?? -1, height: preferredHeight)
     }

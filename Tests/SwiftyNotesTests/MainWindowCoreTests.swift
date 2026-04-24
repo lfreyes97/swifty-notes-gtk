@@ -634,6 +634,40 @@ struct MainWindowCoreTests {
     }
 
     @Test @MainActor
+    func `main window formatting toolbar remembers last chosen table size and alignments`() throws {
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let stateURL = temp.appendingPathComponent("workspace.json", isDirectory: false)
+        let store = WorkspaceStateStore(stateFileURL: stateURL)
+
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.formattingremembertable")
+        try app.register()
+
+        let window = MainWindow(
+            application: app,
+            state: AppState(),
+            stateStore: store,
+            repository: NotesRepository(notesDirectory: temp),
+            renderer: MarkdownRenderer(),
+            autosave: AutosaveCoordinator(),
+        )
+
+        window.debugLoadInitialNotes()
+        window.debugSetEditorText("")
+        window.debugSelectEditorRange(0 ..< 0)
+
+        window.debugPickTableSize(rows: 3, cols: 2, alignments: [.right, .center])
+
+        let persisted = try store.load()
+        #expect(persisted.lastTableRows == 3)
+        #expect(persisted.lastTableCols == 2)
+        #expect(persisted.lastTableAlignments == [.right, .center])
+        #expect(window.debugEditorText.contains("| Column 1 | Column 2 |"))
+        #expect(window.debugEditorText.contains("| -------: | :------: |"))
+    }
+
+    @Test @MainActor
     func `main window formatting toolbar insert table writes scaffold at the cursor and selects the first header cell`() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
@@ -658,9 +692,11 @@ struct MainWindowCoreTests {
 
         window.debugPickTableSize(rows: 2, cols: 3)
 
+        // Confirming the alignment phase writes explicit per-column markers.
+        // Default alignment is left, so the post-header row picks up `:---`.
         let expected = """
         | Column 1 | Column 2 | Column 3 |
-        | -------- | -------- | -------- |
+        | :------- | :------- | :------- |
         |          |          |          |
         |          |          |          |
         """ + "\n"

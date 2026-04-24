@@ -5,16 +5,12 @@ import Markdown
 struct HTMLPreviewDocumentBuilder {
     let darkAppearance: Bool
 
-    init(darkAppearance: Bool) {
-        self.darkAppearance = darkAppearance
-    }
-
     func render(markdown: String) -> [RenderedBlock] {
         let html = HTMLFormatter.format(markdown)
         let nodes = HTMLSubsetParser().parse(html)
         let rendered = restoringImageMetadata(
             in: restoringTaskListMarkers(in: blocks(from: nodes, listDepth: 0), markdown: markdown),
-            markdown: markdown
+            markdown: markdown,
         )
         if rendered.isEmpty, markdown.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return [.paragraph(.plain("Nothing to preview yet."))]
@@ -73,7 +69,7 @@ struct HTMLPreviewDocumentBuilder {
                 return [.image(
                     alt: attributes["alt"] ?? "",
                     source: attributes["src"],
-                    title: attributes["title"]
+                    title: attributes["title"],
                 )]
             case "a":
                 if let linkedImage = renderedImageItem(from: node) {
@@ -122,7 +118,7 @@ struct HTMLPreviewDocumentBuilder {
                 case nil:
                     inlineNodes.append(child)
                 default:
-                    if nestedBlocks.isEmpty && inlineNodes.isEmpty {
+                    if nestedBlocks.isEmpty, inlineNodes.isEmpty {
                         nestedBlocks.append(contentsOf: block(from: child, listDepth: listDepth + 1))
                     } else {
                         nestedBlocks.append(contentsOf: block(from: child, listDepth: listDepth + 1))
@@ -130,7 +126,7 @@ struct HTMLPreviewDocumentBuilder {
                 }
             }
 
-            if inlineNodes.isEmpty && nestedBlocks.isEmpty {
+            if inlineNodes.isEmpty, nestedBlocks.isEmpty {
                 inlineNodes = contentNodes
             }
 
@@ -193,14 +189,15 @@ struct HTMLPreviewDocumentBuilder {
 
         guard meaningfulNodes.count == 1,
               case let .element(name, attributes, _) = meaningfulNodes[0].kind,
-              name == "img" else {
+              name == "img"
+        else {
             return nil
         }
 
         return (
             alt: attributes["alt"] ?? "",
             source: attributes["src"],
-            title: attributes["title"]
+            title: attributes["title"],
         )
     }
 
@@ -235,7 +232,7 @@ struct HTMLPreviewDocumentBuilder {
                     alt: attributes["alt"] ?? "",
                     source: attributes["src"],
                     title: attributes["title"],
-                    linkDestination: nil
+                    linkDestination: nil,
                 )
             case "a":
                 guard let image = standaloneImageGroup(from: children)?.only else {
@@ -245,7 +242,7 @@ struct HTMLPreviewDocumentBuilder {
                     alt: image.alt,
                     source: image.source,
                     title: image.title,
-                    linkDestination: attributes["href"]
+                    linkDestination: attributes["href"],
                 )
             default:
                 return nil
@@ -344,7 +341,7 @@ struct HTMLPreviewDocumentBuilder {
                 restored.append(.listItem(
                     text: text,
                     depth: taskItem.depth,
-                    marker: taskItem.checked ? "[x]" : "[ ]"
+                    marker: taskItem.checked ? "[x]" : "[ ]",
                 ))
                 nextTaskIndex += 1
             default:
@@ -377,7 +374,7 @@ struct HTMLPreviewDocumentBuilder {
                 return TaskListItem(
                     depth: depth,
                     checked: checked,
-                    text: text
+                    text: text,
                 )
             }
     }
@@ -404,7 +401,7 @@ struct HTMLPreviewDocumentBuilder {
                 restored.append(.image(
                     alt: alt.isEmpty ? markdownImage.alt : alt,
                     source: source ?? markdownImage.source,
-                    title: title ?? markdownImage.title
+                    title: title ?? markdownImage.title,
                 ))
                 nextImageIndex += 1
             case let .imageGroup(items):
@@ -422,7 +419,7 @@ struct HTMLPreviewDocumentBuilder {
                         alt: item.alt.isEmpty ? markdownImage.alt : item.alt,
                         source: item.source ?? markdownImage.source,
                         title: item.title ?? markdownImage.title,
-                        linkDestination: item.linkDestination
+                        linkDestination: item.linkDestination,
                     ))
                     nextImageIndex += 1
                 }
@@ -486,7 +483,7 @@ struct MarkdownImageCollector: MarkupWalker {
         images.append(.init(
             alt: image.plainText,
             source: image.source,
-            title: image.title
+            title: image.title,
         ))
         descendInto(image)
     }

@@ -51,7 +51,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         editorTabWidth: Int = AppSettings.defaultEditorTabWidth,
         editorIndentStyle: EditorIndentStyle = .spaces,
         autosaveDelaySeconds: Int = AppSettings.defaultAutosaveDelaySeconds,
-        appearanceMode: AppearanceMode = .system
+        appearanceMode: AppearanceMode = .system,
     ) {
         self.customNotesDirectoryPath = customNotesDirectoryPath?
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -71,14 +71,14 @@ public struct AppSettings: Codable, Equatable, Sendable {
     }
 
     public func resolvedNotesDirectory(
-        defaultDirectory: URL = NotesRepository.fallbackNotesDirectory()
+        defaultDirectory: URL = NotesRepository.fallbackNotesDirectory(),
     ) -> URL {
         customNotesDirectoryURL ?? defaultDirectory.standardizedFileURL
     }
 
     public func updatingNotesDirectory(
         _ directory: URL,
-        defaultDirectory: URL = NotesRepository.fallbackNotesDirectory()
+        defaultDirectory: URL = NotesRepository.fallbackNotesDirectory(),
     ) -> AppSettings {
         let standardizedDirectory = directory.standardizedFileURL
         let standardizedDefault = defaultDirectory.standardizedFileURL
@@ -90,7 +90,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
                 editorTabWidth: editorTabWidth,
                 editorIndentStyle: editorIndentStyle,
                 autosaveDelaySeconds: autosaveDelaySeconds,
-                appearanceMode: appearanceMode
+                appearanceMode: appearanceMode,
             )
         }
         return AppSettings(
@@ -100,16 +100,16 @@ public struct AppSettings: Codable, Equatable, Sendable {
             editorTabWidth: editorTabWidth,
             editorIndentStyle: editorIndentStyle,
             autosaveDelaySeconds: autosaveDelaySeconds,
-            appearanceMode: appearanceMode
+            appearanceMode: appearanceMode,
         )
     }
 
     public func normalized(
-        defaultDirectory: URL = NotesRepository.fallbackNotesDirectory()
+        defaultDirectory: URL = NotesRepository.fallbackNotesDirectory(),
     ) -> AppSettings {
         updatingNotesDirectory(
             resolvedNotesDirectory(defaultDirectory: defaultDirectory),
-            defaultDirectory: defaultDirectory
+            defaultDirectory: defaultDirectory,
         )
     }
 
@@ -125,14 +125,14 @@ public struct AppSettings: Codable, Equatable, Sendable {
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.init(
-            customNotesDirectoryPath: try container.decodeIfPresent(String.self, forKey: .customNotesDirectoryPath),
-            wrapsEditorLines: try container.decodeIfPresent(Bool.self, forKey: .wrapsEditorLines) ?? true,
-            editorFontSize: try container.decodeIfPresent(Int.self, forKey: .editorFontSize) ?? Self.defaultEditorFontSize,
-            editorTabWidth: try container.decodeIfPresent(Int.self, forKey: .editorTabWidth) ?? Self.defaultEditorTabWidth,
-            editorIndentStyle: try container.decodeIfPresent(EditorIndentStyle.self, forKey: .editorIndentStyle) ?? .spaces,
-            autosaveDelaySeconds: try container.decodeIfPresent(Int.self, forKey: .autosaveDelaySeconds) ?? Self.defaultAutosaveDelaySeconds,
-            appearanceMode: try container.decodeIfPresent(AppearanceMode.self, forKey: .appearanceMode) ?? .system
+        try self.init(
+            customNotesDirectoryPath: container.decodeIfPresent(String.self, forKey: .customNotesDirectoryPath),
+            wrapsEditorLines: container.decodeIfPresent(Bool.self, forKey: .wrapsEditorLines) ?? true,
+            editorFontSize: container.decodeIfPresent(Int.self, forKey: .editorFontSize) ?? Self.defaultEditorFontSize,
+            editorTabWidth: container.decodeIfPresent(Int.self, forKey: .editorTabWidth) ?? Self.defaultEditorTabWidth,
+            editorIndentStyle: container.decodeIfPresent(EditorIndentStyle.self, forKey: .editorIndentStyle) ?? .spaces,
+            autosaveDelaySeconds: container.decodeIfPresent(Int.self, forKey: .autosaveDelaySeconds) ?? Self.defaultAutosaveDelaySeconds,
+            appearanceMode: container.decodeIfPresent(AppearanceMode.self, forKey: .appearanceMode) ?? .system,
         )
     }
 

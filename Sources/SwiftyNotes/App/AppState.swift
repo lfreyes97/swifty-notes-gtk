@@ -11,6 +11,9 @@ public final class AppState {
     public var preferredWindowWidth: Int
     public var preferredWindowHeight: Int
     public var preferredPreviewWidth: Int
+    public var lastTableRows: Int
+    public var lastTableCols: Int
+    public var lastTableAlignments: [MarkdownTableAlignment]
 
     public var isPreviewVisible: Bool {
         viewMode.isPreviewVisible
@@ -29,6 +32,15 @@ public final class AppState {
         preferredWindowWidth = persistedState.windowWidth
         preferredWindowHeight = persistedState.windowHeight
         preferredPreviewWidth = persistedState.previewWidth
+        lastTableRows = persistedState.lastTableRows
+        lastTableCols = persistedState.lastTableCols
+        lastTableAlignments = persistedState.lastTableAlignments
+    }
+
+    public func setLastTableSize(rows: Int, cols: Int, alignments: [MarkdownTableAlignment]) {
+        lastTableRows = max(1, rows)
+        lastTableCols = max(1, cols)
+        lastTableAlignments = alignments
     }
 
     public var selectedNote: Note? {
@@ -99,7 +111,10 @@ public final class AppState {
             sortMode: sortMode,
             windowWidth: windowWidth,
             windowHeight: windowHeight,
-            previewWidth: preferredPreviewWidth
+            previewWidth: preferredPreviewWidth,
+            lastTableRows: lastTableRows,
+            lastTableCols: lastTableCols,
+            lastTableAlignments: lastTableAlignments,
         )
     }
 

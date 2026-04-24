@@ -1,11 +1,11 @@
-import Foundation
-import Testing
-@testable import SwiftyNotes
 import Adwaita
+import Foundation
+@testable import SwiftyNotes
+import Testing
 
 struct ExternalDocumentWindowTests {
     @Test @MainActor
-    func externalDocumentWindowLoadsMarkdownFileAndAutosavesEdits() throws {
+    func `external document window loads markdown file and autosaves edits`() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
         try FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
@@ -22,7 +22,7 @@ struct ExternalDocumentWindowTests {
             fileURL: fileURL,
             renderer: MarkdownRenderer(),
             autosave: AutosaveCoordinator(taskScheduler: autosaveScheduler.schedule(after:operation:)),
-            autosaveDelay: .milliseconds(40)
+            autosaveDelay: .milliseconds(40),
         )
 
         window.present()
@@ -35,8 +35,8 @@ struct ExternalDocumentWindowTests {
             "Document": [
                 "Save As…",
                 "Import into Library…",
-                "Reveal in Folder"
-            ]
+                "Reveal in Folder",
+            ],
         ])
 
         window.debugSetEditorText("# Updated\n\nSaved from external window")
@@ -50,7 +50,7 @@ struct ExternalDocumentWindowTests {
     }
 
     @Test @MainActor
-    func externalDocumentWindowReloadsChangedFileAfterPoll() throws {
+    func `external document window reloads changed file after poll`() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
         try FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
@@ -65,7 +65,7 @@ struct ExternalDocumentWindowTests {
             application: app,
             fileURL: fileURL,
             renderer: MarkdownRenderer(),
-            autosave: AutosaveCoordinator()
+            autosave: AutosaveCoordinator(),
         )
 
         window.present()

@@ -13,7 +13,7 @@ enum AppIdentity {
 
     static func migrateApplicationDirectoryIfNeeded(
         currentDirectory: URL,
-        fileManager: FileManager = .default
+        fileManager: FileManager = .default,
     ) throws {
         guard currentDirectory.lastPathComponent == identifier else { return }
         guard !fileManager.fileExists(atPath: currentDirectory.path(percentEncoded: false)) else { return }

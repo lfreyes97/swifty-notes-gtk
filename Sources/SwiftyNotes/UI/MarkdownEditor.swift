@@ -57,7 +57,7 @@ struct MarkdownEditor {
         view.insertSpacesInsteadOfTabs = settings.editorIndentStyle == .spaces
         currentFontSize = settings.editorFontSize
         fontCSSProvider.loadFromString(
-            ".\(fontCSSClass) { font-size: \(currentFontSize)pt; }"
+            ".\(fontCSSClass) { font-size: \(currentFontSize)pt; }",
         )
     }
 
