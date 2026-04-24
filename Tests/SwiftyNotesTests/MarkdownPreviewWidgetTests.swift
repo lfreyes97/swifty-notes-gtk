@@ -355,12 +355,13 @@ struct MarkdownPreviewWidgetTests {
             Issue.record("Expected a Copy button on the rendered code block")
             return
         }
-        #expect(copyButton.label == "Copy")
+        #expect(copyButton.iconName == "edit-copy-symbolic")
+        #expect(copyButton.tooltipText == "Copy code to clipboard")
         #expect(copyButton.hasCSSClass("preview-code-copy"))
     }
 
     @Test @MainActor
-    func `preview code block Copy button flips label to Copied after click and restores`() throws {
+    func `preview code block Copy button swaps to a confirmation icon after click and restores`() throws {
         let app = Application(id: "me.spaceinbox.swiftynotes.tests.code-block-copy-feedback")
         try app.register()
 
@@ -374,12 +375,12 @@ struct MarkdownPreviewWidgetTests {
         }
 
         copyButton.emitClicked()
-        #expect(copyButton.label == "Copied")
+        #expect(copyButton.iconName == "object-select-symbolic")
 
-        // Label should restore after roughly one second. Pump the main loop
+        // Icon should restore after roughly one second. Pump the main loop
         // a touch longer to stay robust on slower CI VMs.
         MainContext.pump(for: .milliseconds(1400))
-        #expect(copyButton.label == "Copy")
+        #expect(copyButton.iconName == "edit-copy-symbolic")
     }
 
     @Test @MainActor

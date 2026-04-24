@@ -377,15 +377,20 @@ final class MarkdownPreview {
         }
     }
 
+    private static let copyIconName = "edit-copy-symbolic"
+    private static let copyConfirmedIconName = "object-select-symbolic"
+
     private func makeCodeBlockCopyButton(for code: String) -> Button {
-        let button = Button(label: "Copy")
+        let button = Button(iconName: Self.copyIconName)
         button.addCSSClass("osd")
+        button.addCSSClass("circular")
         button.addCSSClass("preview-code-copy")
         button.halign = .end
         button.valign = .start
         button.marginTop = 8
         button.marginEnd = 8
         button.tooltipText = "Copy code to clipboard"
+        button.setAccessibleLabel("Copy code to clipboard")
         // Outer capture is strong on purpose: GTK owns the underlying
         // widget but nothing else holds the Swift Button wrapper, so a
         // weak capture here would dangle by the time the signal fires.
@@ -400,9 +405,9 @@ final class MarkdownPreview {
         // timeout a no-op instead of writing to a freed GtkButton.
         button.onClicked { [button, code] in
             button.clipboard.setText(code)
-            button.label = "Copied"
+            button.iconName = Self.copyConfirmedIconName
             MainContext.task(after: .seconds(1)) { [weak button] in
-                button?.label = "Copy"
+                button?.iconName = Self.copyIconName
             }
         }
         return button
