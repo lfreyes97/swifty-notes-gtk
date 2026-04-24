@@ -276,14 +276,20 @@ final class MarkdownPreview {
             inner.append(badge)
         }
 
-        let codeLabel = Label(code)
-        codeLabel.selectable = true
-        codeLabel.wrap = false
-        codeLabel.xalign = 0
-        codeLabel.yalign = 0
-        codeLabel.addCSSClass("monospace")
+        let buffer = Self.makeSourceBuffer(for: code, language: language)
+        let view = SourceView(buffer: buffer)
+        view.editable = false
+        view.cursorVisible = false
+        view.isFocusable = false
+        view.monospace = true
+        view.wrapMode = .none
+        view.leftMargin = 0
+        view.rightMargin = 0
+        view.topMargin = 0
+        view.bottomMargin = 0
+        view.addCSSClass("preview-code-sourceview")
 
-        let scroll = ScrolledWindow(child: codeLabel)
+        let scroll = ScrolledWindow(child: view)
         scroll.setPolicy(horizontal: .automatic, vertical: .never)
         scroll.propagateNaturalHeight = true
         scroll.propagateNaturalWidth = false
@@ -298,6 +304,56 @@ final class MarkdownPreview {
 
         outer.append(overlay)
         return outer
+    }
+
+    /// Builds a ``SourceBuffer`` primed with the code block's text and the
+    /// right language for syntax highlighting. Unknown / absent languages
+    /// fall back to a language-less buffer so the caller still renders as
+    /// plain monospace with a consistent style scheme.
+    private static func makeSourceBuffer(for code: String, language: String?) -> SourceBuffer {
+        let buffer: SourceBuffer
+        if let rawID = language?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+           !rawID.isEmpty,
+           let normalised = sourceLanguageAlias(for: rawID),
+           let lang = SourceLanguageManager.default.language(id: normalised)
+        {
+            buffer = SourceBuffer(language: lang)
+            buffer.highlightSyntax = true
+        } else {
+            buffer = SourceBuffer()
+            buffer.highlightSyntax = false
+        }
+        buffer.text = code
+        buffer.styleScheme = SourceStyleSchemeManager.default.preferredScheme(dark: StyleManager.default.dark)
+        return buffer
+    }
+
+    /// Maps common markdown fence info-strings onto GtkSourceView language
+    /// ids. The manager already accepts the canonical ids verbatim, so this
+    /// only needs to cover aliases users are used to typing. Anything not
+    /// listed is passed through unchanged — the subsequent
+    /// ``SourceLanguageManager/language(id:)`` lookup decides whether it
+    /// matches a shipped .lang file or falls back to language-less mode.
+    ///
+    /// `js`/`jsx` intentionally route to `typescript` because GtkSourceView
+    /// 5.18 dropped the standalone `javascript` language id in favour of
+    /// the TypeScript grammar (TS is a superset of JS and parses plain JS
+    /// files without issue).
+    private static func sourceLanguageAlias(for rawID: String) -> String? {
+        switch rawID {
+        case "js", "jsx", "ts", "tsx": "typescript"
+        case "py": "python"
+        case "rb": "ruby"
+        case "sh", "shell", "zsh": "sh"
+        case "cpp", "cxx", "c++", "hpp", "hxx": "cpp"
+        case "cs": "csharp"
+        case "yml": "yaml"
+        case "md": "markdown"
+        case "rs": "rust"
+        case "kt": "kotlin"
+        case "": nil
+        default: rawID
+        }
     }
 
     private func makeCodeBlockCopyButton(for code: String) -> Button {

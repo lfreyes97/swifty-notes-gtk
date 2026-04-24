@@ -267,6 +267,81 @@ struct MarkdownPreviewWidgetTests {
     }
 
     @Test @MainActor
+    func `preview code block renders through a read-only SourceView with matching language`() throws {
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.code-block-source-view-swift")
+        try app.register()
+
+        let preview = MarkdownPreview(remoteImageLoader: { _, _ in })
+        preview.render(blocks: [
+            .codeBlock(code: "let answer = 42\n", language: "swift"),
+        ])
+
+        guard let sourceView = firstSourceView(in: preview.container) else {
+            Issue.record("Expected a SourceView inside the rendered code block")
+            return
+        }
+        #expect(sourceView.editable == false)
+        #expect(sourceView.cursorVisible == false)
+        #expect(sourceView.buffer.text == "let answer = 42\n")
+        #expect(sourceView.buffer.language?.id == "swift")
+        #expect(sourceView.buffer.highlightSyntax == true)
+    }
+
+    @Test @MainActor
+    func `preview code block maps common language aliases before looking up the SourceLanguageManager`() throws {
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.code-block-language-aliases")
+        try app.register()
+
+        let cases: [(raw: String, expected: String)] = [
+            ("js", "typescript"), // GtkSourceView 5.18 merged JS into TS
+            ("ts", "typescript"),
+            ("py", "python"),
+            ("rb", "ruby"),
+            ("sh", "sh"),
+            ("cpp", "cpp"),
+            ("yml", "yaml"),
+            ("md", "markdown"),
+        ]
+        for (raw, expected) in cases {
+            let preview = MarkdownPreview(remoteImageLoader: { _, _ in })
+            preview.render(blocks: [
+                .codeBlock(code: "x\n", language: raw),
+            ])
+            guard let sourceView = firstSourceView(in: preview.container) else {
+                Issue.record("Expected a SourceView for alias \(raw)")
+                continue
+            }
+            #expect(sourceView.buffer.language?.id == expected, "Alias \(raw) should resolve to \(expected)")
+        }
+    }
+
+    @Test @MainActor
+    func `preview code block falls back to a language-less SourceBuffer when info-string is missing or unknown`() throws {
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.code-block-language-fallback")
+        try app.register()
+
+        let noLanguagePreview = MarkdownPreview(remoteImageLoader: { _, _ in })
+        noLanguagePreview.render(blocks: [
+            .codeBlock(code: "plain\n", language: nil),
+        ])
+        guard let sourceViewNoLang = firstSourceView(in: noLanguagePreview.container) else {
+            Issue.record("Expected a SourceView with no language")
+            return
+        }
+        #expect(sourceViewNoLang.buffer.language == nil)
+
+        let unknownLanguagePreview = MarkdownPreview(remoteImageLoader: { _, _ in })
+        unknownLanguagePreview.render(blocks: [
+            .codeBlock(code: "plain\n", language: "not-a-real-language-42"),
+        ])
+        guard let sourceViewUnknown = firstSourceView(in: unknownLanguagePreview.container) else {
+            Issue.record("Expected a SourceView for unknown language")
+            return
+        }
+        #expect(sourceViewUnknown.buffer.language == nil)
+    }
+
+    @Test @MainActor
     func `preview code block exposes a Copy button`() throws {
         let app = Application(id: "me.spaceinbox.swiftynotes.tests.code-block-copy-button")
         try app.register()
@@ -726,6 +801,19 @@ struct MarkdownPreviewWidgetTests {
         for child in widget.children() {
             if let button = firstButton(in: child) {
                 return button
+            }
+        }
+        return nil
+    }
+
+    @MainActor
+    private func firstSourceView(in widget: Widget) -> SourceView? {
+        if let view = widget.tryCast(SourceView.self) {
+            return view
+        }
+        for child in widget.children() {
+            if let view = firstSourceView(in: child) {
+                return view
             }
         }
         return nil
