@@ -61,33 +61,43 @@ final class MainWindow {
     lazy var renameAction = SimpleAction(name: "rename-note") { [weak self] in
         self?.presentRenameDialogForSelectedNote()
     }
+
     lazy var duplicateAction = SimpleAction(name: "duplicate-note") { [weak self] in
         self?.duplicateSelectedNote()
     }
+
     lazy var deleteAction = SimpleAction(name: "delete-note") { [weak self] in
         self?.presentDeleteConfirmationForSelectedNote()
     }
+
     lazy var copyNoteIDAction = SimpleAction(name: "copy-note-id") { [weak self] in
         self?.copySelectedNoteID()
     }
+
     lazy var exportAction = SimpleAction(name: "export-note") { [weak self] in
         self?.exportSelectedNote()
     }
+
     lazy var openMarkdownFileAction = SimpleAction(name: "open-markdown-file") { [weak self] in
         self?.openMarkdownFile()
     }
+
     lazy var importAction = SimpleAction(name: "import-note") { [weak self] in
         self?.importNote()
     }
+
     lazy var openNotesFolderAction = SimpleAction(name: "open-notes-folder") { [weak self] in
         self?.openNotesFolder()
     }
+
     lazy var reloadAction = SimpleAction(name: "reload-notes") { [weak self] in
         self?.reloadFromDisk(announce: true)
     }
+
     lazy var settingsAction = SimpleAction(name: "settings") { [weak self] in
         self?.presentSettingsWindow()
     }
+
     lazy var aboutAction = SimpleAction(name: "about") { [weak self] in
         self?.presentAboutDialog()
     }
@@ -110,6 +120,13 @@ final class MainWindow {
     var editorFormattingButtonConfigurations: [MarkdownFormattingAction: ToolbarButtonContentConfiguration] = [:]
     var isEditorFormattingToolbarCompact = false
     var isEditorFormattingToolbarUsingTwoRows = false
+    /// Natural horizontal size of the formatting toolbar with full labels
+    /// shown in a single row, measured on-demand via a dry-run. Cached
+    /// after the first successful measurement (zero means "not measured
+    /// yet — fall back to the static threshold"). Used to decide when to
+    /// collapse the toolbar into its compact layout based on the actual
+    /// pixel width the toolbar needs rather than a hard-coded constant.
+    var editorFormattingNonCompactNaturalWidth: Int = 0
     var noteContextMenu: Popover?
     var noteContextMenuRequestID: UInt = 0
     var noteContextHandlers: [String: @MainActor () -> Void] = [:]
@@ -139,7 +156,7 @@ final class MainWindow {
         directoryOpener: @escaping (URL) throws -> Void = MainWindow.openDirectoryInSystemFileManager,
         deferredUIActionScheduler: @escaping (@escaping @MainActor () -> Void) -> Void = { action in
             MainContext.idle { action() }
-        }
+        },
     ) {
         self.state = state
         self.stateStore = stateStore
@@ -148,7 +165,7 @@ final class MainWindow {
         self.repository = repository
         self.renderer = renderer
         self.autosave = autosave
-        self.autosaveDelayOverride = autosaveDelay
+        autosaveDelayOverride = autosaveDelay
         self.autosaveDelay = autosaveDelay ?? .seconds(appSettings.autosaveDelaySeconds)
         self.openExternalDocumentHandler = openExternalDocumentHandler
         self.directoryOpener = directoryOpener
@@ -159,7 +176,7 @@ final class MainWindow {
         window.iconName = AppIdentity.identifier
         let preferredSize = Self.clampedWindowSize(
             width: state.preferredWindowWidth,
-            height: state.preferredWindowHeight
+            height: state.preferredWindowHeight,
         )
         window.setDefaultSize(width: preferredSize.width, height: preferredSize.height)
 
@@ -263,15 +280,15 @@ final class MainWindow {
 
         sidebar.searchEntry.onSearchChanged { [weak self] in
             guard let self else { return }
-            self.state.setSearchQuery(self.sidebar.searchEntry.text)
-            self.refreshSidebar()
-            self.persistWorkspaceState()
+            state.setSearchQuery(sidebar.searchEntry.text)
+            refreshSidebar()
+            persistWorkspaceState()
         }
 
         sidebar.onSortModeChanged { [weak self] sortMode in
             guard let self else { return }
-            guard sortMode != self.state.sortMode else { return }
-            self.setSortMode(sortMode)
+            guard sortMode != state.sortMode else { return }
+            setSortMode(sortMode)
         }
 
         sidebarToggle.onClicked { [weak self] in
@@ -279,18 +296,18 @@ final class MainWindow {
         }
 
         editorModeToggle.onToggled { [weak self] in
-            guard let self, !self.suppressViewModeToggleChange, self.editorModeToggle.active else { return }
-            self.setViewMode(.editor, animated: false)
+            guard let self, !self.suppressViewModeToggleChange, editorModeToggle.active else { return }
+            setViewMode(.editor, animated: false)
         }
 
         splitModeToggle.onToggled { [weak self] in
-            guard let self, !self.suppressViewModeToggleChange, self.splitModeToggle.active else { return }
-            self.setViewMode(.split, animated: false)
+            guard let self, !self.suppressViewModeToggleChange, splitModeToggle.active else { return }
+            setViewMode(.split, animated: false)
         }
 
         previewModeToggle.onToggled { [weak self] in
-            guard let self, !self.suppressViewModeToggleChange, self.previewModeToggle.active else { return }
-            self.setViewMode(.preview, animated: false)
+            guard let self, !self.suppressViewModeToggleChange, previewModeToggle.active else { return }
+            setViewMode(.preview, animated: false)
         }
         for (action, button) in editorFormattingButtons {
             button.onClicked { [weak self] in
@@ -311,12 +328,12 @@ final class MainWindow {
         }
 
         editor.view.onChanged { [weak self] in
-            guard let self, !self.suppressEditorChange, let noteToSave = self.currentEditedNoteSnapshot() else { return }
-            self.state.upsert(noteToSave)
-            self.refreshSidebar()
-            self.refreshPreview()
-            self.updateHeaderSubtitle()
-            self.autosave.scheduleSave(after: self.autosaveDelay) { [weak self] in
+            guard let self, !self.suppressEditorChange, let noteToSave = currentEditedNoteSnapshot() else { return }
+            state.upsert(noteToSave)
+            refreshSidebar()
+            refreshPreview()
+            updateHeaderSubtitle()
+            autosave.scheduleSave(after: autosaveDelay) { [weak self] in
                 self?.saveCurrentEditedNote(announceSuccess: false)
             }
         }
@@ -340,7 +357,7 @@ final class MainWindow {
 
         editorScroll.verticalAdjustment.onValueChanged { [weak self] in
             guard let self else { return }
-            self.syncPreviewScroll()
+            syncPreviewScroll()
         }
 
         window.onCloseRequest { [weak self] in
@@ -395,7 +412,7 @@ final class MainWindow {
         }
         return (
             max(900, min(width, monitor.width - 80)),
-            max(700, min(height, monitor.height - 80))
+            max(700, min(height, monitor.height - 80)),
         )
     }
 
@@ -416,14 +433,14 @@ final class MainWindow {
         try openDirectoryInSystemFileManager(
             folderURL,
             launchDefaultForURI: MainWindow.launchDefaultForURI,
-            fallbackOpenURI: MainWindow.fallbackOpenURI
+            fallbackOpenURI: MainWindow.fallbackOpenURI,
         )
     }
 
     nonisolated static func openDirectoryInSystemFileManager(
         _ folderURL: URL,
         launchDefaultForURI: (String) throws -> Void,
-        fallbackOpenURI: (String) throws -> Void
+        fallbackOpenURI: (String) throws -> Void,
     ) throws {
         let uri = folderURL.standardizedFileURL.absoluteString
         do {
@@ -435,10 +452,10 @@ final class MainWindow {
                 throw DirectoryOpenFailure(
                     message: [
                         primaryError.localizedDescription,
-                        fallbackError.localizedDescription
+                        fallbackError.localizedDescription,
                     ]
                     .filter { !$0.isEmpty }
-                    .joined(separator: "\n")
+                    .joined(separator: "\n"),
                 )
             }
         }
@@ -469,15 +486,13 @@ final class MainWindow {
         let maximumPreviewWidth = max(boundedAvailableWidth - minimumEditorWidth, minimumPreviewWidth)
         let comfortablePreviewWidth = min(
             max(Int(Double(boundedAvailableWidth) * 0.34), WorkspaceState.defaultPreviewWidth),
-            maximumPreviewWidth
+            maximumPreviewWidth,
         )
-        let requestedWidth: Int
-        if storedWidth == WorkspaceState.legacyDefaultPreviewWidth {
-            requestedWidth = max(storedWidth, comfortablePreviewWidth)
+        let requestedWidth: Int = if storedWidth == WorkspaceState.legacyDefaultPreviewWidth {
+            max(storedWidth, comfortablePreviewWidth)
         } else {
-            requestedWidth = storedWidth
+            storedWidth
         }
         return min(max(requestedWidth, minimumPreviewWidth), maximumPreviewWidth)
     }
-
 }

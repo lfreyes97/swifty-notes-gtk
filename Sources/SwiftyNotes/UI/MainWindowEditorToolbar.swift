@@ -7,17 +7,17 @@ extension MainWindow {
         setToggleContent(
             editorModeToggle,
             label: "Editor",
-            iconName: "document-edit-symbolic"
+            iconName: "document-edit-symbolic",
         )
         setToggleContent(
             splitModeToggle,
             label: "Split",
-            iconName: "view-dual-symbolic"
+            iconName: "view-dual-symbolic",
         )
         setToggleContent(
             previewModeToggle,
             label: "Preview",
-            iconName: "text-x-generic-symbolic"
+            iconName: "text-x-generic-symbolic",
         )
     }
 
@@ -73,7 +73,8 @@ extension MainWindow {
     func updateEditorFormattingToolbarLayout(forWidth width: Int) {
         guard width > 0 else { return }
 
-        let shouldUseCompactMode = width <= Self.editorFormattingCompactWidthThreshold
+        let effectiveCompactThreshold = resolvedCompactThreshold()
+        let shouldUseCompactMode = width < effectiveCompactThreshold
         if isEditorFormattingToolbarCompact != shouldUseCompactMode {
             isEditorFormattingToolbarCompact = shouldUseCompactMode
             refreshEditorFormattingToolbarButtons()
@@ -94,6 +95,51 @@ extension MainWindow {
         editorFormattingBarScroll.horizontalAdjustment.value = 0
     }
 
+    /// Returns the minimum editor-pane width at which the formatting
+    /// toolbar can still show full labels in a single row. Uses the
+    /// measured natural width of the non-compact toolbar (plus a small
+    /// padding allowance) when available; falls back to the static
+    /// ``editorFormattingCompactWidthThreshold`` during early setup
+    /// before the widget tree has been through its first allocation.
+    private func resolvedCompactThreshold() -> Int {
+        ensureEditorFormattingNonCompactNaturalWidthCached()
+        let measured = editorFormattingNonCompactNaturalWidth
+        if measured > 0 {
+            // 24 px safety margin covers the outer horizontal margins
+            // that aren't part of editorFormattingBar's own measurement.
+            return measured + 24
+        }
+        return Self.editorFormattingCompactWidthThreshold
+    }
+
+    private func ensureEditorFormattingNonCompactNaturalWidthCached() {
+        guard editorFormattingNonCompactNaturalWidth == 0 else { return }
+
+        let savedCompact = isEditorFormattingToolbarCompact
+        let savedTwoRows = isEditorFormattingToolbarUsingTwoRows
+
+        if savedCompact {
+            isEditorFormattingToolbarCompact = false
+            refreshEditorFormattingToolbarButtons()
+        }
+        if savedTwoRows {
+            layoutEditorFormattingRows(useTwoRows: false)
+        }
+
+        let measured = measuredNaturalWidth(of: editorFormattingBar)
+        if measured > 0 {
+            editorFormattingNonCompactNaturalWidth = measured
+        }
+
+        if isEditorFormattingToolbarCompact != savedCompact {
+            isEditorFormattingToolbarCompact = savedCompact
+            refreshEditorFormattingToolbarButtons()
+        }
+        if isEditorFormattingToolbarUsingTwoRows != savedTwoRows {
+            layoutEditorFormattingRows(useTwoRows: savedTwoRows)
+        }
+    }
+
     func refreshEditorFormattingToolbarLayout() {
         updateEditorFormattingToolbarLayout(forWidth: resolvedEditorFormattingToolbarWidth())
     }
@@ -102,7 +148,7 @@ extension MainWindow {
         var labels: [MarkdownFormattingAction: String?] = [:]
         for action in MarkdownFormattingAction.allCases {
             labels[action] = editorFormattingButtonConfigurations[action]?.displayedText(
-                isCompact: isEditorFormattingToolbarCompact
+                isCompact: isEditorFormattingToolbarCompact,
             )
         }
         return labels
@@ -116,12 +162,12 @@ extension MainWindow {
             primaryText: action.shortLabel ?? action.accessibilityLabel,
             iconName: action.iconName,
             prefersCompactLabel: action.iconName != nil && action.shortLabel == nil,
-            hidesLabelWhenCompact: action.iconName != nil
+            hidesLabelWhenCompact: action.iconName != nil,
         )
         editorFormattingButtonConfigurations[action] = configuration
         button.child = makeToolbarButtonContent(
             configuration: configuration,
-            isCompact: isEditorFormattingToolbarCompact
+            isCompact: isEditorFormattingToolbarCompact,
         )
         return button
     }
@@ -132,9 +178,9 @@ extension MainWindow {
                 primaryText: label,
                 iconName: iconName,
                 prefersCompactLabel: false,
-                hidesLabelWhenCompact: false
+                hidesLabelWhenCompact: false,
             ),
-            isCompact: false
+            isCompact: false,
         )
     }
 
@@ -143,7 +189,7 @@ extension MainWindow {
             let totalWidth = currentPreviewContainerWidth
             let previewWidth = Self.resolvedPreviewWidth(
                 storedWidth: state.preferredPreviewWidth,
-                availableWidth: totalWidth
+                availableWidth: totalWidth,
             )
             return max(totalWidth - previewWidth, Self.minimumEditorWidth)
         }
@@ -176,7 +222,7 @@ extension MainWindow {
             guard let configuration = editorFormattingButtonConfigurations[action] else { continue }
             button.child = makeToolbarButtonContent(
                 configuration: configuration,
-                isCompact: isEditorFormattingToolbarCompact
+                isCompact: isEditorFormattingToolbarCompact,
             )
         }
     }
@@ -195,7 +241,7 @@ extension MainWindow {
 
     private func makeToolbarButtonContent(
         configuration: ToolbarButtonContentConfiguration,
-        isCompact: Bool
+        isCompact: Bool,
     ) -> Widget {
         let labelText = configuration.displayedText(isCompact: isCompact)
         let showsLabel = labelText != nil

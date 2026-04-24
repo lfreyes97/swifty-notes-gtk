@@ -41,11 +41,11 @@ private enum ExternalMarkdownDocumentStore {
         return .init(
             modifiedAt: (attributes[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0,
             fileSize: (attributes[.size] as? NSNumber)?.uint64Value ?? 0,
-            contentFingerprint: hashing(data, into: hashSeed)
+            contentFingerprint: hashing(data, into: hashSeed),
         )
     }
 
-    private static func hashing<S: Sequence>(_ bytes: S, into seed: UInt64) -> UInt64 where S.Element == UInt8 {
+    private static func hashing(_ bytes: some Sequence<UInt8>, into seed: UInt64) -> UInt64 {
         var hash = seed
         for byte in bytes {
             hash ^= UInt64(byte)
@@ -104,12 +104,15 @@ final class ExternalDocumentWindow {
     lazy var saveAsAction = SimpleAction(name: "save-document-as") { [weak self] in
         self?.saveDocumentAs()
     }
+
     lazy var importIntoLibraryAction = SimpleAction(name: "import-document-into-library") { [weak self] in
         self?.importCurrentDocumentIntoLibrary()
     }
+
     lazy var revealInFolderAction = SimpleAction(name: "reveal-document-folder") { [weak self] in
         self?.revealDocumentInFolder()
     }
+
     lazy var reloadAction = SimpleAction(name: "reload-document") { [weak self] in
         self?.reloadFromDisk(announce: true)
     }
@@ -136,6 +139,7 @@ final class ExternalDocumentWindow {
     private var editorFormattingButtonConfigurations: [MarkdownFormattingAction: ToolbarButtonContentConfiguration] = [:]
     private var isEditorFormattingToolbarCompact = false
     private var isEditorFormattingToolbarUsingTwoRows = false
+    private var editorFormattingNonCompactNaturalWidth: Int = 0
     private(set) var overflowMenuSectionTitles: [String] = []
     private(set) var overflowMenuItemsBySection: [String: [String]] = [:]
 
@@ -149,17 +153,17 @@ final class ExternalDocumentWindow {
         directoryOpener: @escaping (URL) throws -> Void = MainWindow.openDirectoryInSystemFileManager,
         importIntoLibrary: @escaping (URL) throws -> Note = { fileURL in
             try NotesRepository(notesDirectory: NotesRepository.fallbackNotesDirectory()).importNote(from: fileURL)
-        }
+        },
     ) throws {
         let loadedDocument = try ExternalMarkdownDocumentStore.load(from: fileURL)
         self.renderer = renderer
         self.autosave = autosave
-        self.autosaveDelayOverride = autosaveDelay
+        autosaveDelayOverride = autosaveDelay
         self.autosaveDelay = autosaveDelay ?? .seconds(appSettings.autosaveDelaySeconds)
         self.directoryOpener = directoryOpener
         self.importIntoLibrary = importIntoLibrary
         self.fileURL = loadedDocument.url
-        self.fileSnapshot = loadedDocument.snapshot
+        fileSnapshot = loadedDocument.snapshot
 
         window = ApplicationWindow(application: application)
         window.iconName = AppIdentity.identifier
@@ -242,18 +246,18 @@ private extension ExternalDocumentWindow {
 
     func wireSignals() {
         editorModeToggle.onToggled { [weak self] in
-            guard let self, !self.suppressViewModeToggleChange, self.editorModeToggle.active else { return }
-            self.setViewMode(.editor, animated: false)
+            guard let self, !self.suppressViewModeToggleChange, editorModeToggle.active else { return }
+            setViewMode(.editor, animated: false)
         }
 
         splitModeToggle.onToggled { [weak self] in
-            guard let self, !self.suppressViewModeToggleChange, self.splitModeToggle.active else { return }
-            self.setViewMode(.split, animated: false)
+            guard let self, !self.suppressViewModeToggleChange, splitModeToggle.active else { return }
+            setViewMode(.split, animated: false)
         }
 
         previewModeToggle.onToggled { [weak self] in
-            guard let self, !self.suppressViewModeToggleChange, self.previewModeToggle.active else { return }
-            self.setViewMode(.preview, animated: false)
+            guard let self, !self.suppressViewModeToggleChange, previewModeToggle.active else { return }
+            setViewMode(.preview, animated: false)
         }
 
         for (action, button) in editorFormattingButtons {
@@ -268,9 +272,9 @@ private extension ExternalDocumentWindow {
 
         editor.view.onChanged { [weak self] in
             guard let self, !self.suppressEditorChange else { return }
-            self.refreshPreview()
-            self.updateHeaderSubtitle()
-            self.autosave.scheduleSave(after: self.autosaveDelay) { [weak self] in
+            refreshPreview()
+            updateHeaderSubtitle()
+            autosave.scheduleSave(after: autosaveDelay) { [weak self] in
                 self?.saveCurrentDocument(announceSuccess: false)
             }
         }
@@ -339,8 +343,8 @@ private extension ExternalDocumentWindow {
             "Document": [
                 "Save As…",
                 "Import into Library…",
-                "Reveal in Folder"
-            ]
+                "Reveal in Folder",
+            ],
         ]
         menuButton.setMenuModel(menu)
     }
@@ -435,7 +439,7 @@ private extension ExternalDocumentWindow {
         pendingPreviewBaseDirectory = baseDirectory
         previewRefreshID = MainContext.timeout(every: .milliseconds(1)) { [weak self] in
             guard let self else { return false }
-            self.flushPendingPreviewRefresh()
+            flushPendingPreviewRefresh()
             return false
         }
     }
@@ -452,8 +456,8 @@ private extension ExternalDocumentWindow {
             if previewRefreshRetryID == nil {
                 previewRefreshRetryID = MainContext.timeout(every: .milliseconds(16)) { [weak self] in
                     guard let self else { return false }
-                    self.previewRefreshRetryID = nil
-                    self.flushPendingPreviewRefresh()
+                    previewRefreshRetryID = nil
+                    flushPendingPreviewRefresh()
                     return false
                 }
             }
@@ -481,7 +485,7 @@ private extension ExternalDocumentWindow {
             hasParent: preview.rootScroll.parent != nil,
             hasRoot: preview.rootScroll.root != nil,
             width: preview.rootScroll.width,
-            height: preview.rootScroll.height
+            height: preview.rootScroll.height,
         )
     }
 
@@ -633,15 +637,15 @@ private extension ExternalDocumentWindow {
             let progress = min(max(elapsed / duration, 0), 1)
             let easedProgress = 1 - pow(1 - progress, 3)
             let position = Double(startPosition) + (Double(targetPosition - startPosition) * easedProgress)
-            self.editorPreviewPane.position = Int(position.rounded())
+            editorPreviewPane.position = Int(position.rounded())
             if progress < 1 {
                 return true
             }
 
-            self.previewAnimationID = nil
-            self.isRestoringPreviewPaneLayout = false
-            if self.viewMode != .split {
-                self.schedulePreviewDetachIfNeeded()
+            previewAnimationID = nil
+            isRestoringPreviewPaneLayout = false
+            if viewMode != .split {
+                schedulePreviewDetachIfNeeded()
             }
             return false
         }
@@ -649,8 +653,8 @@ private extension ExternalDocumentWindow {
 
     func schedulePreviewDetachIfNeeded() {
         MainContext.delay(for: .milliseconds(1)) { [weak self] in
-            guard let self, self.viewMode != .split else { return }
-            self.detachPreviewPane()
+            guard let self, viewMode != .split else { return }
+            detachPreviewPane()
         }
     }
 
@@ -666,7 +670,7 @@ private extension ExternalDocumentWindow {
             editorPreviewPane.width,
             contentHost.width,
             window.width,
-            window.defaultWidth
+            window.defaultWidth,
         )
     }
 
@@ -678,7 +682,7 @@ private extension ExternalDocumentWindow {
         preview.rootScroll.minContentWidth = MainWindow.minimumPreviewWidth
         let previewWidth = MainWindow.resolvedPreviewWidth(
             storedWidth: preferredPreviewWidth,
-            availableWidth: totalWidth
+            availableWidth: totalWidth,
         )
         return max(totalWidth - previewWidth, MainWindow.minimumEditorWidth)
     }
@@ -700,17 +704,17 @@ private extension ExternalDocumentWindow {
         setToggleContent(
             editorModeToggle,
             label: "Editor",
-            iconName: "document-edit-symbolic"
+            iconName: "document-edit-symbolic",
         )
         setToggleContent(
             splitModeToggle,
             label: "Split",
-            iconName: "view-dual-symbolic"
+            iconName: "view-dual-symbolic",
         )
         setToggleContent(
             previewModeToggle,
             label: "Preview",
-            iconName: "text-x-generic-symbolic"
+            iconName: "text-x-generic-symbolic",
         )
     }
 
@@ -765,7 +769,8 @@ private extension ExternalDocumentWindow {
     func updateEditorFormattingToolbarLayout(forWidth width: Int) {
         guard width > 0 else { return }
 
-        let shouldUseCompactMode = width <= MainWindow.editorFormattingCompactWidthThreshold
+        let effectiveCompactThreshold = resolvedCompactThreshold()
+        let shouldUseCompactMode = width < effectiveCompactThreshold
         if isEditorFormattingToolbarCompact != shouldUseCompactMode {
             isEditorFormattingToolbarCompact = shouldUseCompactMode
             refreshEditorFormattingToolbarButtons()
@@ -786,6 +791,43 @@ private extension ExternalDocumentWindow {
         editorFormattingBarScroll.horizontalAdjustment.value = 0
     }
 
+    private func resolvedCompactThreshold() -> Int {
+        ensureEditorFormattingNonCompactNaturalWidthCached()
+        let measured = editorFormattingNonCompactNaturalWidth
+        if measured > 0 {
+            return measured + 24
+        }
+        return MainWindow.editorFormattingCompactWidthThreshold
+    }
+
+    private func ensureEditorFormattingNonCompactNaturalWidthCached() {
+        guard editorFormattingNonCompactNaturalWidth == 0 else { return }
+
+        let savedCompact = isEditorFormattingToolbarCompact
+        let savedTwoRows = isEditorFormattingToolbarUsingTwoRows
+
+        if savedCompact {
+            isEditorFormattingToolbarCompact = false
+            refreshEditorFormattingToolbarButtons()
+        }
+        if savedTwoRows {
+            layoutEditorFormattingRows(useTwoRows: false)
+        }
+
+        let measured = measuredNaturalWidth(of: editorFormattingBar)
+        if measured > 0 {
+            editorFormattingNonCompactNaturalWidth = measured
+        }
+
+        if isEditorFormattingToolbarCompact != savedCompact {
+            isEditorFormattingToolbarCompact = savedCompact
+            refreshEditorFormattingToolbarButtons()
+        }
+        if isEditorFormattingToolbarUsingTwoRows != savedTwoRows {
+            layoutEditorFormattingRows(useTwoRows: savedTwoRows)
+        }
+    }
+
     func refreshEditorFormattingToolbarLayout() {
         updateEditorFormattingToolbarLayout(forWidth: resolvedEditorFormattingToolbarWidth())
     }
@@ -798,12 +840,12 @@ private extension ExternalDocumentWindow {
             primaryText: action.shortLabel ?? action.accessibilityLabel,
             iconName: action.iconName,
             prefersCompactLabel: action.iconName != nil && action.shortLabel == nil,
-            hidesLabelWhenCompact: action.iconName != nil
+            hidesLabelWhenCompact: action.iconName != nil,
         )
         editorFormattingButtonConfigurations[action] = configuration
         button.child = makeToolbarButtonContent(
             configuration: configuration,
-            isCompact: isEditorFormattingToolbarCompact
+            isCompact: isEditorFormattingToolbarCompact,
         )
         return button
     }
@@ -814,9 +856,9 @@ private extension ExternalDocumentWindow {
                 primaryText: label,
                 iconName: iconName,
                 prefersCompactLabel: false,
-                hidesLabelWhenCompact: false
+                hidesLabelWhenCompact: false,
             ),
-            isCompact: false
+            isCompact: false,
         )
     }
 
@@ -825,7 +867,7 @@ private extension ExternalDocumentWindow {
             let totalWidth = currentPreviewContainerWidth
             let previewWidth = MainWindow.resolvedPreviewWidth(
                 storedWidth: preferredPreviewWidth,
-                availableWidth: totalWidth
+                availableWidth: totalWidth,
             )
             return max(totalWidth - previewWidth, MainWindow.minimumEditorWidth)
         }
@@ -834,7 +876,7 @@ private extension ExternalDocumentWindow {
             editorFormattingBarScroll.width,
             editorContent.width,
             editorPreviewPane.width,
-            contentHost.width
+            contentHost.width,
         )
         if allocatedWidth > 0 {
             return allocatedWidth
@@ -863,7 +905,7 @@ private extension ExternalDocumentWindow {
             guard let configuration = editorFormattingButtonConfigurations[action] else { continue }
             button.child = makeToolbarButtonContent(
                 configuration: configuration,
-                isCompact: isEditorFormattingToolbarCompact
+                isCompact: isEditorFormattingToolbarCompact,
             )
         }
     }
@@ -882,7 +924,7 @@ private extension ExternalDocumentWindow {
 
     private func makeToolbarButtonContent(
         configuration: ToolbarButtonContentConfiguration,
-        isCompact: Bool
+        isCompact: Bool,
     ) -> Widget {
         let labelText = configuration.displayedText(isCompact: isCompact)
         let showsLabel = labelText != nil
@@ -919,7 +961,7 @@ private extension ExternalDocumentWindow {
     func saveCurrentDocument(announceSuccess: Bool) {
         _ = saveDocument(
             to: fileURL,
-            successMessage: announceSuccess ? "File saved" : nil
+            successMessage: announceSuccess ? "File saved" : nil,
         )
     }
 
@@ -928,7 +970,7 @@ private extension ExternalDocumentWindow {
         do {
             let savedDocument = try ExternalMarkdownDocumentStore.save(
                 content: editor.buffer.text,
-                to: targetURL
+                to: targetURL,
             )
             fileURL = savedDocument.url
             fileSnapshot = savedDocument.snapshot
@@ -962,30 +1004,30 @@ private extension ExternalDocumentWindow {
         dialog.initialName = fileURL.lastPathComponent
         dialog.setFilters([
             FileFilter(name: "Markdown", suffixes: ["md", "markdown", "txt"]),
-            FileFilter(name: "All files", patterns: ["*"])
+            FileFilter(name: "All files", patterns: ["*"]),
         ])
         activeFileDialog = dialog
         dialog.save(parent: window.root ?? window) { [weak self] result in
             guard let self else { return }
-            self.activeFileDialog = nil
+            activeFileDialog = nil
             let path: String?
             switch result {
             case let .success(value):
                 path = value
             case let .failure(error):
-                self.presentError(
+                presentError(
                     heading: "Could not open save dialog",
-                    body: error.message
+                    body: error.message,
                 )
                 return
             }
             guard let path else { return }
             let savedURL = URL(fileURLWithPath: path)
-            if self.saveDocument(
+            if saveDocument(
                 to: savedURL,
-                successMessage: "Saved as \(savedURL.lastPathComponent)"
+                successMessage: "Saved as \(savedURL.lastPathComponent)",
             ) {
-                self.autosave.cancel()
+                autosave.cancel()
             }
         }
     }
@@ -1002,7 +1044,7 @@ private extension ExternalDocumentWindow {
         } catch {
             presentError(
                 heading: "Could not import file into library",
-                body: error.localizedDescription
+                body: error.localizedDescription,
             )
         }
     }
@@ -1013,18 +1055,18 @@ private extension ExternalDocumentWindow {
         } catch {
             presentError(
                 heading: "Could not open containing folder",
-                body: error.localizedDescription
+                body: error.localizedDescription,
             )
         }
     }
 
     func reloadFromDisk(announce: Bool, forceDiscardingUnsavedChanges: Bool = false) {
-        if editor.buffer.modified && !forceDiscardingUnsavedChanges {
+        if editor.buffer.modified, !forceDiscardingUnsavedChanges {
             if !externalReloadDeferred {
                 externalReloadDeferred = true
                 toastOverlay.showToast(
                     "File changed on disk. Save or reload to sync.",
-                    button: "Reload"
+                    button: "Reload",
                 ) { [weak self] in
                     self?.reloadFromDisk(announce: true, forceDiscardingUnsavedChanges: true)
                 }
@@ -1041,7 +1083,7 @@ private extension ExternalDocumentWindow {
         } catch {
             presentError(
                 heading: "Could not reload file",
-                body: error.localizedDescription
+                body: error.localizedDescription,
             )
         }
     }
@@ -1050,7 +1092,7 @@ private extension ExternalDocumentWindow {
         stopExternalChangeMonitor()
         externalChangeMonitorID = MainContext.timeout(every: .milliseconds(1500)) { [weak self] in
             guard let self else { return false }
-            self.pollForExternalChanges()
+            pollForExternalChanges()
             return true
         }
     }
@@ -1086,7 +1128,7 @@ private extension ExternalDocumentWindow {
                     externalReloadDeferred = true
                     toastOverlay.showToast(
                         "File changed on disk. Save or reload to sync.",
-                        button: "Reload"
+                        button: "Reload",
                     ) { [weak self] in
                         self?.reloadFromDisk(announce: true, forceDiscardingUnsavedChanges: true)
                     }
@@ -1115,51 +1157,51 @@ private extension ExternalDocumentWindow {
 }
 
 #if DEBUG
-@MainActor
-extension ExternalDocumentWindow {
-    var debugViewMode: EditorViewMode {
-        viewMode
-    }
-
-    var debugEditorText: String {
-        editor.buffer.text
-    }
-
-    var debugEditorModified: Bool {
-        editor.buffer.modified
-    }
-
-    var debugOverflowMenuSectionTitles: [String] {
-        overflowMenuSectionTitles
-    }
-
-    var debugOverflowMenuItemsBySection: [String: [String]] {
-        overflowMenuItemsBySection
-    }
-
-    var debugPreviewText: String {
-        if let previewRefreshID {
-            MainContext.cancel(sourceId: previewRefreshID)
-            self.previewRefreshID = nil
+    @MainActor
+    extension ExternalDocumentWindow {
+        var debugViewMode: EditorViewMode {
+            viewMode
         }
-        if let previewRefreshRetryID {
-            MainContext.cancel(sourceId: previewRefreshRetryID)
-            self.previewRefreshRetryID = nil
+
+        var debugEditorText: String {
+            editor.buffer.text
         }
-        let blocks = pendingPreviewBlocks ?? renderer.blocks(for: editor.buffer.text)
-        let baseDirectory = pendingPreviewBaseDirectory ?? fileURL.deletingLastPathComponent()
-        pendingPreviewBlocks = nil
-        pendingPreviewBaseDirectory = nil
-        preview.render(blocks: blocks, baseDirectory: baseDirectory)
-        return preview.plainText
-    }
 
-    func debugSetEditorText(_ text: String) {
-        editor.buffer.text = text
-    }
+        var debugEditorModified: Bool {
+            editor.buffer.modified
+        }
 
-    func debugPollForExternalChanges() {
-        pollForExternalChanges()
+        var debugOverflowMenuSectionTitles: [String] {
+            overflowMenuSectionTitles
+        }
+
+        var debugOverflowMenuItemsBySection: [String: [String]] {
+            overflowMenuItemsBySection
+        }
+
+        var debugPreviewText: String {
+            if let previewRefreshID {
+                MainContext.cancel(sourceId: previewRefreshID)
+                self.previewRefreshID = nil
+            }
+            if let previewRefreshRetryID {
+                MainContext.cancel(sourceId: previewRefreshRetryID)
+                self.previewRefreshRetryID = nil
+            }
+            let blocks = pendingPreviewBlocks ?? renderer.blocks(for: editor.buffer.text)
+            let baseDirectory = pendingPreviewBaseDirectory ?? fileURL.deletingLastPathComponent()
+            pendingPreviewBlocks = nil
+            pendingPreviewBaseDirectory = nil
+            preview.render(blocks: blocks, baseDirectory: baseDirectory)
+            return preview.plainText
+        }
+
+        func debugSetEditorText(_ text: String) {
+            editor.buffer.text = text
+        }
+
+        func debugPollForExternalChanges() {
+            pollForExternalChanges()
+        }
     }
-}
 #endif

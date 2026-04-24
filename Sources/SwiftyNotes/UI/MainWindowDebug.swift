@@ -2,374 +2,401 @@ import Adwaita
 import Foundation
 
 #if DEBUG
-@MainActor
-extension MainWindow {
-    func debugLoadInitialNotes() {
-        loadInitialNotes()
-    }
-
-    func debugCreateNote() {
-        createNote()
-    }
-
-    func debugRequestCreateNote() {
-        requestCreateNote()
-    }
-
-    func debugEmitNewNoteClicked() {
-        newNoteButton.emitClicked()
-    }
-
-    func debugEmitSaveClicked() {
-        saveNoteButton.emitClicked()
-    }
-
-    func debugEmitSidebarToggleClicked() {
-        sidebarToggle.emitClicked()
-    }
-
-    func debugSelectViewMode(_ mode: EditorViewMode) {
-        switch mode {
-        case .editor:
-            editorModeToggle.active = true
-        case .split:
-            splitModeToggle.active = true
-        case .preview:
-            previewModeToggle.active = true
+    @MainActor
+    extension MainWindow {
+        func debugLoadInitialNotes() {
+            loadInitialNotes()
         }
-    }
 
-    func debugEmitSortButtonClicked() {
-        sidebar.sortButton.emitClicked()
-    }
+        func debugCreateNote() {
+            createNote()
+        }
 
-    func debugSetEditorText(_ text: String) {
-        editor.buffer.text = text
-    }
+        func debugRequestCreateNote() {
+            requestCreateNote()
+        }
 
-    func debugSelectEditorRange(_ range: Range<Int>) {
-        editor.select(range: range)
-    }
+        func debugEmitNewNoteClicked() {
+            newNoteButton.emitClicked()
+        }
 
-    func debugEmitEditorFormattingButtonClicked(_ action: MarkdownFormattingAction) {
-        guard let button = editorFormattingButtons[action] else { return }
-        button.emitClicked()
-    }
+        func debugEmitSaveClicked() {
+            saveNoteButton.emitClicked()
+        }
 
-    func debugSetSearchQuery(_ text: String) {
-        sidebar.searchEntry.text = text
-        sidebar.searchEntry.emitSearchChanged()
-    }
+        func debugEmitSidebarToggleClicked() {
+            sidebarToggle.emitClicked()
+        }
 
-    var debugNotesCount: Int {
-        state.notes.count
-    }
+        func debugSelectViewMode(_ mode: EditorViewMode) {
+            switch mode {
+            case .editor:
+                editorModeToggle.active = true
+            case .split:
+                splitModeToggle.active = true
+            case .preview:
+                previewModeToggle.active = true
+            }
+        }
 
-    var debugSelectedNoteContent: String? {
-        state.selectedNote?.content
-    }
+        func debugEmitSortButtonClicked() {
+            sidebar.sortButton.emitClicked()
+        }
 
-    var debugEditorModified: Bool {
-        editor.buffer.modified
-    }
+        func debugSetEditorText(_ text: String) {
+            editor.buffer.text = text
+        }
 
-    var debugHeaderSubtitle: String {
-        headerTitle.subtitle
-    }
+        func debugSelectEditorRange(_ range: Range<Int>) {
+            editor.select(range: range)
+        }
 
-    var debugWindowIconName: String? {
-        window.iconName
-    }
+        func debugEmitEditorFormattingButtonClicked(_ action: MarkdownFormattingAction) {
+            guard let button = editorFormattingButtons[action] else { return }
+            button.emitClicked()
+        }
 
-    var debugEditorText: String {
-        editor.buffer.text
-    }
+        func debugSetSearchQuery(_ text: String) {
+            sidebar.searchEntry.text = text
+            sidebar.searchEntry.emitSearchChanged()
+        }
 
-    var debugEditorSelectionRange: Range<Int> {
-        editor.selectedRange()
-    }
+        var debugNotesCount: Int {
+            state.notes.count
+        }
 
-    var debugPreviewText: String {
-        flushPendingPreviewRefresh()
-        return preview.plainText
-    }
+        var debugSelectedNoteContent: String? {
+            state.selectedNote?.content
+        }
 
-    var debugDisplayedNotesCount: Int {
-        displayedNotes.count
-    }
+        var debugEditorModified: Bool {
+            editor.buffer.modified
+        }
 
-    var debugDisplayedNoteTitles: [String] {
-        displayedNotes.map(\.title)
-    }
+        var debugHeaderSubtitle: String {
+            headerTitle.subtitle
+        }
 
-    var debugSearchQuery: String {
-        sidebar.searchEntry.text
-    }
+        var debugWindowIconName: String? {
+            window.iconName
+        }
 
-    var debugDisplayedNoteStableIDs: [String] {
-        displayedNotes.map(\.stableID)
-    }
+        var debugEditorText: String {
+            editor.buffer.text
+        }
 
-    func debugSelectDisplayedNote(at index: Int) {
-        selectNote(at: index)
-    }
+        var debugEditorSelectionRange: Range<Int> {
+            editor.selectedRange()
+        }
 
-    func debugRequestSelectDisplayedNote(at index: Int) {
-        requestSelectNote(at: index)
-    }
+        var debugPreviewText: String {
+            flushPendingPreviewRefresh()
+            return preview.plainText
+        }
 
-    func debugOpenContextMenuForDisplayedNote(at index: Int) {
-        guard displayedNotes.indices.contains(index) else { return }
-        let note = displayedNotes[index]
-        state.select(noteID: note.id)
-        renderSelection()
-        noteContextDeferredAction = nil
-        dismissNoteContextMenu()
+        var debugDisplayedNotesCount: Int {
+            displayedNotes.count
+        }
 
-        let popover = Popover()
-        popover.hasArrow = true
-        popover.position = .bottom
-        popover.autohide = true
-        popover.child = makeNoteContextPopoverContent()
-        noteContextMenu = popover
-    }
+        var debugDisplayedNoteTitles: [String] {
+            displayedNotes.map(\.title)
+        }
 
-    func debugDismissContextMenu() {
-        dismissNoteContextMenu()
-    }
+        var debugSearchQuery: String {
+            sidebar.searchEntry.text
+        }
 
-    var debugHasContextMenu: Bool {
-        noteContextMenu != nil
-    }
+        var debugDisplayedNoteStableIDs: [String] {
+            displayedNotes.map(\.stableID)
+        }
 
-    var debugOverflowMenuSectionTitles: [String] {
-        overflowMenuSectionTitles
-    }
+        func debugSelectDisplayedNote(at index: Int) {
+            selectNote(at: index)
+        }
 
-    var debugOverflowMenuItemsBySection: [String: [String]] {
-        overflowMenuItemsBySection
-    }
+        func debugRequestSelectDisplayedNote(at index: Int) {
+            requestSelectNote(at: index)
+        }
 
-    var debugToolbarTooltips: [String: String?] {
-        [
-            "sidebar": sidebarToggle.tooltipText,
-            "new": newNoteButton.tooltipText,
-            "save": saveNoteButton.tooltipText,
-            "delete": deleteNoteButton.tooltipText,
-            "editorMode": editorModeToggle.tooltipText,
-            "splitMode": splitModeToggle.tooltipText,
-            "previewMode": previewModeToggle.tooltipText,
-            "formatHeading": editorFormattingButtons[.heading]?.tooltipText,
-            "formatBold": editorFormattingButtons[.bold]?.tooltipText,
-            "formatItalic": editorFormattingButtons[.italic]?.tooltipText,
-            "formatCode": editorFormattingButtons[.code]?.tooltipText,
-            "formatLink": editorFormattingButtons[.link]?.tooltipText,
-            "formatQuote": editorFormattingButtons[.quote]?.tooltipText,
-            "formatBullet": editorFormattingButtons[.bulletList]?.tooltipText,
-            "formatNumbered": editorFormattingButtons[.numberedList]?.tooltipText,
-            "formatTask": editorFormattingButtons[.taskList]?.tooltipText,
-            "menu": menuButton.tooltipText
-        ]
-    }
+        func debugOpenContextMenuForDisplayedNote(at index: Int) {
+            guard displayedNotes.indices.contains(index) else { return }
+            let note = displayedNotes[index]
+            state.select(noteID: note.id)
+            renderSelection()
+            noteContextDeferredAction = nil
+            dismissNoteContextMenu()
 
-    struct DebugEditorFormattingToolbarSnapshot: Equatable {
-        let isCompact: Bool
-        let usesTwoRows: Bool
-        let labelsByAction: [MarkdownFormattingAction: String?]
-    }
+            let popover = Popover()
+            popover.hasArrow = true
+            popover.position = .bottom
+            popover.autohide = true
+            popover.child = makeNoteContextPopoverContent()
+            noteContextMenu = popover
+        }
 
-    var debugEditorFormattingToolbarSnapshot: DebugEditorFormattingToolbarSnapshot {
-        .init(
-            isCompact: isEditorFormattingToolbarCompact,
-            usesTwoRows: isEditorFormattingToolbarUsingTwoRows,
-            labelsByAction: editorFormattingToolbarLabels()
-        )
-    }
+        func debugDismissContextMenu() {
+            dismissNoteContextMenu()
+        }
 
-    func debugSetEditorFormattingToolbarWidth(_ width: Int) {
-        updateEditorFormattingToolbarLayout(forWidth: width)
-    }
+        var debugHasContextMenu: Bool {
+            noteContextMenu != nil
+        }
 
-    var debugNoteContextMenuLabels: [String] {
-        noteContextMenuLabels
-    }
+        var debugOverflowMenuSectionTitles: [String] {
+            overflowMenuSectionTitles
+        }
 
-    var debugSortMode: NotesSortMode {
-        state.sortMode
-    }
+        var debugOverflowMenuItemsBySection: [String: [String]] {
+            overflowMenuItemsBySection
+        }
 
-    var debugSidebarVisible: Bool {
-        splitView.showSidebar
-    }
+        var debugToolbarTooltips: [String: String?] {
+            [
+                "sidebar": sidebarToggle.tooltipText,
+                "new": newNoteButton.tooltipText,
+                "save": saveNoteButton.tooltipText,
+                "delete": deleteNoteButton.tooltipText,
+                "editorMode": editorModeToggle.tooltipText,
+                "splitMode": splitModeToggle.tooltipText,
+                "previewMode": previewModeToggle.tooltipText,
+                "formatHeading": editorFormattingButtons[.heading]?.tooltipText,
+                "formatBold": editorFormattingButtons[.bold]?.tooltipText,
+                "formatItalic": editorFormattingButtons[.italic]?.tooltipText,
+                "formatCode": editorFormattingButtons[.code]?.tooltipText,
+                "formatLink": editorFormattingButtons[.link]?.tooltipText,
+                "formatQuote": editorFormattingButtons[.quote]?.tooltipText,
+                "formatBullet": editorFormattingButtons[.bulletList]?.tooltipText,
+                "formatNumbered": editorFormattingButtons[.numberedList]?.tooltipText,
+                "formatTask": editorFormattingButtons[.taskList]?.tooltipText,
+                "menu": menuButton.tooltipText,
+            ]
+        }
 
-    var debugSidebarSortSelection: Int {
-        sidebar.selectedSortIndex
-    }
+        struct DebugEditorFormattingToolbarSnapshot: Equatable {
+            let isCompact: Bool
+            let usesTwoRows: Bool
+            let labelsByAction: [MarkdownFormattingAction: String?]
+        }
 
-    func debugSelectSidebarSort(at index: Int) {
-        guard NotesSortMode.allCases.indices.contains(index) else { return }
-        setSortMode(NotesSortMode.allCases[index])
-    }
-
-    @discardableResult
-    func debugInvokeContextMenuAction(label: String) -> Bool {
-        guard let handler = noteContextHandlers[label] else { return false }
-        dismissNoteContextMenu()
-        handler()
-        return true
-    }
-
-    func debugSelectedNoteStableID() -> String? {
-        state.selectedNote?.stableID
-    }
-
-    var debugLastCopiedNoteID: String? {
-        lastCopiedNoteID
-    }
-
-    func debugPollForExternalChanges() {
-        pollForExternalChanges()
-    }
-
-    func debugActivateOpenNotesFolderAction() {
-        openNotesFolderAction.activate()
-    }
-
-    func debugOpenNotesFolder() {
-        do {
-            let folderURL = try ensureNotesDirectoryExists()
-            try directoryOpener(folderURL)
-        } catch {
-            presentError(
-                heading: "Could not open notes folder",
-                body: error.localizedDescription
+        var debugEditorFormattingToolbarSnapshot: DebugEditorFormattingToolbarSnapshot {
+            .init(
+                isCompact: isEditorFormattingToolbarCompact,
+                usesTwoRows: isEditorFormattingToolbarUsingTwoRows,
+                labelsByAction: editorFormattingToolbarLabels(),
             )
         }
-    }
 
-    func debugActivateAboutAction() {
-        aboutAction.activate()
-    }
+        func debugSetEditorFormattingToolbarWidth(_ width: Int) {
+            updateEditorFormattingToolbarLayout(forWidth: width)
+        }
 
-    func debugActivateSettingsAction() {
-        settingsAction.activate()
-    }
+        /// The pixel width at which the formatting toolbar will flip between
+        /// its full-label and compact-icon layouts for the current widget
+        /// tree. Exposes the dynamic threshold (measured natural width of the
+        /// toolbar in full-label mode + padding allowance) so tests don't
+        /// have to duplicate the measurement logic.
+        var debugEditorFormattingToolbarCompactThreshold: Int {
+            // Accessing this forces the natural-width cache to populate if
+            // the widget tree has been laid out at least once.
+            ensureDebugFormattingToolbarNaturalWidthCached()
+            let measured = editorFormattingNonCompactNaturalWidth
+            if measured > 0 {
+                return measured + 24
+            }
+            return Self.editorFormattingCompactWidthThreshold
+        }
 
-    func debugChangeNotesDirectory(to directory: URL) throws {
-        _ = try changeNotesDirectory(to: directory)
-    }
+        private func ensureDebugFormattingToolbarNaturalWidthCached() {
+            guard editorFormattingNonCompactNaturalWidth == 0 else { return }
+            // Running a dry-run measurement via the same path production
+            // uses. If the widget isn't realized this is a no-op and the
+            // cache stays at zero.
+            let measured = editorFormattingBar.measure(orientation: .horizontal).natural
+            if measured > 0 {
+                editorFormattingNonCompactNaturalWidth = measured
+            }
+        }
 
-    func debugUpdateAppSettings(_ settings: AppSettings) throws {
-        _ = try updateAppSettings(settings)
-    }
+        var debugNoteContextMenuLabels: [String] {
+            noteContextMenuLabels
+        }
 
-    var debugHasAboutDialog: Bool {
-        activeAboutDialog != nil
-    }
+        var debugSortMode: NotesSortMode {
+            state.sortMode
+        }
 
-    var debugHasSettingsWindow: Bool {
-        activeSettingsWindow != nil
-    }
+        var debugSidebarVisible: Bool {
+            splitView.showSidebar
+        }
 
-    var debugSettingsWindowNotesDirectoryPath: String? {
-        activeSettingsWindow?.displayedNotesDirectoryPath
-    }
+        var debugSidebarSortSelection: Int {
+            sidebar.selectedSortIndex
+        }
 
-    var debugSettingsWindowSnapshot: SettingsWindow.Snapshot? {
-        activeSettingsWindow?.snapshot
-    }
+        func debugSelectSidebarSort(at index: Int) {
+            guard NotesSortMode.allCases.indices.contains(index) else { return }
+            setSortMode(NotesSortMode.allCases[index])
+        }
 
-    var debugSettingsWindowDefaultHeight: Int? {
-        activeSettingsWindow?.debugDefaultHeight
-    }
+        @discardableResult
+        func debugInvokeContextMenuAction(label: String) -> Bool {
+            guard let handler = noteContextHandlers[label] else { return false }
+            dismissNoteContextMenu()
+            handler()
+            return true
+        }
 
-    var debugEditorWrapsLines: Bool {
-        editor.view.wrapMode != .none
-    }
+        func debugSelectedNoteStableID() -> String? {
+            state.selectedNote?.stableID
+        }
 
-    var debugEditorFontSize: Int {
-        editor.currentFontSize
-    }
+        var debugLastCopiedNoteID: String? {
+            lastCopiedNoteID
+        }
 
-    var debugEditorTabWidth: Int {
-        editor.view.tabWidth
-    }
+        func debugPollForExternalChanges() {
+            pollForExternalChanges()
+        }
 
-    var debugEditorInsertsSpacesInsteadOfTabs: Bool {
-        editor.view.insertSpacesInsteadOfTabs
-    }
+        func debugActivateOpenNotesFolderAction() {
+            openNotesFolderAction.activate()
+        }
 
-    var debugAutosaveDelaySeconds: Int {
-        appSettings.autosaveDelaySeconds
-    }
+        func debugOpenNotesFolder() {
+            do {
+                let folderURL = try ensureNotesDirectoryExists()
+                try directoryOpener(folderURL)
+            } catch {
+                presentError(
+                    heading: "Could not open notes folder",
+                    body: error.localizedDescription,
+                )
+            }
+        }
 
-    var debugAppearanceMode: AppearanceMode {
-        appSettings.appearanceMode
-    }
+        func debugActivateAboutAction() {
+            aboutAction.activate()
+        }
 
-    func debugSettingsSetWrapLines(_ value: Bool) {
-        activeSettingsWindow?.debugSetWrapLines(value)
-    }
+        func debugActivateSettingsAction() {
+            settingsAction.activate()
+        }
 
-    func debugSettingsSetFontSize(_ value: Int) {
-        activeSettingsWindow?.debugSetFontSize(value)
-    }
+        func debugChangeNotesDirectory(to directory: URL) throws {
+            _ = try changeNotesDirectory(to: directory)
+        }
 
-    func debugSettingsSetTabWidth(_ value: Int) {
-        activeSettingsWindow?.debugSetTabWidth(value)
-    }
+        func debugUpdateAppSettings(_ settings: AppSettings) throws {
+            _ = try updateAppSettings(settings)
+        }
 
-    func debugSettingsSetIndentStyle(_ value: EditorIndentStyle) {
-        activeSettingsWindow?.debugSetIndentStyle(value)
-    }
+        var debugHasAboutDialog: Bool {
+            activeAboutDialog != nil
+        }
 
-    func debugSettingsSetAutosaveDelaySeconds(_ value: Int) {
-        activeSettingsWindow?.debugSetAutosaveDelaySeconds(value)
-    }
+        var debugHasSettingsWindow: Bool {
+            activeSettingsWindow != nil
+        }
 
-    func debugSettingsSetAppearanceMode(_ value: AppearanceMode) {
-        activeSettingsWindow?.debugSetAppearanceMode(value)
-    }
+        var debugSettingsWindowNotesDirectoryPath: String? {
+            activeSettingsWindow?.displayedNotesDirectoryPath
+        }
 
-    struct DebugAboutDialogSnapshot: Equatable {
-        let applicationName: String
-        let version: String
-        let developerName: String
-        let copyright: String
-        let website: String
-        let issueURL: String
-        let comments: String
-    }
+        var debugSettingsWindowSnapshot: SettingsWindow.Snapshot? {
+            activeSettingsWindow?.snapshot
+        }
 
-    var debugAboutDialogSnapshot: DebugAboutDialogSnapshot? {
-        guard let activeAboutDialog else { return nil }
-        return .init(
-            applicationName: activeAboutDialog.applicationName,
-            version: activeAboutDialog.version,
-            developerName: activeAboutDialog.developerName,
-            copyright: activeAboutDialog.copyright,
-            website: activeAboutDialog.website,
-            issueURL: activeAboutDialog.issueUrl,
-            comments: activeAboutDialog.comments
-        )
-    }
+        var debugSettingsWindowDefaultHeight: Int? {
+            activeSettingsWindow?.debugDefaultHeight
+        }
 
-    func debugCloseAboutDialog() {
-        guard let activeAboutDialog else { return }
-        self.activeAboutDialog = nil
-        _ = activeAboutDialog.close()
-    }
+        var debugEditorWrapsLines: Bool {
+            editor.view.wrapMode != .none
+        }
 
-    var debugPreferredPreviewWidth: Int {
-        state.preferredPreviewWidth
-    }
+        var debugEditorFontSize: Int {
+            editor.currentFontSize
+        }
 
-    var debugIsPreviewPaneAttached: Bool {
-        isPreviewPaneAttached
-    }
+        var debugEditorTabWidth: Int {
+            editor.view.tabWidth
+        }
 
-    var debugViewMode: EditorViewMode {
-        state.viewMode
+        var debugEditorInsertsSpacesInsteadOfTabs: Bool {
+            editor.view.insertSpacesInsteadOfTabs
+        }
+
+        var debugAutosaveDelaySeconds: Int {
+            appSettings.autosaveDelaySeconds
+        }
+
+        var debugAppearanceMode: AppearanceMode {
+            appSettings.appearanceMode
+        }
+
+        func debugSettingsSetWrapLines(_ value: Bool) {
+            activeSettingsWindow?.debugSetWrapLines(value)
+        }
+
+        func debugSettingsSetFontSize(_ value: Int) {
+            activeSettingsWindow?.debugSetFontSize(value)
+        }
+
+        func debugSettingsSetTabWidth(_ value: Int) {
+            activeSettingsWindow?.debugSetTabWidth(value)
+        }
+
+        func debugSettingsSetIndentStyle(_ value: EditorIndentStyle) {
+            activeSettingsWindow?.debugSetIndentStyle(value)
+        }
+
+        func debugSettingsSetAutosaveDelaySeconds(_ value: Int) {
+            activeSettingsWindow?.debugSetAutosaveDelaySeconds(value)
+        }
+
+        func debugSettingsSetAppearanceMode(_ value: AppearanceMode) {
+            activeSettingsWindow?.debugSetAppearanceMode(value)
+        }
+
+        struct DebugAboutDialogSnapshot: Equatable {
+            let applicationName: String
+            let version: String
+            let developerName: String
+            let copyright: String
+            let website: String
+            let issueURL: String
+            let comments: String
+        }
+
+        var debugAboutDialogSnapshot: DebugAboutDialogSnapshot? {
+            guard let activeAboutDialog else { return nil }
+            return .init(
+                applicationName: activeAboutDialog.applicationName,
+                version: activeAboutDialog.version,
+                developerName: activeAboutDialog.developerName,
+                copyright: activeAboutDialog.copyright,
+                website: activeAboutDialog.website,
+                issueURL: activeAboutDialog.issueUrl,
+                comments: activeAboutDialog.comments,
+            )
+        }
+
+        func debugCloseAboutDialog() {
+            guard let activeAboutDialog else { return }
+            self.activeAboutDialog = nil
+            _ = activeAboutDialog.close()
+        }
+
+        var debugPreferredPreviewWidth: Int {
+            state.preferredPreviewWidth
+        }
+
+        var debugIsPreviewPaneAttached: Bool {
+            isPreviewPaneAttached
+        }
+
+        var debugViewMode: EditorViewMode {
+            state.viewMode
+        }
     }
-}
 #endif
