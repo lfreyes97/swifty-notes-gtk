@@ -412,7 +412,7 @@ extension MainWindow {
         } catch {
             presentError(
                 heading: "Could not open notes folder",
-                body: error.localizedDescription,
+                body: NotesDirectoryErrorMessage.userFriendly(for: error),
             )
         }
     }

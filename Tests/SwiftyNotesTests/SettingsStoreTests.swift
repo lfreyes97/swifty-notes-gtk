@@ -145,4 +145,94 @@ struct SettingsStoreTests {
             #expect(error.localizedDescription.contains("empty"))
         }
     }
+
+    @Test
+    func `notes directory relocator rolls partial moves back when a later move fails`() throws {
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let source = temp.appendingPathComponent("source-notes", isDirectory: true)
+        let destination = temp.appendingPathComponent("destination-notes", isDirectory: true)
+        try FileManager.default.createDirectory(at: source, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+        for filename in ["a.md", "b.md", "c.md"] {
+            try "# \(filename)\n".write(
+                to: source.appendingPathComponent(filename, isDirectory: false),
+                atomically: true,
+                encoding: .utf8,
+            )
+        }
+
+        do {
+            try NotesDirectoryRelocator.relocateInternal(from: source, to: destination, debugFailMoveAtIndex: 1)
+            Issue.record("Expected relocation to surface the simulated move failure")
+        } catch {
+            // Surface error is expected; we now want full rollback.
+        }
+
+        let restoredSourceContents = try FileManager.default.contentsOfDirectory(at: source, includingPropertiesForKeys: nil).map(\.lastPathComponent).sorted()
+        let destinationContents = try FileManager.default.contentsOfDirectory(at: destination, includingPropertiesForKeys: nil).map(\.lastPathComponent).sorted()
+        #expect(restoredSourceContents == ["a.md", "b.md", "c.md"])
+        #expect(destinationContents == [])
+    }
+
+    @Test
+    func `notes directory error message rewrites cocoa file write codes into user-friendly text`() {
+        let permissionError = NSError(domain: NSCocoaErrorDomain, code: 512)
+        let writeNoPermissionError = NSError(domain: NSCocoaErrorDomain, code: 513)
+        let readNoPermissionError = NSError(domain: NSCocoaErrorDomain, code: 257)
+
+        let permissionText = NotesDirectoryErrorMessage.userFriendly(for: permissionError)
+        let writeNoPermissionText = NotesDirectoryErrorMessage.userFriendly(for: writeNoPermissionError)
+        let readNoPermissionText = NotesDirectoryErrorMessage.userFriendly(for: readNoPermissionError)
+
+        #expect(permissionText.contains("permission"))
+        #expect(writeNoPermissionText.contains("permission"))
+        #expect(readNoPermissionText.contains("permission"))
+        #expect(!permissionText.contains("NSCocoaErrorDomain"))
+        #expect(!permissionText.contains("512"))
+    }
+
+    @Test
+    func `notes directory error message keeps disk-full and read-only and relocation messages distinct`() {
+        let diskFullError = NSError(domain: NSCocoaErrorDomain, code: 640)
+        let readOnlyVolumeError = NSError(domain: NSCocoaErrorDomain, code: 642)
+        let relocationError = NotesDirectoryRelocator.RelocationError(message: "Choose an empty destination folder for your notes.")
+
+        #expect(NotesDirectoryErrorMessage.userFriendly(for: diskFullError).contains("disk space"))
+        #expect(NotesDirectoryErrorMessage.userFriendly(for: readOnlyVolumeError).lowercased().contains("read-only"))
+        #expect(NotesDirectoryErrorMessage.userFriendly(for: relocationError) == "Choose an empty destination folder for your notes.")
+    }
+
+    @Test
+    func `notes directory relocator removes the destination it created when rollback runs`() throws {
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let source = temp.appendingPathComponent("source-notes", isDirectory: true)
+        let destination = temp.appendingPathComponent("destination-notes", isDirectory: true)
+        try FileManager.default.createDirectory(at: source, withIntermediateDirectories: true)
+        try "# a\n".write(
+            to: source.appendingPathComponent("a.md", isDirectory: false),
+            atomically: true,
+            encoding: .utf8,
+        )
+        try "# b\n".write(
+            to: source.appendingPathComponent("b.md", isDirectory: false),
+            atomically: true,
+            encoding: .utf8,
+        )
+
+        do {
+            try NotesDirectoryRelocator.relocateInternal(from: source, to: destination, debugFailMoveAtIndex: 1)
+            Issue.record("Expected relocation to surface the simulated move failure")
+        } catch {
+            // Expected.
+        }
+
+        #expect(FileManager.default.fileExists(atPath: source.path()))
+        #expect(!FileManager.default.fileExists(atPath: destination.path()))
+        let restoredSourceContents = try FileManager.default.contentsOfDirectory(at: source, includingPropertiesForKeys: nil).map(\.lastPathComponent).sorted()
+        #expect(restoredSourceContents == ["a.md", "b.md"])
+    }
 }

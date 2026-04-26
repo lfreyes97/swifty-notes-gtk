@@ -240,7 +240,7 @@ final class SettingsWindow {
         } catch {
             presentError(
                 heading: "Could not change the notes folder",
-                body: error.localizedDescription,
+                body: NotesDirectoryErrorMessage.userFriendly(for: error),
             )
         }
     }
@@ -251,7 +251,7 @@ final class SettingsWindow {
         } catch {
             presentError(
                 heading: "Could not open notes folder",
-                body: error.localizedDescription,
+                body: NotesDirectoryErrorMessage.userFriendly(for: error),
             )
         }
     }
