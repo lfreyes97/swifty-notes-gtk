@@ -1,4 +1,4 @@
-name: swiftynotes
+name: swifty-notes
 title: Swifty Notes
 base: core24
 version: "1.1.2"
@@ -24,23 +24,23 @@ platforms:
   arm64:
 
 apps:
-  swiftynotes:
+  swifty-notes:
     command: usr/bin/swiftynotes
     common-id: me.spaceinbox.swiftynotes
     desktop: usr/share/applications/me.spaceinbox.swiftynotes.desktop
     extensions:
       - gnome
     slots:
-      - dbus-swiftynotes
+      - dbus-swifty-notes
 
 slots:
-  dbus-swiftynotes:
+  dbus-swifty-notes:
     interface: dbus
     bus: session
     name: me.spaceinbox.swiftynotes
 
 parts:
-  swiftynotes:
+  swifty-notes:
     plugin: nil
     source: .
     build-packages:
