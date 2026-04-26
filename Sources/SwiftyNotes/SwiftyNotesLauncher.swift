@@ -172,11 +172,12 @@ public enum SwiftyNotesLauncher {
             exit(cliResult.exitCode)
         }
 
-        let applicationID = ProcessInfo.processInfo.environment["SWIFTY_NOTES_APP_ID"]?
+        let environment = ProcessInfo.processInfo.environment
+        let applicationID = environment["SWIFTY_NOTES_APP_ID"]?
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let app = Application(
             id: (applicationID?.isEmpty == false) ? applicationID! : AppIdentity.identifier,
-            flags: .handlesOpen,
+            flags: resolveApplicationFlags(env: environment),
         )
         let appController = AppController()
 
@@ -190,6 +191,22 @@ public enum SwiftyNotesLauncher {
         let processArguments = [CommandLine.arguments.first ?? "swiftynotes"] + arguments
         app.run(arguments: processArguments)
         exit(0)
+    }
+
+    /// Picks the `ApplicationFlags` to start the app with based on the
+    /// process environment. Strict-confined Snap installs can't own the
+    /// app's D-Bus name on the session bus without a Snap Store
+    /// snap-declaration assertion, so under `SNAP` we fall back to
+    /// `.nonUnique` to let the app launch at all. The tradeoff: a
+    /// second launch starts a second process instead of focusing the
+    /// running one. Flatpak and native installs keep the default
+    /// single-instance behavior.
+    static func resolveApplicationFlags(env: [String: String]) -> ApplicationFlags {
+        var flags: ApplicationFlags = .handlesOpen
+        if env["SNAP"] != nil {
+            flags.insert(.nonUnique)
+        }
+        return flags
     }
 }
 
