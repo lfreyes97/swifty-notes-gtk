@@ -33,8 +33,6 @@ apps:
     plugs:
       - home
       - network
-      - network-bind
-      - removable-media
 
 parts:
   swifty-notes:
