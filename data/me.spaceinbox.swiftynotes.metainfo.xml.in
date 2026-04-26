@@ -63,6 +63,18 @@
   <releases>
     <release version="@VERSION@" date="@DATE@">
       <description>
+        <p>This update fixes a few cross-platform packaging issues and the way Swifty Notes handles your notes folder.</p>
+        <ul>
+          <li>The Snap build now starts cleanly under strict confinement on Ubuntu 26.04 and other recent setups. Previous versions could abort on launch with a D-Bus AppArmor policy error.</li>
+          <li>The Flatpak build can now point its notes folder at any directory under your home, including cloud-synced ones like ~/Sync/Notes or ~/Dropbox/Notes. Note that approving the new permission may require accepting an update in your software centre.</li>
+          <li>Switching the notes folder is now safer: if anything goes wrong mid-move, your notes are restored to the original location instead of being left half-moved.</li>
+          <li>Errors from the "Could not change the notes folder" dialog now show a friendly explanation instead of "(NSCocoaErrorDomain error 512)".</li>
+          <li>The Insert Table button icon now renders in standalone document windows, not just the main library window.</li>
+        </ul>
+      </description>
+    </release>
+    <release version="1.1.2" date="2026-04-24">
+      <description>
         <p>This update focuses on making the Markdown editor and preview more productive day to day.</p>
         <ul>
           <li>Fenced code blocks in the preview now show a quick Copy button, so you can grab a snippet in one click instead of selecting it by hand.</li>

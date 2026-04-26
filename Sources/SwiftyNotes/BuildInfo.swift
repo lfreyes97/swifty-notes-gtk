@@ -1,7 +1,7 @@
 import Foundation
 
 enum BuildInfo {
-    private static let defaultVersion = "1.1.2"
+    private static let defaultVersion = "1.1.3"
 
     static var version: String {
         let rawValue = ProcessInfo.processInfo.environment["SWIFTY_NOTES_VERSION"]?
