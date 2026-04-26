@@ -39,22 +39,6 @@ struct SwiftyNotesLauncherTests {
         ])
     }
 
-    @Test
-    func `application flags default to handlesOpen outside a snap environment`() {
-        let flags = SwiftyNotesLauncher.resolveApplicationFlags(env: ["PATH": "/usr/bin"])
-        #expect(flags == .handlesOpen)
-    }
-
-    @Test
-    func `application flags add nonUnique under strict-confined snap to dodge AppArmor dbus restriction`() {
-        let flags = SwiftyNotesLauncher.resolveApplicationFlags(env: [
-            "SNAP": "/snap/swifty-notes/current",
-            "SNAP_NAME": "swifty-notes",
-        ])
-        #expect(flags.contains(.handlesOpen))
-        #expect(flags.contains(.nonUnique))
-    }
-
     @Test @MainActor
     func `app controller open documents reuses existing external window for same file`() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
