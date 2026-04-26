@@ -30,6 +30,14 @@ apps:
     desktop: usr/share/applications/me.spaceinbox.swiftynotes.desktop
     extensions:
       - gnome
+    slots:
+      - dbus-swiftynotes
+
+slots:
+  dbus-swiftynotes:
+    interface: dbus
+    bus: session
+    name: me.spaceinbox.swiftynotes
 
 parts:
   swiftynotes:
