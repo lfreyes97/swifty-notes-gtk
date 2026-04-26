@@ -39,6 +39,60 @@ struct SwiftyNotesLauncherTests {
         ])
     }
 
+    @Test
+    func `application id falls back to AppIdentity outside snap and explicit override`() {
+        let resolved = SwiftyNotesLauncher.resolveApplicationID(
+            override: nil,
+            env: ["PATH": "/usr/bin"],
+        )
+        #expect(resolved == AppIdentity.identifier)
+    }
+
+    @Test
+    func `application id honors SWIFTY_NOTES_APP_ID override regardless of snap environment`() {
+        let resolved = SwiftyNotesLauncher.resolveApplicationID(
+            override: "me.example.custom",
+            env: [
+                "SNAP_INSTANCE_NAME": "swifty-notes",
+                "SNAP_NAME": "swifty-notes",
+            ],
+        )
+        #expect(resolved == "me.example.custom")
+    }
+
+    @Test
+    func `application id under strict snap is prefixed with snap instance name to satisfy AppArmor binding`() {
+        let resolved = SwiftyNotesLauncher.resolveApplicationID(
+            override: nil,
+            env: [
+                "SNAP_INSTANCE_NAME": "swifty-notes",
+                "SNAP_NAME": "swifty-notes",
+            ],
+        )
+        #expect(resolved == "swifty-notes_\(AppIdentity.identifier)")
+    }
+
+    @Test
+    func `application id under snap prefers SNAP_INSTANCE_NAME over SNAP_NAME for parallel installs`() {
+        let resolved = SwiftyNotesLauncher.resolveApplicationID(
+            override: nil,
+            env: [
+                "SNAP_INSTANCE_NAME": "swifty-notes_test",
+                "SNAP_NAME": "swifty-notes",
+            ],
+        )
+        #expect(resolved == "swifty-notes_test_\(AppIdentity.identifier)")
+    }
+
+    @Test
+    func `application id ignores empty whitespace override and falls back to default behavior`() {
+        let resolved = SwiftyNotesLauncher.resolveApplicationID(
+            override: "   ",
+            env: ["SNAP_NAME": "swifty-notes"],
+        )
+        #expect(resolved == "swifty-notes_\(AppIdentity.identifier)")
+    }
+
     @Test @MainActor
     func `app controller open documents reuses existing external window for same file`() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)

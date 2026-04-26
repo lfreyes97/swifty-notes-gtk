@@ -172,10 +172,12 @@ public enum SwiftyNotesLauncher {
             exit(cliResult.exitCode)
         }
 
-        let applicationID = ProcessInfo.processInfo.environment["SWIFTY_NOTES_APP_ID"]?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let environment = ProcessInfo.processInfo.environment
         let app = Application(
-            id: (applicationID?.isEmpty == false) ? applicationID! : AppIdentity.identifier,
+            id: resolveApplicationID(
+                override: environment["SWIFTY_NOTES_APP_ID"],
+                env: environment,
+            ),
             flags: .handlesOpen,
         )
         let appController = AppController()
@@ -190,6 +192,36 @@ public enum SwiftyNotesLauncher {
         let processArguments = [CommandLine.arguments.first ?? "swiftynotes"] + arguments
         app.run(arguments: processArguments)
         exit(0)
+    }
+
+    /// Resolves the GApplication identifier to register on the session bus.
+    ///
+    /// Priority:
+    /// 1. An explicit ``SWIFTY_NOTES_APP_ID`` override (handy for dev /
+    ///    parallel installs where you want to side-step the canonical id).
+    /// 2. Inside a strict-confined Snap, prefix the canonical id with the
+    ///    snap instance name and an underscore — e.g. on the
+    ///    ``swifty-notes`` snap the registered id becomes
+    ///    ``swifty-notes_me.spaceinbox.swiftynotes``. The default snapd
+    ///    AppArmor template only allows ``dbus (bind)`` for names that
+    ///    start with ``@{SNAP_INSTANCE_NAME}_`` (or match it exactly), so
+    ///    keeping the canonical reverse-DNS id would surface as
+    ///    ``AccessDenied: not allowed to own the service`` and abort
+    ///    ``g_application_register()``. Same trick the Actioneer snap uses.
+    /// 3. Otherwise (Flatpak, native, dev) fall back to the canonical id.
+    static func resolveApplicationID(override: String?, env: [String: String]) -> String {
+        if let override = override?.trimmingCharacters(in: .whitespacesAndNewlines), !override.isEmpty {
+            return override
+        }
+        if let snapInstanceName = env["SNAP_INSTANCE_NAME"]?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !snapInstanceName.isEmpty {
+            return "\(snapInstanceName)_\(AppIdentity.identifier)"
+        }
+        if let snapName = env["SNAP_NAME"]?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !snapName.isEmpty {
+            return "\(snapName)_\(AppIdentity.identifier)"
+        }
+        return AppIdentity.identifier
     }
 }
 
