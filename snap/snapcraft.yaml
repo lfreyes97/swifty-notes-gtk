@@ -30,6 +30,11 @@ apps:
     desktop: usr/share/applications/me.spaceinbox.swiftynotes.desktop
     extensions:
       - gnome
+    plugs:
+      - home
+      - network
+      - network-bind
+      - removable-media
 
 parts:
   swifty-notes:
