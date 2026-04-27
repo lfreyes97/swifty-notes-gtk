@@ -91,6 +91,66 @@ struct CLITests {
     }
 
     @Test
+    func `cli create with folder auto creates the folder and places the note there`() throws {
+        let temp = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: temp) }
+        try FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
+        let notesDirectory = temp.appendingPathComponent("notes", isDirectory: true)
+
+        let result = NotesCLI.runIfRequested(
+            arguments: [
+                "cli", "create",
+                "--notes-dir", notesDirectory.path(),
+                "--folder", "Work/Projects",
+                "--content", "# Hi",
+            ],
+        )
+        #expect(result?.exitCode == 0)
+        let document = try decodeDocument(from: result?.stdout ?? "")
+        #expect(document.folder == "Work/Projects")
+
+        let foldersResult = NotesCLI.runIfRequested(
+            arguments: ["cli", "folders", "--notes-dir", notesDirectory.path()],
+        )
+        #expect(foldersResult?.exitCode == 0)
+        let folders = try cliJSONDecoder().decode([String].self, from: Data((foldersResult?.stdout ?? "").utf8))
+        #expect(folders.contains("Work"))
+        #expect(folders.contains("Work/Projects"))
+    }
+
+    @Test
+    func `cli list with folder scopes results to that folder and its descendants`() throws {
+        let temp = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: temp) }
+        try FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
+        let notesDirectory = temp.appendingPathComponent("notes", isDirectory: true)
+
+        _ = NotesCLI.runIfRequested(arguments: [
+            "cli", "create", "--notes-dir", notesDirectory.path(), "--content", "root",
+        ])
+        _ = NotesCLI.runIfRequested(arguments: [
+            "cli", "create", "--notes-dir", notesDirectory.path(),
+            "--folder", "Work", "--content", "work",
+        ])
+        _ = NotesCLI.runIfRequested(arguments: [
+            "cli", "create", "--notes-dir", notesDirectory.path(),
+            "--folder", "Work/Drafts", "--content", "draft",
+        ])
+        _ = NotesCLI.runIfRequested(arguments: [
+            "cli", "create", "--notes-dir", notesDirectory.path(),
+            "--folder", "Personal", "--content", "personal",
+        ])
+
+        let scoped = NotesCLI.runIfRequested(arguments: [
+            "cli", "list", "--notes-dir", notesDirectory.path(), "--folder", "Work",
+        ])
+        #expect(scoped?.exitCode == 0)
+        let summaries = try decodeSummaries(from: scoped?.stdout ?? "")
+        #expect(summaries.count == 2)
+        #expect(Set(summaries.map(\.folder)) == Set(["Work", "Work/Drafts"]))
+    }
+
+    @Test
     func `cli executable round trips notes across processes`() throws {
         let temp = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: temp) }
@@ -309,6 +369,7 @@ private struct CLIFileTestSummary: Decodable {
     let id: String
     let title: String
     let filename: String
+    let folder: String
     let createdAt: Date
     let updatedAt: Date
 }
@@ -317,6 +378,7 @@ private struct CLIFileTestDocument: Decodable {
     let id: String
     let title: String
     let filename: String
+    let folder: String
     let createdAt: Date
     let updatedAt: Date
     let content: String

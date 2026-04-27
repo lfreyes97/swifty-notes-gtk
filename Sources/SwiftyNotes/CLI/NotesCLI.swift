@@ -12,6 +12,7 @@ private enum CLIHelpTopic {
     case get
     case create
     case update
+    case folders
 }
 
 enum NotesCLI {
@@ -37,20 +38,31 @@ enum NotesCLI {
             switch parsed.command {
             case let .help(topic):
                 output = help(for: topic)
-            case .list:
+            case let .list(folderScope):
                 let notes = try repository.loadNotes()
-                output = try encodeJSON(notes.map(CLINoteSummary.init))
+                let filtered = filterNotesByFolder(notes, scope: folderScope)
+                output = try encodeJSON(filtered.map(CLINoteSummary.init))
             case let .get(noteID, raw):
                 let note = try loadNote(id: noteID, repository: repository)
                 output = raw ? note.content : try encodeJSON(CLINoteDocument(note: note))
-            case let .create(content):
-                let note = try repository.createNote(initialContent: content)
+            case let .create(content, folderPath):
+                let normalizedFolder = NotesRepository.trimmedFolderPath(folderPath)
+                if !normalizedFolder.isEmpty {
+                    try ensureFolderExists(normalizedFolder, repository: repository)
+                }
+                let note = try repository.createNote(
+                    initialContent: content,
+                    in: normalizedFolder,
+                )
                 output = try encodeJSON(CLINoteDocument(note: note))
             case let .update(noteID, content):
                 var note = try loadNote(id: noteID, repository: repository)
                 note.content = content
                 let saved = try repository.save(note: note)
                 output = try encodeJSON(CLINoteDocument(note: saved))
+            case .folders:
+                let folders = try repository.listFolders()
+                output = try encodeJSON(folders)
             }
 
             return .init(
@@ -71,6 +83,25 @@ enum NotesCLI {
             throw NotesCLIError.notFound("No note found for ID \(id.uuidString.lowercased())")
         }
         return note
+    }
+
+    private static func filterNotesByFolder(_ notes: [Note], scope: String) -> [Note] {
+        let normalized = NotesRepository.trimmedFolderPath(scope)
+        guard !normalized.isEmpty else { return notes }
+        return notes.filter { note in
+            note.folderPath == normalized
+                || note.folderPath.hasPrefix("\(normalized)/")
+        }
+    }
+
+    private static func ensureFolderExists(_ folderPath: String, repository: NotesRepository) throws {
+        let existing = try repository.listFolders()
+        if existing.contains(folderPath) { return }
+        do {
+            try repository.createFolder(at: folderPath)
+        } catch NotesRepositoryFolderError.alreadyExists {
+            // Concurrent creator beat us to it — that's fine, the folder is here now.
+        }
     }
 
     private static func encodeJSON(_ value: some Encodable) throws -> String {
@@ -101,6 +132,7 @@ enum NotesCLI {
               get       Print one note as JSON or raw markdown
               create    Create a new note
               update    Replace a note's markdown content
+              folders   List the folder paths in the vault as JSON
               help      Show general or command-specific help
 
             Global options:
@@ -108,6 +140,7 @@ enum NotesCLI {
 
             Notes:
               - Note IDs are lowercase UUID strings.
+              - Folder paths are slash-separated relative paths (e.g. "Work/Projects").
               - For Flathub installs, run `flatpak run me.spaceinbox.swiftynotes cli ...`.
               - To add a short host command, create `~/.local/bin/swiftynotes` that runs `flatpak run me.spaceinbox.swiftynotes "$@"`.
               - Without --notes-dir, the CLI uses the same storage directory as the GUI.
@@ -116,9 +149,11 @@ enum NotesCLI {
 
             Examples:
               swiftynotes cli list
+              swiftynotes cli list --folder Work
+              swiftynotes cli folders
               swiftynotes cli get 657aa2f6-0f4e-4a9c-944a-76fc94f40554
               swiftynotes cli get 657aa2f6-0f4e-4a9c-944a-76fc94f40554 --raw
-              swiftynotes cli create --content '# Title\n\nBody'
+              swiftynotes cli create --content '# Title\n\nBody' --folder Work/Drafts
               swiftynotes cli update 657aa2f6-0f4e-4a9c-944a-76fc94f40554 --stdin
 
             Run `swiftynotes cli help <command>` for details on a specific command.
@@ -126,19 +161,26 @@ enum NotesCLI {
         case .list:
             """
             Usage:
-              swiftynotes cli list [--notes-dir PATH]
+              swiftynotes cli list [--folder PATH] [--notes-dir PATH]
 
-            List all notes as a JSON array.
+            List notes as a JSON array.
+
+            Options:
+              --folder PATH   Limit results to notes inside the given folder
+                              (the folder itself plus every descendant folder).
 
             Output:
               Each item includes:
               - id
               - title
               - filename
+              - folder        (relative folder path, "" for root)
               - createdAt
               - updatedAt
 
-            Example:
+            Examples:
+              swiftynotes cli list
+              swiftynotes cli list --folder Work
               swiftynotes cli list --notes-dir /path/to/notes
             """
         case .get:
@@ -160,7 +202,7 @@ enum NotesCLI {
         case .create:
             """
             Usage:
-              swiftynotes cli create [--content TEXT | --content-file PATH | --stdin] [--notes-dir PATH]
+              swiftynotes cli create [--content TEXT | --content-file PATH | --stdin] [--folder PATH] [--notes-dir PATH]
 
             Create a new note.
 
@@ -169,6 +211,10 @@ enum NotesCLI {
               --content-file PATH   Read markdown from a file
               --stdin               Read markdown from standard input
 
+            Options:
+              --folder PATH         Place the note inside the given folder, creating
+                                    intermediate folders if they do not exist.
+
             Notes:
               - If no content source is provided, an empty note is created.
               - Output is the created note as JSON.
@@ -176,7 +222,8 @@ enum NotesCLI {
             Examples:
               swiftynotes cli create --content '# Title'
               swiftynotes cli create --content-file ./note.md
-              cat note.md | swiftynotes cli create --stdin
+              swiftynotes cli create --content '# Draft' --folder Work/Drafts
+              cat note.md | swiftynotes cli create --stdin --folder Inbox
             """
         case .update:
             """
@@ -197,6 +244,20 @@ enum NotesCLI {
             Examples:
               swiftynotes cli update 657aa2f6-0f4e-4a9c-944a-76fc94f40554 --content '# Updated'
               cat note.md | swiftynotes cli update 657aa2f6-0f4e-4a9c-944a-76fc94f40554 --stdin
+            """
+        case .folders:
+            """
+            Usage:
+              swiftynotes cli folders [--notes-dir PATH]
+
+            Print every folder path in the vault as a JSON array.
+
+            Output:
+              A sorted JSON array of folder paths relative to the notes directory.
+              Empty folders are included.
+
+            Example:
+              swiftynotes cli folders
             """
         }
     }
@@ -229,10 +290,11 @@ private enum NotesCLIError: Error {
 private struct ParsedInvocation {
     enum Command {
         case help(CLIHelpTopic)
-        case list
+        case list(folderScope: String)
         case get(UUID, raw: Bool)
-        case create(String)
+        case create(String, folderPath: String)
         case update(UUID, String)
+        case folders
     }
 
     let notesDirectory: URL?
@@ -256,10 +318,16 @@ private struct ParsedInvocation {
                 command = .help(.list)
                 return
             }
-            guard args.isEmpty else {
-                throw NotesCLIError.usage("`list` does not accept positional arguments.\n\n\(NotesCLI.help(for: .list))")
+            command = try Self.parseList(args)
+        case "folders":
+            if Self.containsHelpFlag(args) {
+                command = .help(.folders)
+                return
             }
-            command = .list
+            guard args.isEmpty else {
+                throw NotesCLIError.usage("`folders` does not accept positional arguments.\n\n\(NotesCLI.help(for: .folders))")
+            }
+            command = .folders
         case "get":
             if Self.containsHelpFlag(args) {
                 command = .help(.get)
@@ -271,7 +339,8 @@ private struct ParsedInvocation {
                 command = .help(.create)
                 return
             }
-            command = try .create(Self.parseContentSource(args, stdin: stdin, contentRequired: false))
+            let parsed = try Self.parseContentSourceWithFolder(args, stdin: stdin, contentRequired: false)
+            command = .create(parsed.content, folderPath: parsed.folderPath)
         case "update":
             if Self.containsHelpFlag(args) {
                 command = .help(.update)
@@ -299,9 +368,30 @@ private struct ParsedInvocation {
             return .help(.create)
         case "update":
             return .help(.update)
+        case "folders":
+            return .help(.folders)
         default:
             throw NotesCLIError.usage("Unknown command for help: \(topic)\n\n\(NotesCLI.help(for: .general))")
         }
+    }
+
+    private static func parseList(_ arguments: [String]) throws -> Command {
+        var folderScope = ""
+        var index = 0
+        while index < arguments.count {
+            let current = arguments[index]
+            if current == "--folder" {
+                let nextIndex = index + 1
+                guard nextIndex < arguments.count else {
+                    throw NotesCLIError.usage("Missing value for --folder.\n\n\(NotesCLI.help(for: .list))")
+                }
+                folderScope = arguments[nextIndex]
+                index += 2
+                continue
+            }
+            throw NotesCLIError.usage("Unknown option: \(current)\n\n\(NotesCLI.help(for: .list))")
+        }
+        return .list(folderScope: folderScope)
     }
 
     private static func containsHelpFlag(_ arguments: [String]) -> Bool {
@@ -368,6 +458,38 @@ private struct ParsedInvocation {
         }
         let content = try parseContentSource(Array(arguments.dropFirst()), stdin: stdin, contentRequired: true)
         return .update(noteID, content)
+    }
+
+    private struct ContentAndFolder {
+        let content: String
+        let folderPath: String
+    }
+
+    private static func parseContentSourceWithFolder(
+        _ arguments: [String],
+        stdin: Data?,
+        contentRequired: Bool,
+    ) throws -> ContentAndFolder {
+        var folderPath = ""
+        var passthrough: [String] = []
+        var index = 0
+        while index < arguments.count {
+            let current = arguments[index]
+            if current == "--folder" {
+                let nextIndex = index + 1
+                guard nextIndex < arguments.count else {
+                    let topic: CLIHelpTopic = contentRequired ? .update : .create
+                    throw NotesCLIError.usage("Missing value for --folder.\n\n\(NotesCLI.help(for: topic))")
+                }
+                folderPath = arguments[nextIndex]
+                index += 2
+                continue
+            }
+            passthrough.append(current)
+            index += 1
+        }
+        let content = try parseContentSource(passthrough, stdin: stdin, contentRequired: contentRequired)
+        return ContentAndFolder(content: content, folderPath: folderPath)
     }
 
     private static func parseContentSource(
@@ -602,6 +724,7 @@ private struct CLINoteSummary: Codable {
     let id: String
     let title: String
     let filename: String
+    let folder: String
     let createdAt: Date
     let updatedAt: Date
 
@@ -609,6 +732,7 @@ private struct CLINoteSummary: Codable {
         id = note.stableID
         title = note.title
         filename = note.filename
+        folder = note.folderPath
         createdAt = note.createdAt
         updatedAt = note.updatedAt
     }
@@ -618,6 +742,7 @@ private struct CLINoteDocument: Codable {
     let id: String
     let title: String
     let filename: String
+    let folder: String
     let createdAt: Date
     let updatedAt: Date
     let content: String
@@ -626,6 +751,7 @@ private struct CLINoteDocument: Codable {
         id = note.stableID
         title = note.title
         filename = note.filename
+        folder = note.folderPath
         createdAt = note.createdAt
         updatedAt = note.updatedAt
         content = note.content
