@@ -244,6 +244,84 @@ extension MainWindow {
         dialog.present(window)
     }
 
+    func presentMoveNoteDialogForSelectedNote() {
+        guard let note = state.selectedNote else { return }
+        presentMoveNoteDialog(for: note)
+    }
+
+    func presentMoveNoteDialog(for note: Note) {
+        let availableTargets = ["" /* root */] + state.folders.sorted()
+        let targetsExceptCurrent = availableTargets.filter { $0 != note.folderPath }
+        guard !targetsExceptCurrent.isEmpty else {
+            toastOverlay.showToast("No other folders to move into")
+            return
+        }
+
+        let dialog = AlertDialog(
+            heading: "Move note",
+            body: "Choose a destination folder for \"\(note.title)\".",
+        )
+
+        let listBox = ListBox()
+        listBox.selectionMode = .single
+        listBox.addCSSClass(.boxedList)
+        for target in targetsExceptCurrent {
+            let row = ListBoxRow()
+            row.activatable = true
+            let label = Label(target.isEmpty ? "(Root)" : target)
+            label.xalign = 0
+            label.setMargins(8)
+            row.child = label
+            listBox.append(row)
+        }
+        listBox.selectRow(at: 0)
+
+        let scroll = ScrolledWindow(child: listBox)
+        scroll.setPolicy(horizontal: .never, vertical: .automatic)
+        scroll.minContentHeight = 220
+        scroll.hexpand = true
+        scroll.vexpand = false
+
+        dialog.extraChild = scroll
+        dialog.addResponse("cancel", label: "Cancel")
+        dialog.addResponse("move", label: "Move")
+        dialog.defaultResponse = "move"
+        dialog.closeResponse = "cancel"
+        dialog.setResponseAppearance("move", appearance: .suggested)
+        dialog.onResponse { [weak self] response in
+            guard let self, response == "move" else { return }
+            guard let selectedRow = listBox.selectedRow else { return }
+            let selectedIndex = Int(selectedRow.index)
+            guard targetsExceptCurrent.indices.contains(selectedIndex) else { return }
+            moveNote(note, to: targetsExceptCurrent[selectedIndex])
+        }
+        dialog.present(window)
+    }
+
+    func moveNote(_ note: Note, to folderPath: String) {
+        do {
+            let moved = try repository.move(note: note, to: folderPath)
+            state.upsert(moved)
+            // Re-load to keep ordering aligned with on-disk layout —
+            // upsert sorts by createdAt only, but a moved note is identical
+            // and gets re-pinned at top, which would lie about recency.
+            let notes = try repository.loadNotes()
+            state.setNotes(notes)
+            if !folderPath.isEmpty {
+                state.setFolderExpanded(folderPath, expanded: true)
+            }
+            refreshDirectorySnapshot()
+            renderSelection()
+            persistWorkspaceState()
+            toastOverlay.showToast("Note moved")
+        } catch {
+            presentError(
+                heading: "Could not move note",
+                body: error.localizedDescription,
+            )
+        }
+    }
+
     func deleteFolder(at folderPath: String) {
         do {
             try repository.deleteFolderRecursively(at: folderPath)

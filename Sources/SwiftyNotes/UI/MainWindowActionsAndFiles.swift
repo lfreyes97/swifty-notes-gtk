@@ -116,6 +116,7 @@ extension MainWindow {
         noteContextMenuLabels = [
             "Rename note…",
             "Duplicate note",
+            "Move to…",
             "Export note…",
             "Copy note ID",
             "Delete…",
@@ -129,6 +130,9 @@ extension MainWindow {
         }
         let duplicateAction: @MainActor () -> Void = { [weak self] in
             self?.duplicateSelectedNote()
+        }
+        let moveAction: @MainActor () -> Void = { [weak self] in
+            self?.presentMoveNoteDialogForSelectedNote()
         }
         let exportAction: @MainActor () -> Void = { [weak self] in
             self?.exportSelectedNote()
@@ -146,6 +150,9 @@ extension MainWindow {
         let duplicateButton = makeNoteContextButton(label: "Duplicate note") { [weak self] in
             self?.runAfterNoteContextMenuClosure(duplicateAction)
         }
+        let moveButton = makeNoteContextButton(label: "Move to…") { [weak self] in
+            self?.runAfterNoteContextMenuClosure(moveAction)
+        }
         let exportButton = makeNoteContextButton(label: "Export note…") { [weak self] in
             self?.runAfterNoteContextMenuClosure(exportAction)
         }
@@ -156,10 +163,11 @@ extension MainWindow {
             self?.runAfterNoteContextMenuClosure(deleteAction)
         }
 
-        [renameButton, duplicateButton, exportButton, copyIDButton, deleteButton].forEach(content.append)
+        [renameButton, duplicateButton, moveButton, exportButton, copyIDButton, deleteButton].forEach(content.append)
         noteContextHandlers = [
             "Rename note…": renameAction,
             "Duplicate note": duplicateAction,
+            "Move to…": moveAction,
             "Export note…": exportAction,
             "Copy note ID": copyIDAction,
             "Delete…": deleteAction,
