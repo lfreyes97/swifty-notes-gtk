@@ -3,6 +3,21 @@
 
 #include <libspelling.h>
 
+// libspelling renamed `SpellingLanguageInfo` → `SpellingLanguage` and the
+// matching `spelling_language_info_get_*` accessors → `spelling_language_get_*`
+// somewhere around 0.4.0. Ubuntu 24.04 LTS (Noble) ships 0.2.0, Ubuntu 26.04
+// (Resolute) ships 0.4.9. Provide a single facade so the rest of the shim
+// doesn't care which side of the rename it's on.
+#if (SPELLING_MAJOR_VERSION > 0) || (SPELLING_MINOR_VERSION >= 4)
+typedef SpellingLanguage SwiftyNotesSpellingLanguageItem;
+#define swifty_notes_spelling_lang_get_code(item) spelling_language_get_code(item)
+#define swifty_notes_spelling_lang_get_name(item) spelling_language_get_name(item)
+#else
+typedef SpellingLanguageInfo SwiftyNotesSpellingLanguageItem;
+#define swifty_notes_spelling_lang_get_code(item) spelling_language_info_get_code(item)
+#define swifty_notes_spelling_lang_get_name(item) spelling_language_info_get_name(item)
+#endif
+
 // Both `swift-adwaita`'s CAdwaita module and our CSpelling module pull
 // in `<gtk/gtk.h>` and `<gtksourceview/gtksource.h>`, so Swift treats
 // the resulting `GtkWidget` / `GtkSourceBuffer` types as two distinct
@@ -141,10 +156,10 @@ swifty_notes_spelling_for_each_language(SwiftyNotesSpellingLanguageCallback call
     }
     guint count = g_list_model_get_n_items(model);
     for (guint i = 0; i < count; i++) {
-        SpellingLanguage *language = g_list_model_get_item(model, i);
+        SwiftyNotesSpellingLanguageItem *language = g_list_model_get_item(model, i);
         if (language != NULL) {
-            callback(spelling_language_get_code(language),
-                     spelling_language_get_name(language),
+            callback(swifty_notes_spelling_lang_get_code(language),
+                     swifty_notes_spelling_lang_get_name(language),
                      user_data);
             g_object_unref(language);
         }
