@@ -25,6 +25,7 @@ final class MainWindow {
     let editorContent = Box(orientation: .vertical, spacing: 0)
     let editorFormattingToolbar = EditorFormattingToolbar()
     let newNoteButton = Button(icon: .custom("list-add-symbolic"))
+    let newFolderButton = Button(icon: .custom("folder-new-symbolic"))
     let saveNoteButton = Button(icon: .custom("document-save-symbolic"))
     let deleteNoteButton = Button(icon: .userTrash)
     let menuButton = MenuButton(icon: .custom("open-menu-symbolic"))
@@ -223,6 +224,7 @@ final class MainWindow {
         header.titleWidget = headerTitle
         header.packStart(sidebarToggle)
         header.packStart(newNoteButton)
+        header.packStart(newFolderButton)
         header.packStart(saveNoteButton)
         header.packStart(deleteNoteButton)
         header.packEnd(menuButton)
@@ -305,6 +307,10 @@ final class MainWindow {
         }
         newNoteButton.onClicked { [weak self] in
             self?.requestCreateNote()
+        }
+
+        newFolderButton.onClicked { [weak self] in
+            self?.presentNewFolderDialog(parentPath: "")
         }
 
         saveNoteButton.onClicked { [weak self] in

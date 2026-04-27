@@ -1,0 +1,269 @@
+import Adwaita
+import Foundation
+
+@MainActor
+extension MainWindow {
+    func presentFolderContextMenu(forFolderPath folderPath: String, x: Int, y: Int) {
+        // Re-use the note context menu plumbing — both menus close as soon as
+        // either one opens, so a stale folder popover never lingers behind a
+        // newly opened note popover.
+        dismissNoteContextMenu()
+        let folderRowIndex = sidebar.renderedItems.firstIndex { item in
+            if case let .folder(folder) = item { return folder.path == folderPath }
+            return false
+        }
+        guard let rowIndex = folderRowIndex,
+              let row = sidebar.list.rowAt(rowIndex)
+        else { return }
+        guard row.root != nil else { return }
+
+        let popover = Popover()
+        popover.hasArrow = true
+        popover.position = .bottom
+        popover.autohide = true
+        popover.child = makeFolderContextPopoverContent(forFolderPath: folderPath)
+        popover.onClosed { [weak popover] in
+            guard let popover, popover.root != nil else { return }
+            popover.unparent()
+        }
+        _ = popover.present(from: row, x: x, y: y)
+    }
+
+    private func makeFolderContextPopoverContent(forFolderPath folderPath: String) -> Widget {
+        let content = Box(orientation: .vertical, spacing: 2)
+        content.setMargins(4)
+
+        let createNoteButton = makeFolderContextButton(label: "New note here") { [weak self] in
+            self?.createNote(in: folderPath)
+        }
+        let createSubfolderButton = makeFolderContextButton(label: "New subfolder…") { [weak self] in
+            self?.presentNewFolderDialog(parentPath: folderPath)
+        }
+        let renameButton = makeFolderContextButton(label: "Rename folder…") { [weak self] in
+            self?.presentRenameFolderDialog(at: folderPath)
+        }
+        let deleteButton = makeFolderContextButton(label: "Delete folder…", destructive: true) { [weak self] in
+            self?.presentDeleteFolderConfirmation(at: folderPath)
+        }
+
+        [createNoteButton, createSubfolderButton, renameButton, deleteButton].forEach(content.append)
+        return content
+    }
+
+    private func makeFolderContextButton(
+        label: String,
+        destructive: Bool = false,
+        handler: @escaping @MainActor () -> Void,
+    ) -> Button {
+        let button = Button()
+        let row = Box(orientation: .horizontal, spacing: 8)
+        row.hexpand = true
+        row.halign = .fill
+        let titleLabel = Label(label)
+        titleLabel.xalign = 0
+        titleLabel.hexpand = true
+        row.append(titleLabel)
+        button.child = row
+        button.addCSSClass("flat")
+        if destructive {
+            button.addCSSClass(.destructiveAction)
+        }
+        button.halign = .fill
+        button.hexpand = true
+        button.onClicked { [weak self] in
+            self?.runAfterFolderContextMenuClosure(handler)
+        }
+        return button
+    }
+
+    private func runAfterFolderContextMenuClosure(_ action: @escaping @MainActor () -> Void) {
+        // Folder popovers close on autohide once a button click bubbles up,
+        // but the action needs to run after the popover unparents to avoid
+        // GTK warnings about presenting a dialog from a closing widget.
+        MainContext.idle(action)
+    }
+
+    /// Creates a note inside `folderPath`, expanding the folder so the new
+    /// note is visible right away.
+    func createNote(in folderPath: String) {
+        do {
+            clearSearchIfNeeded()
+            let note = try repository.createNote(in: folderPath)
+            state.upsert(note)
+            if !folderPath.isEmpty {
+                state.setFolderExpanded(folderPath, expanded: true)
+            }
+            refreshDirectorySnapshot()
+            renderSelection()
+            persistWorkspaceState()
+            MainContext.idle { [weak self] in
+                self?.focusPrimaryContentIfNeeded()
+            }
+        } catch {
+            presentError(
+                heading: "Could not create note",
+                body: error.localizedDescription,
+            )
+        }
+    }
+
+    func presentNewFolderDialog(parentPath: String) {
+        let dialog = AlertDialog(
+            heading: parentPath.isEmpty ? "New folder" : "New subfolder in \"\(parentPath)\"",
+            body: "Folder names cannot contain slashes.",
+        )
+        let entry = Entry()
+        entry.placeholderText = "Folder name"
+        dialog.extraChild = entry
+        dialog.addResponse("cancel", label: "Cancel")
+        dialog.addResponse("create", label: "Create")
+        dialog.defaultResponse = "create"
+        dialog.closeResponse = "cancel"
+        dialog.setResponseAppearance("create", appearance: .suggested)
+        dialog.onResponse { [weak self] response in
+            guard let self, response == "create" else { return }
+            let trimmed = entry.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return }
+            let path = parentPath.isEmpty ? trimmed : "\(parentPath)/\(trimmed)"
+            createFolder(at: path, expandAfter: parentPath)
+        }
+        dialog.present(window)
+        _ = entry.grabFocus()
+    }
+
+    func createFolder(at path: String, expandAfter parentPath: String?) {
+        do {
+            try repository.createFolder(at: path)
+            refreshFolderList()
+            if let parentPath, !parentPath.isEmpty {
+                state.setFolderExpanded(parentPath, expanded: true)
+            }
+            refreshSidebar()
+            refreshDirectorySnapshot()
+            persistWorkspaceState()
+        } catch {
+            presentError(
+                heading: "Could not create folder",
+                body: error.localizedDescription,
+            )
+        }
+    }
+
+    func presentRenameFolderDialog(at folderPath: String) {
+        let currentName = (folderPath as NSString).lastPathComponent
+        let dialog = AlertDialog(
+            heading: "Rename folder",
+            body: "Renaming \"\(folderPath)\".",
+        )
+        let entry = Entry()
+        entry.text = currentName
+        entry.selectAll()
+        dialog.extraChild = entry
+        dialog.addResponse("cancel", label: "Cancel")
+        dialog.addResponse("rename", label: "Rename")
+        dialog.defaultResponse = "rename"
+        dialog.closeResponse = "cancel"
+        dialog.setResponseAppearance("rename", appearance: .suggested)
+        dialog.onResponse { [weak self] response in
+            guard let self, response == "rename" else { return }
+            let trimmed = entry.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty, trimmed != currentName else { return }
+            renameFolder(at: folderPath, to: trimmed)
+        }
+        dialog.present(window)
+        _ = entry.grabFocus()
+    }
+
+    func renameFolder(at folderPath: String, to newName: String) {
+        do {
+            try repository.renameFolder(at: folderPath, to: newName)
+            // Re-load notes — a folder rename moves every nested note's
+            // folderPath on disk, and the in-memory copies need to follow.
+            let notes = try repository.loadNotes()
+            state.setNotes(notes)
+            refreshFolderList()
+            // Expanded set: rewrite any path that started with the old prefix
+            // so users don't have to re-expand the renamed branch.
+            let parent = NotesRepository.parentFolderPath(of: folderPath)
+            let newPath = parent.isEmpty ? newName : "\(parent)/\(newName)"
+            let migrated = state.expandedFolders.map { entry -> String in
+                if entry == folderPath { return newPath }
+                if entry.hasPrefix("\(folderPath)/") {
+                    return newPath + entry.dropFirst(folderPath.count)
+                }
+                return entry
+            }
+            state.setExpandedFolders(Set(migrated))
+            refreshSidebar()
+            refreshDirectorySnapshot()
+            persistWorkspaceState()
+            toastOverlay.showToast("Folder renamed")
+        } catch {
+            presentError(
+                heading: "Could not rename folder",
+                body: error.localizedDescription,
+            )
+        }
+    }
+
+    func presentDeleteFolderConfirmation(at folderPath: String) {
+        let nestedNotes = state.notes.filter { note in
+            note.folderPath == folderPath || note.folderPath.hasPrefix("\(folderPath)/")
+        }.count
+        let nestedFolders = state.folders.filter { entry in
+            entry != folderPath && entry.hasPrefix("\(folderPath)/")
+        }.count
+
+        let summary: String = {
+            if nestedNotes == 0, nestedFolders == 0 {
+                return "\"\(folderPath)\" is empty."
+            }
+            var parts: [String] = []
+            if nestedNotes > 0 {
+                parts.append(nestedNotes == 1 ? "1 note" : "\(nestedNotes) notes")
+            }
+            if nestedFolders > 0 {
+                parts.append(nestedFolders == 1 ? "1 subfolder" : "\(nestedFolders) subfolders")
+            }
+            return "\"\(folderPath)\" contains \(parts.joined(separator: " and ")). They will be permanently deleted."
+        }()
+
+        let dialog = AlertDialog(
+            heading: "Delete folder?",
+            body: summary,
+        )
+        dialog.addResponse("cancel", label: "Cancel")
+        dialog.addResponse("delete", label: "Delete")
+        dialog.defaultResponse = "cancel"
+        dialog.closeResponse = "cancel"
+        dialog.setResponseAppearance("delete", appearance: .destructive)
+        dialog.onResponse { [weak self] response in
+            guard let self, response == "delete" else { return }
+            deleteFolder(at: folderPath)
+        }
+        dialog.present(window)
+    }
+
+    func deleteFolder(at folderPath: String) {
+        do {
+            try repository.deleteFolderRecursively(at: folderPath)
+            let notes = try repository.loadNotes()
+            state.setNotes(notes)
+            refreshFolderList()
+            // Drop any expanded entries that pointed inside the removed branch.
+            let surviving = state.expandedFolders.filter { entry in
+                entry != folderPath && !entry.hasPrefix("\(folderPath)/")
+            }
+            state.setExpandedFolders(surviving)
+            refreshDirectorySnapshot()
+            renderSelection()
+            persistWorkspaceState()
+            toastOverlay.showToast("Folder deleted")
+        } catch {
+            presentError(
+                heading: "Could not delete folder",
+                body: error.localizedDescription,
+            )
+        }
+    }
+}

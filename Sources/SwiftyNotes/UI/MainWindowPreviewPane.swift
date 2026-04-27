@@ -185,6 +185,7 @@ extension MainWindow {
     func configureToolbarAccessibility() {
         sidebarToggle.setAccessibleLabel(state.isSidebarVisible ? "Hide Notes Sidebar" : "Show Notes Sidebar")
         newNoteButton.setAccessibleLabel("New Note")
+        newFolderButton.setAccessibleLabel("New Folder")
         saveNoteButton.setAccessibleLabel("Save Note")
         deleteNoteButton.setAccessibleLabel("Delete Note")
         menuButton.setAccessibleLabel("Main Menu")
@@ -197,6 +198,7 @@ extension MainWindow {
     func configureToolbarTooltips() {
         sidebarToggle.tooltipText = state.isSidebarVisible ? "Hide Notes Sidebar" : "Show Notes Sidebar"
         newNoteButton.tooltipText = "New Note"
+        newFolderButton.tooltipText = "New Folder"
         saveNoteButton.tooltipText = "Save Note"
         deleteNoteButton.tooltipText = "Delete Note"
         menuButton.tooltipText = "Main Menu"

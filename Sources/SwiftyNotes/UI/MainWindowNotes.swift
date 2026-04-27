@@ -81,10 +81,6 @@ extension MainWindow {
         persistWorkspaceState()
     }
 
-    /// Folder context menu — populated in the folder-CRUD UI step. Until
-    /// then this just no-ops so the right-click handler can stay wired up.
-    func presentFolderContextMenu(forFolderPath _: String, x _: Int, y _: Int) {}
-
     func createNote() {
         do {
             clearSearchIfNeeded()
