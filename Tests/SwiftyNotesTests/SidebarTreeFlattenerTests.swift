@@ -121,6 +121,31 @@ struct SidebarTreeFlattenerTests {
     }
 
     @Test
+    func `drag payload round trips through string encoding`() throws {
+        let noteID = UUID()
+        let notePayload = SidebarDragPayload.note(noteID)
+        let folderPayload = SidebarDragPayload.folder(path: "Work/Drafts")
+
+        guard case let .note(decodedID) = SidebarDragPayload.parse(notePayload.encoded) else {
+            Issue.record("Note payload failed to round-trip")
+            return
+        }
+        #expect(decodedID == noteID)
+
+        guard case let .folder(decodedPath) = SidebarDragPayload.parse(folderPayload.encoded) else {
+            Issue.record("Folder payload failed to round-trip")
+            return
+        }
+        #expect(decodedPath == "Work/Drafts")
+    }
+
+    @Test
+    func `drag payload rejects unrelated text drops`() {
+        #expect(SidebarDragPayload.parse("https://example.com") == nil)
+        #expect(SidebarDragPayload.parse("swiftynotes/note/not-a-uuid") == nil)
+    }
+
+    @Test
     func `empty folders still surface as collapsed rows so the user can rename or delete them`() {
         let items = SidebarTreeFlattener.flatten(
             notes: [],

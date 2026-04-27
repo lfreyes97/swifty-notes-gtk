@@ -219,5 +219,6 @@ extension MainWindow {
                 }
             }
         }
+        attachSidebarDnD()
     }
 }
