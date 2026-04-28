@@ -138,6 +138,11 @@ extension MainWindow {
         dialog.defaultResponse = "create"
         dialog.closeResponse = "cancel"
         dialog.setResponseAppearance("create", appearance: .suggested)
+        dialog.setResponseEnabled("create", enabled: false)
+        entry.onChanged { [weak dialog, weak entry] in
+            let trimmed = entry?.text.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            dialog?.setResponseEnabled("create", enabled: !trimmed.isEmpty)
+        }
         dialog.onResponse { [weak self] response in
             guard let self, response == "create" else { return }
             let trimmed = entry.text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -182,6 +187,13 @@ extension MainWindow {
         dialog.defaultResponse = "rename"
         dialog.closeResponse = "cancel"
         dialog.setResponseAppearance("rename", appearance: .suggested)
+        // Same name as the current one is a no-op, so keep Rename disabled
+        // until the user actually types something different.
+        dialog.setResponseEnabled("rename", enabled: false)
+        entry.onChanged { [weak dialog, weak entry] in
+            let trimmed = entry?.text.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            dialog?.setResponseEnabled("rename", enabled: !trimmed.isEmpty && trimmed != currentName)
+        }
         dialog.onResponse { [weak self] response in
             guard let self, response == "rename" else { return }
             let trimmed = entry.text.trimmingCharacters(in: .whitespacesAndNewlines)
