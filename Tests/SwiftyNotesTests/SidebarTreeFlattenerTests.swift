@@ -1,3 +1,4 @@
+import Adwaita
 import Foundation
 @testable import SwiftyNotes
 import Testing
@@ -143,6 +144,20 @@ struct SidebarTreeFlattenerTests {
     func `drag payload rejects unrelated text drops`() {
         #expect(SidebarDragPayload.parse("https://example.com") == nil)
         #expect(SidebarDragPayload.parse("swiftynotes/note/not-a-uuid") == nil)
+    }
+
+    @Test
+    func `sidebar title label layout truncates with an ellipsis on a single line and keeps the full title in the tooltip`() {
+        let longTitle = String(repeating: "Very long heading ", count: 12)
+        let note = Self.note(longTitle)
+        let layout = NotesSidebar.titleLabelLayout(for: note)
+        // note.title applies its own 80-char trim before we ever see it,
+        // so the layout text and tooltip both reflect the displayed title.
+        #expect(layout.text == note.title)
+        #expect(layout.tooltipText == note.title)
+        #expect(layout.ellipsize == PANGO_ELLIPSIZE_END)
+        #expect(layout.lines == 1)
+        #expect(layout.wrap == false)
     }
 
     @Test

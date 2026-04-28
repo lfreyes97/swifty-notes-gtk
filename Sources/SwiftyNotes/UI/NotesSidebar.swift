@@ -165,9 +165,7 @@ struct NotesSidebar {
         rowBox.setMargins(8)
         rowBox.marginStart = 8 + indentation(forDepth: noteItem.depth)
 
-        let title = Label(noteItem.note.title)
-        title.xalign = 0
-        rowBox.append(title)
+        rowBox.append(makeTitleLabel(for: noteItem.note))
 
         let subtitle = Label(displayDate(noteItem.note.createdAt))
         subtitle.xalign = 0
@@ -176,6 +174,46 @@ struct NotesSidebar {
 
         row.child = rowBox
         return row
+    }
+
+    /// Layout used by the title label of every note row.
+    ///
+    /// Pulled out as a plain value so tests can assert the layout without
+    /// needing a GTK display — the headless test suite shouldn't construct
+    /// widgets, which would require `gtk_init`.
+    struct TitleLabelLayout: Equatable {
+        let text: String
+        let tooltipText: String
+        let ellipsize: PangoEllipsizeMode
+        let wrap: Bool
+        let lines: Int
+    }
+
+    /// Settings for a note's title label. Long titles truncate to a single
+    /// line with a trailing ellipsis instead of wrapping, so a long heading
+    /// never grows the sidebar's row height or its overall width. The full
+    /// title is preserved in the tooltip.
+    static func titleLabelLayout(for note: Note) -> TitleLabelLayout {
+        TitleLabelLayout(
+            text: note.title,
+            tooltipText: note.title,
+            ellipsize: PANGO_ELLIPSIZE_END,
+            wrap: false,
+            lines: 1,
+        )
+    }
+
+    /// Builds the title `Label` for a note row in the sidebar by applying
+    /// ``titleLabelLayout(for:)`` to a fresh `Label`.
+    static func makeTitleLabel(for note: Note) -> Label {
+        let layout = titleLabelLayout(for: note)
+        let title = Label(layout.text)
+        title.xalign = 0
+        title.ellipsize = layout.ellipsize
+        title.lines = layout.lines
+        title.wrap = layout.wrap
+        title.tooltipText = layout.tooltipText
+        return title
     }
 
     private static func makeFolderRow(_ folder: SidebarFolder) -> ListBoxRow {
