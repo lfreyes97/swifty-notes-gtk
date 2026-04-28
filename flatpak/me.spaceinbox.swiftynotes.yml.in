@@ -25,7 +25,6 @@ modules:
     config-opts:
       - -Dvapi=false
       - -Ddocs=false
-      - -Dtests=false
     cleanup:
       - /lib/girepository-1.0
       - /share/gir-1.0
