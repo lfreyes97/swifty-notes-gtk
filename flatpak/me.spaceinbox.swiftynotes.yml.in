@@ -17,6 +17,24 @@ build-options:
   prepend-ld-library-path: /usr/lib/sdk/swift6/lib
 
 modules:
+  # GNOME Platform 50 doesn't ship libspelling-1 dev headers in the SDK, so
+  # build it from source before our app module compiles the CSpelling shim.
+  # Pinned to the latest stable tag at the time of writing.
+  - name: libspelling
+    buildsystem: meson
+    config-opts:
+      - -Dvapi=false
+      - -Ddocs=false
+      - -Dtests=false
+    cleanup:
+      - /lib/girepository-1.0
+      - /share/gir-1.0
+      - /share/vala
+    sources:
+      - type: git
+        url: https://gitlab.gnome.org/GNOME/libspelling.git
+        tag: "0.4.9"
+
   - name: swifty-notes
     buildsystem: simple
     sources:
