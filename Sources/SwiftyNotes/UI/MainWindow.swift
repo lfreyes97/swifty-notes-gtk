@@ -179,6 +179,9 @@ final class MainWindow {
         buildUI()
         applyRuntimeSettings(appSettings, shouldRefreshPreview: false)
         preview.attach(to: window)
+        preview.taskCheckboxToggleHandler = { [weak self] taskIndex in
+            self?.handleTaskCheckboxToggle(at: taskIndex)
+        }
         configureActionsAndMenu()
         wireSignals()
     }

@@ -217,10 +217,10 @@ final class MarkdownPreview {
         while index < blocks.count {
             let block = blocks[index]
             if case .listItem = block {
-                var items: [(text: RenderedText, depth: Int, marker: String, loose: Bool)] = []
+                var items: [(text: RenderedText, depth: Int, marker: String, loose: Bool, taskIndex: Int?)] = []
                 while index < blocks.count {
-                    guard case let .listItem(text, depth, marker, loose) = blocks[index] else { break }
-                    items.append((text, depth, marker, loose))
+                    guard case let .listItem(text, depth, marker, loose, taskIndex) = blocks[index] else { break }
+                    items.append((text, depth, marker, loose, taskIndex))
                     index += 1
                 }
                 container.append(makeList(items))
@@ -446,7 +446,7 @@ final class MarkdownPreview {
         return row
     }
 
-    private func makeList(_ items: [(text: RenderedText, depth: Int, marker: String, loose: Bool)]) -> Widget {
+    private func makeList(_ items: [(text: RenderedText, depth: Int, marker: String, loose: Bool, taskIndex: Int?)]) -> Widget {
         let list = Box(orientation: .vertical, spacing: 0)
         for item in items {
             list.append(makeListItem(
@@ -455,12 +455,13 @@ final class MarkdownPreview {
                 marker: item.marker,
                 compact: !isTaskListMarker(item.marker),
                 loose: item.loose,
+                taskIndex: item.taskIndex,
             ))
         }
         return list
     }
 
-    private func makeListItem(text: RenderedText, depth: Int, marker: String, compact: Bool, loose: Bool) -> Widget {
+    private func makeListItem(text: RenderedText, depth: Int, marker: String, compact: Bool, loose: Bool, taskIndex: Int?) -> Widget {
         let row = Box(orientation: .horizontal, spacing: PreviewMetrics.listMarkerSpacing)
         row.marginStart = PreviewMetrics.listIndentPerLevel * depth
         row.addCSSClass("preview-list-row")
@@ -490,8 +491,26 @@ final class MarkdownPreview {
 
         row.append(markerLabel)
         row.append(content)
+
+        if let taskIndex {
+            markerLabel.addCSSClass("preview-task-checkbox")
+            markerLabel.setCursor(name: "pointer")
+            let click = GestureClick()
+            click.onReleased { [weak self] _, _, _ in
+                self?.taskCheckboxToggleHandler?(taskIndex)
+            }
+            markerLabel.addController(click)
+        }
+
         return row
     }
+
+    /// Invoked when the user clicks the `☐` / `☑` glyph in front of a
+    /// task list item. The `Int` is the 0-based document-order index
+    /// stamped on `RenderedBlock.listItem.taskIndex`. The receiver is
+    /// expected to hand it off to `TaskListToggle.toggle(in:atTaskIndex:)`,
+    /// persist the rewritten markdown, and re-render the preview.
+    var taskCheckboxToggleHandler: ((Int) -> Void)?
 
     private func displayMarker(for marker: String, depth: Int) -> String {
         switch marker {

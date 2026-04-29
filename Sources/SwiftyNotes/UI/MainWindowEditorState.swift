@@ -36,6 +36,24 @@ extension MainWindow {
         autosave.cancel()
     }
 
+    /// Invoked from the preview when the user clicks a task-list
+    /// checkbox glyph (`☐` / `☑`). Flips the corresponding `[ ]`
+    /// ↔ `[x]` in the editor buffer and persists the change.
+    /// `taskIndex` is the 0-based document-order index the renderer
+    /// stamped on each task item.
+    func handleTaskCheckboxToggle(at taskIndex: Int) {
+        guard state.selectedNote != nil else { return }
+        let original = editor.buffer.text
+        let toggled = TaskListToggle.toggle(in: original, atTaskIndex: taskIndex)
+        guard toggled != original else { return }
+        suppressEditorChange = true
+        editor.buffer.text = toggled
+        suppressEditorChange = false
+        editor.buffer.modified = true
+        saveCurrentEditedNote(announceSuccess: false)
+        autosave.cancel()
+    }
+
     func currentEditedNoteSnapshot() -> Note? {
         guard var selected = state.selectedNote else { return nil }
         selected.content = editor.buffer.text

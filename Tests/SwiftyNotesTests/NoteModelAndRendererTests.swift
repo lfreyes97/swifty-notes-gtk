@@ -84,8 +84,8 @@ struct NoteModelAndRendererTests {
         """, darkAppearance: false)
 
         #expect(blocks.count == 2)
-        #expect(blocks[0] == .listItem(text: .plain("Done"), depth: 0, marker: "[x]"))
-        #expect(blocks[1] == .listItem(text: .plain("Todo"), depth: 0, marker: "[ ]"))
+        #expect(blocks[0] == .listItem(text: .plain("Done"), depth: 0, marker: "[x]", loose: false, taskIndex: 0))
+        #expect(blocks[1] == .listItem(text: .plain("Todo"), depth: 0, marker: "[ ]", loose: false, taskIndex: 1))
     }
 
     @Test
@@ -96,7 +96,7 @@ struct NoteModelAndRendererTests {
         """, darkAppearance: false)
 
         #expect(blocks.count == 1)
-        guard case let .listItem(text, depth, marker, _) = blocks[0] else {
+        guard case let .listItem(text, depth, marker, _, _) = blocks[0] else {
             Issue.record("Expected a task list item block")
             return
         }
@@ -400,7 +400,7 @@ struct NoteModelAndRendererTests {
         """, darkAppearance: false)
 
         let looseFlags = blocks.compactMap { block -> Bool? in
-            guard case let .listItem(_, _, _, loose) = block else { return nil }
+            guard case let .listItem(_, _, _, loose, _) = block else { return nil }
             return loose
         }
         #expect(looseFlags == [false, false, false, false, true, true])
@@ -417,7 +417,7 @@ struct NoteModelAndRendererTests {
 
         #expect(blocks.count == 3)
         for block in blocks {
-            guard case let .listItem(_, _, _, loose) = block else {
+            guard case let .listItem(_, _, _, loose, _) = block else {
                 Issue.record("Expected list item, got \(block)")
                 continue
             }
@@ -448,13 +448,109 @@ struct NoteModelAndRendererTests {
         """, darkAppearance: false)
 
         let looseFlags = blocks.compactMap { block -> Bool? in
-            guard case let .listItem(_, _, _, loose) = block else { return nil }
+            guard case let .listItem(_, _, _, loose, _) = block else { return nil }
             return loose
         }
         // `First` is the first item — no preceding blank inside the
         // list, so it stays tight. `Second` and `Third` follow a
         // blank line and get the loose flag.
         #expect(looseFlags == [false, true, true])
+    }
+
+    @Test
+    func `toggleTaskItem flips an unchecked task at the given index to checked, leaving other task items untouched`() {
+        let original = """
+        # Plan
+
+        - [ ] First
+        - [ ] Second
+        - [x] Third already done
+        """
+        let toggled = TaskListToggle.toggle(in: original, atTaskIndex: 1)
+        #expect(toggled == """
+        # Plan
+
+        - [ ] First
+        - [x] Second
+        - [x] Third already done
+        """)
+    }
+
+    @Test
+    func `toggleTaskItem flips a checked task to unchecked at the given index`() {
+        let original = """
+        - [x] Done
+        - [ ] Pending
+        """
+        let toggled = TaskListToggle.toggle(in: original, atTaskIndex: 0)
+        #expect(toggled == """
+        - [ ] Done
+        - [ ] Pending
+        """)
+    }
+
+    @Test
+    func `toggleTaskItem leaves non-task content untouched even if it contains brackets that resemble checkbox markers`() {
+        // A standalone `[x]` inside prose isn't a task list marker —
+        // only `[ ]` / `[x]` directly after a list bullet (and a
+        // single space) should toggle. Otherwise a click could rewrite
+        // unrelated brackets in the user's note.
+        let original = """
+        Mention of [x] in prose.
+
+        - [ ] Real task
+        """
+        let toggled = TaskListToggle.toggle(in: original, atTaskIndex: 0)
+        #expect(toggled == """
+        Mention of [x] in prose.
+
+        - [x] Real task
+        """)
+    }
+
+    @Test
+    func `toggleTaskItem returns the input unchanged when the index is out of bounds`() {
+        let original = """
+        - [ ] Only one
+        """
+        let toggled = TaskListToggle.toggle(in: original, atTaskIndex: 5)
+        #expect(toggled == original)
+    }
+
+    @Test
+    func `renderer assigns a stable task-item index in document order so the preview can wire clicks back to the source line`() {
+        // Each `[x]` / `[ ]` item carries its own 0-based index among
+        // every task item in the document. Non-task list items keep
+        // `taskIndex == nil`. The preview wires a click handler to
+        // each task marker that hands this index off to the source-
+        // toggle service.
+        let renderer = MarkdownRenderer()
+        let blocks = renderer.blocks(for: """
+        # Note
+
+        - [ ] First todo
+        - Bullet, not a task
+        - [x] Second todo
+
+        Some prose here.
+
+        - [ ] Third todo
+        """, darkAppearance: false)
+
+        let taskIndices = blocks.compactMap { block -> (marker: String, taskIndex: Int?)? in
+            guard case let .listItem(_, _, marker, _, taskIndex) = block else { return nil }
+            return (marker, taskIndex)
+        }
+
+        #expect(taskIndices.count == 4)
+        #expect(taskIndices[0].marker == "[ ]")
+        #expect(taskIndices[0].taskIndex == 0)
+        #expect(taskIndices[1].marker == "-")
+        #expect(taskIndices[1].taskIndex == nil)
+        #expect(taskIndices[2].marker == "[x]")
+        #expect(taskIndices[2].taskIndex == 1)
+        #expect(taskIndices[3].marker == "[ ]")
+        #expect(taskIndices[3].taskIndex == 2)
     }
 
     @Test
@@ -474,7 +570,7 @@ struct NoteModelAndRendererTests {
         """, darkAppearance: false)
 
         let markers = blocks.compactMap { block -> String? in
-            guard case let .listItem(_, _, marker, _) = block else { return nil }
+            guard case let .listItem(_, _, marker, _, _) = block else { return nil }
             return marker
         }
         #expect(markers == ["1.", "2.", "3.", "1."])
@@ -498,7 +594,7 @@ struct NoteModelAndRendererTests {
 
         #expect(blocks.count == 3)
         for block in blocks {
-            guard case let .listItem(text, _, _, _) = block else {
+            guard case let .listItem(text, _, _, _, _) = block else {
                 Issue.record("Expected list item, got \(block)")
                 continue
             }

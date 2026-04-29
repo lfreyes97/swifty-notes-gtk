@@ -38,14 +38,39 @@ final class HTMLPreviewDocumentBuilder {
         listItemMetadataCursor = 0
         let html = HTMLFormatter.format(markdown)
         let nodes = HTMLSubsetParser().parse(html)
-        let rendered = restoringImageMetadata(
-            in: restoringTaskListMarkers(in: blocks(from: nodes, listDepth: 0), markdown: markdown),
-            markdown: markdown,
+        let rendered = assigningTaskIndices(
+            in: restoringImageMetadata(
+                in: restoringTaskListMarkers(in: blocks(from: nodes, listDepth: 0), markdown: markdown),
+                markdown: markdown,
+            ),
         )
         if rendered.isEmpty, markdown.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return [.paragraph(.plain("Nothing to preview yet."))]
         }
         return rendered
+    }
+
+    /// Walks the rendered blocks once and stamps a 0-based
+    /// document-order index onto each task item (`[ ]` / `[x]`).
+    /// The index is what the preview's checkbox click handler hands
+    /// to ``TaskListToggle`` so the right `[ ]` ↔ `[x]` flips in the
+    /// source. Non-task list items keep `taskIndex == nil`.
+    private func assigningTaskIndices(in blocks: [RenderedBlock]) -> [RenderedBlock] {
+        var counter = 0
+        return blocks.map { block in
+            guard case let .listItem(text, depth, marker, loose, _) = block,
+                  marker == "[ ]" || marker == "[x]"
+            else { return block }
+            let stamped = RenderedBlock.listItem(
+                text: text,
+                depth: depth,
+                marker: marker,
+                loose: loose,
+                taskIndex: counter,
+            )
+            counter += 1
+            return stamped
+        }
     }
 
     /// Walks the source markdown and emits one ``ListItemMeta`` per
