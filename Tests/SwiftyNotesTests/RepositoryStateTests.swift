@@ -543,6 +543,85 @@ struct RepositoryStateTests {
     }
 
     @Test
+    func `repository imports image asset from raw data with unique filename`() throws {
+        // Clipboard paste decodes the image into bytes, not into a
+        // source URL. The `data:` overload owns the same uniqueness +
+        // sanitization logic as the URL one so paste-into-editor can
+        // hand the bytes off without staging a temp file first.
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let repository = NotesRepository(notesDirectory: temp)
+        let note = try repository.createNote(initialContent: "# Pasted")
+
+        let firstBytes = Data("first-paste".utf8)
+        let secondBytes = Data("second-paste".utf8)
+
+        let firstRelativePath = try repository.importImageAsset(
+            data: firstBytes,
+            baseName: "pasted",
+            fileExtension: "png",
+            for: note,
+        )
+        let secondRelativePath = try repository.importImageAsset(
+            data: secondBytes,
+            baseName: "pasted",
+            fileExtension: "png",
+            for: note,
+        )
+
+        #expect(firstRelativePath == "assets/pasted.png")
+        #expect(secondRelativePath == "assets/pasted-2.png")
+
+        let assetsDir = repository.noteAssetsDirectoryURL(for: note)
+        #expect(try Data(contentsOf: assetsDir.appendingPathComponent("pasted.png")) == firstBytes)
+        #expect(try Data(contentsOf: assetsDir.appendingPathComponent("pasted-2.png")) == secondBytes)
+    }
+
+    @Test
+    func `repository rejects raw image data with unsupported extension`() throws {
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let repository = NotesRepository(notesDirectory: temp)
+        let note = try repository.createNote(initialContent: "# Pasted")
+
+        #expect {
+            try repository.importImageAsset(
+                data: Data("nope".utf8),
+                baseName: "pasted",
+                fileExtension: "xyz",
+                for: note,
+            )
+        } throws: { error in
+            (error as? NotesRepositoryAssetImportError) == .unsupportedImageType("pasted.xyz")
+        }
+    }
+
+    @Test
+    func `repository sanitizes baseName when importing raw image data`() throws {
+        // Anything the caller hands us is run through the same
+        // filename-stem sanitizer as the URL-based path so a whitespaced
+        // or mixed-case label still produces a kebab-case file on disk.
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let repository = NotesRepository(notesDirectory: temp)
+        let note = try repository.createNote(initialContent: "# Pasted")
+
+        let relativePath = try repository.importImageAsset(
+            data: Data("snip".utf8),
+            baseName: "Pasted Image",
+            fileExtension: "PNG",
+            for: note,
+        )
+
+        #expect(relativePath == "assets/pasted-image.png")
+        let assetURL = repository.noteAssetsDirectoryURL(for: note).appendingPathComponent("pasted-image.png", isDirectory: false)
+        #expect(FileManager.default.fileExists(atPath: assetURL.path()))
+    }
+
+    @Test
     func `repository stages unreferenced assets until next session then prunes them`() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }

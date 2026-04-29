@@ -70,7 +70,7 @@ public enum NoteExportError: Error, LocalizedError {
     }
 }
 
-private enum NotesRepositoryAssetImportError: LocalizedError {
+enum NotesRepositoryAssetImportError: Error, LocalizedError, Equatable {
     case unsupportedImageType(String)
 
     var errorDescription: String? {
@@ -467,28 +467,66 @@ public final class NotesRepository: @unchecked Sendable {
 
     public func importImageAsset(from sourceURL: URL, for note: Note) throws -> String {
         try queue.sync {
-            try ensureNotesDirectoryUnlocked()
             guard let imageExtension = Self.normalizedImageExtension(for: sourceURL) else {
                 throw NotesRepositoryAssetImportError.unsupportedImageType(sourceURL.lastPathComponent)
             }
-
-            let assetsDirectoryURL = noteAssetsDirectoryURL(for: note)
-            try fileManager.createDirectory(at: assetsDirectoryURL, withIntermediateDirectories: true)
-
-            let stem = Note.sanitizedFilenameStem(
-                from: sourceURL.deletingPathExtension().lastPathComponent,
-                defaultStem: "image",
-            )
-            let filename = uniqueImportedAssetFilenameUnlocked(
-                baseName: stem,
-                imageExtension: imageExtension,
-                in: assetsDirectoryURL,
-            )
-            let destinationURL = assetsDirectoryURL.appendingPathComponent(filename, isDirectory: false)
             let data = try Data(contentsOf: sourceURL)
-            try data.write(to: destinationURL, options: .atomic)
-            return Self.relativeAssetPath(for: filename)
+            return try importImageAssetUnlocked(
+                data: data,
+                rawBaseName: sourceURL.deletingPathExtension().lastPathComponent,
+                imageExtension: imageExtension,
+                for: note,
+            )
         }
+    }
+
+    /// Saves the given image bytes into the note's `assets/` directory
+    /// under a unique filename derived from `baseName` (e.g. `pasted.png`,
+    /// `pasted-2.png`, …) and returns the relative reference suitable for
+    /// a Markdown `![](…)` link. Used by the clipboard-paste path that
+    /// receives raw decoded bytes instead of a source URL.
+    public func importImageAsset(
+        data: Data,
+        baseName: String,
+        fileExtension: String,
+        for note: Note,
+    ) throws -> String {
+        try queue.sync {
+            let trimmed = fileExtension.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            guard Self.supportedImageExtensions.contains(trimmed) else {
+                throw NotesRepositoryAssetImportError.unsupportedImageType("\(baseName).\(fileExtension)")
+            }
+            return try importImageAssetUnlocked(
+                data: data,
+                rawBaseName: baseName,
+                imageExtension: trimmed,
+                for: note,
+            )
+        }
+    }
+
+    /// Shared body of the URL-based and data-based image-asset imports.
+    /// Caller has already validated the image extension and acquired
+    /// the queue lock.
+    private func importImageAssetUnlocked(
+        data: Data,
+        rawBaseName: String,
+        imageExtension: String,
+        for note: Note,
+    ) throws -> String {
+        try ensureNotesDirectoryUnlocked()
+        let assetsDirectoryURL = noteAssetsDirectoryURL(for: note)
+        try fileManager.createDirectory(at: assetsDirectoryURL, withIntermediateDirectories: true)
+
+        let stem = Note.sanitizedFilenameStem(from: rawBaseName, defaultStem: "image")
+        let filename = uniqueImportedAssetFilenameUnlocked(
+            baseName: stem,
+            imageExtension: imageExtension,
+            in: assetsDirectoryURL,
+        )
+        let destinationURL = assetsDirectoryURL.appendingPathComponent(filename, isDirectory: false)
+        try data.write(to: destinationURL, options: .atomic)
+        return Self.relativeAssetPath(for: filename)
     }
 
     public func save(note: Note) throws -> Note {
