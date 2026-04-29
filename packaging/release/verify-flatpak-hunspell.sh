@@ -13,7 +13,7 @@
 # MANIFEST is the rendered .yml manifest path; needed so we can run
 # `flatpak-builder --run` to spot-check enchant inside the sandbox.
 
-set -euo pipefail
+set -euxo pipefail
 
 if [ "$#" -ne 2 ]; then
     echo "Usage: $0 BUILD_DIR MANIFEST" >&2
