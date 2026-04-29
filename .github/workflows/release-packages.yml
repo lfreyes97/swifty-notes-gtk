@@ -289,47 +289,10 @@ jobs:
           arch: ${{ matrix.arch }}
 
       - name: Verify bundled hunspell dictionaries
-        # Catches regressions when bumping the LibreOffice/dictionaries pin
-        # or editing the install list in the manifest — without this, a
-        # silently dropped dict or an upstream rename would only surface
-        # when end users complain that their language is missing.
         run: |
-          set -euo pipefail
-          cd packaging/out/flatpak
-
-          expected=(ar bg_BG cs_CZ da_DK de_DE el_GR en_GB en_US es_ES fr_FR \
-                    hu_HU it_IT nb_NO nl_NL pl_PL pt_BR pt_PT ro_RO ru_RU sv_SE)
-          expected_count=${#expected[@]}
-
-          actual_count=$(find build/files/share/hunspell -maxdepth 1 -name '*.dic' -type f 2>/dev/null | wc -l)
-          if [ "$actual_count" -ne "$expected_count" ]; then
-            echo "::error::Expected $expected_count hunspell dicts in /app/share/hunspell, found $actual_count"
-            ls build/files/share/hunspell/ 2>&1 || true
-            exit 1
-          fi
-
-          for code in "${expected[@]}"; do
-            if [ ! -f "build/files/share/hunspell/${code}.aff" ] || \
-               [ ! -f "build/files/share/hunspell/${code}.dic" ]; then
-              echo "::error::Missing .aff or .dic for ${code} in /app/share/hunspell"
-              exit 1
-            fi
-          done
-
-          # Spot-check that enchant-2 inside the bundle actually loads each
-          # dict and flags an obvious not-a-word as misspelt. Covers four
-          # script families (Latin, Cyrillic, Greek, Arabic) so a broken
-          # dict for any of them surfaces here rather than at user runtime.
-          for code in en_US de_DE ru_RU el_GR ar; do
-            result=$(flatpak-builder --run build me.spaceinbox.swiftynotes.yml \
-              sh -c "printf '%s\n' xyzqwertynotaword | enchant-2 -d ${code} -l" 2>&1 | tr -d '\r' | tail -1)
-            if [ "$result" != "xyzqwertynotaword" ]; then
-              echo "::error::enchant-2 -d ${code} did not flag the typo (got: '$result')"
-              exit 1
-            fi
-          done
-
-          echo "All ${expected_count} hunspell dictionaries present and loadable."
+          packaging/release/verify-flatpak-hunspell.sh \
+            packaging/out/flatpak/build \
+            packaging/out/flatpak/me.spaceinbox.swiftynotes.yml
 
       - name: Install Flatpak linter
         run: |

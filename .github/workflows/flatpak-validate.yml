@@ -1,0 +1,65 @@
+name: Flatpak Validate
+
+# Catches Flatpak-bundle regressions (missing dicts, broken libspelling
+# build, manifest typos) on every push that touches the related files,
+# rather than waiting for a release-packages run. Path-filtered so
+# regular Swift-only changes don't pay the flatpak-builder cost.
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - "flatpak/**"
+      - "Sources/CSpelling/**"
+      - "packaging/release/verify-flatpak-hunspell.sh"
+      - "packaging/release/render-flatpak-manifest.sh"
+      - ".github/workflows/flatpak-validate.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  hunspell-smoke:
+    name: Flatpak hunspell smoke
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-48
+      options: --privileged
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Render Flatpak manifest
+        run: |
+          packaging/release/render-flatpak-manifest.sh \
+            --version "smoke" \
+            --repo-slug "${{ github.repository }}" \
+            --repo-ref "${{ github.sha }}" \
+            --source-path ../../.. \
+            --output packaging/out/flatpak/me.spaceinbox.swiftynotes.yml
+
+      - name: Build dictionaries module only
+        # stop-at-module skips the Swift-compile-heavy swifty-notes module,
+        # so this completes in a few minutes even on a cold cache. The
+        # libspelling and hunspell-dictionaries modules still build, which
+        # is exactly what the smoke check needs to enchant against.
+        uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          manifest-path: packaging/out/flatpak/me.spaceinbox.swiftynotes.yml
+          stop-at-module: swifty-notes
+          build-bundle: false
+          build-dir: packaging/out/flatpak/build
+          repo-dir: packaging/out/flatpak/repo
+          state-dir: packaging/out/flatpak/state
+          cache-key: flatpak-smoke-${{ hashFiles('flatpak/me.spaceinbox.swiftynotes.yml.in') }}
+          upload-artifact: false
+          verbose: true
+          arch: x86_64
+
+      - name: Verify bundled hunspell dictionaries
+        run: |
+          packaging/release/verify-flatpak-hunspell.sh \
+            packaging/out/flatpak/build \
+            packaging/out/flatpak/me.spaceinbox.swiftynotes.yml
