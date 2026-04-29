@@ -34,6 +34,77 @@ modules:
         url: https://gitlab.gnome.org/GNOME/libspelling.git
         tag: "0.4.9"
 
+  # Bundle hunspell dictionaries for the most common languages so spellcheck
+  # works out-of-the-box on every Flatpak install. Without this the runtime's
+  # /usr/share/hunspell/<lang>.dic symlinks point into org.gnome.Platform.Locale
+  # extension subsets that Flatpak only fetches based on the user's
+  # `flatpak config languages` setting — anyone whose system LANG isn't in
+  # that set sees broken symlinks and a near-empty language picker.
+  # Sourcing from LibreOffice/dictionaries (single repo, stable branch).
+  - name: hunspell-dictionaries
+    buildsystem: simple
+    sources:
+      - type: archive
+        url: https://github.com/LibreOffice/dictionaries/archive/c011d96c90cc9c6c8b6d95ec6d83d11daacce994.tar.gz
+        sha256: cdbc8d6d79425b2749f7eee077c107ef96fb23c44e4f0ca450897f0a4402581a
+    build-commands:
+      - mkdir -p /app/share/hunspell
+      # English (US, GB)
+      - install -m644 en/en_US.aff en/en_US.dic /app/share/hunspell/
+      - install -m644 en/en_GB.aff en/en_GB.dic /app/share/hunspell/
+      # German (de_DE) — upstream filename is de_DE_frami, rename to standard
+      - install -m644 de/de_DE_frami.aff /app/share/hunspell/de_DE.aff
+      - install -m644 de/de_DE_frami.dic /app/share/hunspell/de_DE.dic
+      # French (fr_FR) — upstream stem is just "fr", rename
+      - install -m644 fr_FR/fr.aff /app/share/hunspell/fr_FR.aff
+      - install -m644 fr_FR/fr.dic /app/share/hunspell/fr_FR.dic
+      # Spanish (es_ES) — every LATAM variant resolves to es_ES rules
+      - install -m644 es/es_ES.aff es/es_ES.dic /app/share/hunspell/
+      # Italian
+      - install -m644 it_IT/it_IT.aff it_IT/it_IT.dic /app/share/hunspell/
+      # Portuguese — Brazilian and European, separate orthographies
+      - install -m644 pt_BR/pt_BR.aff pt_BR/pt_BR.dic /app/share/hunspell/
+      - install -m644 pt_PT/pt_PT.aff pt_PT/pt_PT.dic /app/share/hunspell/
+      # Russian
+      - install -m644 ru_RU/ru_RU.aff ru_RU/ru_RU.dic /app/share/hunspell/
+      # Dutch
+      - install -m644 nl_NL/nl_NL.aff nl_NL/nl_NL.dic /app/share/hunspell/
+      # Polish
+      - install -m644 pl_PL/pl_PL.aff pl_PL/pl_PL.dic /app/share/hunspell/
+      # Swedish
+      - install -m644 sv_SE/sv_SE.aff sv_SE/sv_SE.dic /app/share/hunspell/
+      # Czech
+      - install -m644 cs_CZ/cs_CZ.aff cs_CZ/cs_CZ.dic /app/share/hunspell/
+      # Hungarian
+      - install -m644 hu_HU/hu_HU.aff hu_HU/hu_HU.dic /app/share/hunspell/
+      # Turkish
+      - install -m644 tr_TR/tr_TR.aff tr_TR/tr_TR.dic /app/share/hunspell/
+      # Greek
+      - install -m644 el_GR/el_GR.aff el_GR/el_GR.dic /app/share/hunspell/
+      # Romanian — upstream dir is "ro" but file stem is ro_RO already
+      - install -m644 ro/ro_RO.aff ro/ro_RO.dic /app/share/hunspell/
+      # Arabic
+      - install -m644 ar/ar.aff ar/ar.dic /app/share/hunspell/
+      # Danish
+      - install -m644 da_DK/da_DK.aff da_DK/da_DK.dic /app/share/hunspell/
+      # Norwegian Bokmål — lives under no/ alongside Nynorsk
+      - install -m644 no/nb_NO.aff no/nb_NO.dic /app/share/hunspell/
+      # Bulgarian
+      - install -m644 bg_BG/bg_BG.aff bg_BG/bg_BG.dic /app/share/hunspell/
+      # Bundle each language's upstream COPYING/README/license file under the
+      # app's licenses dir so Flathub's redistribution rules are met. Some
+      # dirs use README*, some Copyright*, so glob and skip dirs without one.
+      - mkdir -p /app/share/licenses/me.spaceinbox.swiftynotes/hunspell-dictionaries
+      - |
+        for src in en de fr_FR es it_IT pt_BR pt_PT ru_RU nl_NL pl_PL sv_SE \
+                   cs_CZ hu_HU tr_TR el_GR ro ar da_DK no bg_BG; do
+          dest="/app/share/licenses/me.spaceinbox.swiftynotes/hunspell-dictionaries/${src}"
+          mkdir -p "${dest}"
+          for f in "${src}"/Copyright* "${src}"/COPYING* "${src}"/README* "${src}"/LICENSE* "${src}"/license*; do
+            if [ -f "${f}" ]; then install -m644 "${f}" "${dest}/$(basename "${f}")"; fi
+          done
+        done
+
   - name: swifty-notes
     buildsystem: simple
     sources:
