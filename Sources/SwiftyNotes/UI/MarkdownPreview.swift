@@ -29,13 +29,13 @@ final class MarkdownPreview {
     }
 
     .preview-compact-list-row {
-        margin-top: 0;
-        margin-bottom: 0;
+        margin-top: 2px;
+        margin-bottom: 2px;
     }
 
     .preview-task-list-row {
-        margin-top: 1px;
-        margin-bottom: 1px;
+        margin-top: 2px;
+        margin-bottom: 2px;
     }
 
     .preview-paragraph-label,
@@ -44,8 +44,8 @@ final class MarkdownPreview {
     }
 
     .preview-nested-list-row {
-        margin-top: -7px;
-        margin-bottom: 6px;
+        margin-top: 2px;
+        margin-bottom: 2px;
     }
 
     .preview-compact-list-label,
