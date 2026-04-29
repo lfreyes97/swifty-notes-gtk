@@ -289,10 +289,7 @@ jobs:
           arch: ${{ matrix.arch }}
 
       - name: Verify bundled hunspell dictionaries
-        run: |
-          packaging/release/verify-flatpak-hunspell.sh \
-            packaging/out/flatpak/build \
-            packaging/out/flatpak/me.spaceinbox.swiftynotes.yml
+        run: packaging/release/verify-flatpak-hunspell.sh packaging/out/flatpak/build
 
       - name: Install Flatpak linter
         run: |

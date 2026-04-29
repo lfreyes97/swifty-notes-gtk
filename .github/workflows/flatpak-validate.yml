@@ -58,17 +58,5 @@ jobs:
           verbose: true
           arch: x86_64
 
-      - name: Inspect build directory
-        run: |
-          set -x
-          ls -la packaging/out/flatpak/ || true
-          ls -la packaging/out/flatpak/build/ || true
-          ls -la packaging/out/flatpak/build/files/ 2>&1 | head -30 || true
-          ls -la packaging/out/flatpak/build/files/share/hunspell/ 2>&1 | head -10 || true
-          find packaging/out/flatpak/build -name '*.dic' -type f 2>&1 | head || true
-
       - name: Verify bundled hunspell dictionaries
-        run: |
-          bash packaging/release/verify-flatpak-hunspell.sh \
-            packaging/out/flatpak/build \
-            packaging/out/flatpak/me.spaceinbox.swiftynotes.yml
+        run: packaging/release/verify-flatpak-hunspell.sh packaging/out/flatpak/build
