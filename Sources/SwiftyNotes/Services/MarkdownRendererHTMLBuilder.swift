@@ -188,18 +188,30 @@ struct HTMLPreviewDocumentBuilder {
         return headers.isEmpty && rows.isEmpty ? [] : [.table(headers: headers, rows: rows, alignments: alignments)]
     }
 
-    /// Splits a paragraph's children into per-line groups by walking text
-    /// nodes and treating embedded `\n` characters as line boundaries.
-    /// Returns `nil` if no line contains a single image (i.e. the
-    /// paragraph is plain text and segmentation buys nothing). Otherwise
-    /// emits a heterogeneous block sequence: text-only lines coalesce
-    /// into a single paragraph, image-only lines become plain block
-    /// images.
+    /// Splits a paragraph's children into a heterogeneous block sequence
+    /// when it contains any image. Pango can't draw images inside a Label
+    /// run, so an image embedded in a paragraph would otherwise fall back
+    /// to a `[Image: …]` placeholder. This routine pulls every image (or
+    /// run of consecutive images) out into its own block and renders the
+    /// surrounding text as paragraphs.
+    ///
+    /// Two layers of segmentation:
+    /// 1. The paragraph is first split by `\n` into visible lines, so an
+    ///    image that lives on its own line in the source markdown stays a
+    ///    standalone block — never merged with images on a different line.
+    /// 2. Inside each line we then walk node-by-node, splitting into
+    ///    text-runs and image-runs. Consecutive images (separated only by
+    ///    whitespace) coalesce into a single `.imageGroup` so badge rows
+    ///    stay laid out horizontally instead of stacking vertically.
+    ///
+    /// Returns `nil` for paragraphs that contain no images at all — the
+    /// caller falls back to the standard text-paragraph rendering.
     func segmentParagraphIfImagesPresent(children: [HTMLNode]) -> [RenderedBlock]? {
         let lines = paragraphLines(from: children)
-        guard lines.contains(where: { extractSingleImage(from: $0) != nil }) else {
-            return nil
+        let hasImage = lines.contains { line in
+            line.contains { renderedImageItem(from: $0) != nil }
         }
+        guard hasImage else { return nil }
 
         var result: [RenderedBlock] = []
         var textBuffer: [HTMLNode] = []
@@ -213,29 +225,86 @@ struct HTMLPreviewDocumentBuilder {
             }
         }
 
-        for line in lines {
-            if let imageItem = extractSingleImage(from: line) {
-                flushText()
-                if imageItem.linkDestination != nil {
-                    result.append(.imageGroup(items: [imageItem], style: .plain))
-                } else {
-                    result.append(.image(
-                        alt: imageItem.alt,
-                        source: imageItem.source,
-                        title: imageItem.title,
-                        style: .plain,
-                    ))
+        for (lineIndex, line) in lines.enumerated() {
+            for run in splitLineByImageRuns(line) {
+                switch run {
+                case let .text(nodes):
+                    if !textBuffer.isEmpty, lineIndex > 0 {
+                        textBuffer.append(.text("\n"))
+                    }
+                    textBuffer.append(contentsOf: nodes)
+                case let .images(items):
+                    flushText()
+                    if items.count == 1, items[0].linkDestination == nil {
+                        let item = items[0]
+                        result.append(.image(
+                            alt: item.alt,
+                            source: item.source,
+                            title: item.title,
+                            style: .plain,
+                        ))
+                    } else {
+                        result.append(.imageGroup(items: items, style: .plain))
+                    }
                 }
-            } else {
-                if !textBuffer.isEmpty {
-                    textBuffer.append(.text("\n"))
-                }
-                textBuffer.append(contentsOf: line)
             }
         }
         flushText()
 
         return result
+    }
+
+    private enum LineRun {
+        case text(nodes: [HTMLNode])
+        case images(items: [RenderedImageItem])
+    }
+
+    /// Walks the nodes of a single line and groups them into runs of
+    /// either consecutive text (+ non-image inline elements like `<strong>`)
+    /// or consecutive images. Whitespace text nodes that sit *between
+    /// images* are treated as inter-image padding and dropped, so badge
+    /// rows like `<a><img></a> <a><img></a>` form one image-run instead
+    /// of being torn apart by the literal space between them.
+    private func splitLineByImageRuns(_ line: [HTMLNode]) -> [LineRun] {
+        var runs: [LineRun] = []
+        var textNodes: [HTMLNode] = []
+        var imageItems: [RenderedImageItem] = []
+        var pendingWhitespace: [HTMLNode] = []
+
+        func flushText() {
+            guard !textNodes.isEmpty else { return }
+            runs.append(.text(nodes: textNodes))
+            textNodes.removeAll(keepingCapacity: true)
+        }
+
+        func flushImages() {
+            guard !imageItems.isEmpty else { return }
+            runs.append(.images(items: imageItems))
+            imageItems.removeAll(keepingCapacity: true)
+        }
+
+        for node in line {
+            if let item = renderedImageItem(from: node) {
+                flushText()
+                pendingWhitespace.removeAll(keepingCapacity: true)
+                imageItems.append(item)
+            } else if case let .text(text) = node.kind,
+                      text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            {
+                pendingWhitespace.append(node)
+            } else {
+                flushImages()
+                textNodes.append(contentsOf: pendingWhitespace)
+                pendingWhitespace.removeAll(keepingCapacity: true)
+                textNodes.append(node)
+            }
+        }
+        if !textNodes.isEmpty {
+            textNodes.append(contentsOf: pendingWhitespace)
+        }
+        flushText()
+        flushImages()
+        return runs
     }
 
     /// Walks `<p>`'s children and returns them grouped by visual line —

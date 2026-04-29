@@ -261,21 +261,81 @@ struct NoteModelAndRendererTests {
     }
 
     @Test
-    func `renderer keeps an inline image inside a sentence as part of the paragraph`() {
-        // Image not on its own line — embedded mid-sentence with text on
-        // both sides of the same line. Must NOT be split out; stays inline
-        // in the paragraph (current placeholder fallback behaviour).
+    func `renderer splits a sentence that embeds an inline image into text image text blocks`() {
+        // The renderer can't draw an image mid-line in a Pango label, so an
+        // image inside a sentence becomes its own block sandwiched between
+        // the text segments on either side. Each segment renders as its
+        // own paragraph; the image is a plain block image (or image group
+        // of one for linked images).
         let renderer = MarkdownRenderer()
         let blocks = renderer.blocks(
             for: "Click ![icon](icon.png) here to continue.",
             darkAppearance: false,
         )
 
-        #expect(blocks.count == 1)
-        guard case .paragraph = blocks.first else {
-            Issue.record("Expected a single paragraph block; got \(String(describing: blocks.first))")
+        #expect(blocks.count == 3)
+        guard case let .paragraph(before) = blocks.first,
+              blocks.indices.contains(1),
+              case let .paragraph(after) = blocks.last
+        else {
+            Issue.record("Expected paragraph + image + paragraph; got \(blocks)")
             return
         }
+        #expect(before.plainText.trimmingCharacters(in: .whitespaces) == "Click")
+        #expect(after.plainText.contains("here to continue"))
+        #expect(blocks[1] == .image(alt: "icon", source: "icon.png", title: nil, style: .plain))
+    }
+
+    @Test
+    func `renderer groups consecutive inline images into a horizontal imageGroup so badge rows stay in a row`() {
+        // Two badges next to each other inside a sentence must end up as
+        // a single .imageGroup so the preview lays them out horizontally.
+        // If we naively split per image, badges stack vertically and the
+        // "row of shields" becomes a column.
+        let renderer = MarkdownRenderer()
+        let blocks = renderer.blocks(for: """
+        Look at [![A](a.svg)](https://example.com) [![B](b.svg)](https://example.com) right here.
+        """, darkAppearance: false)
+
+        #expect(blocks.count == 3)
+        guard case let .paragraph(before) = blocks.first,
+              blocks.indices.contains(1),
+              case let .paragraph(after) = blocks.last
+        else {
+            Issue.record("Expected paragraph + imageGroup + paragraph; got \(blocks)")
+            return
+        }
+        #expect(before.plainText.contains("Look at"))
+        #expect(after.plainText.contains("right here"))
+        guard case let .imageGroup(items, style) = blocks[1] else {
+            Issue.record("Expected imageGroup; got \(blocks[1])")
+            return
+        }
+        #expect(style == .plain)
+        #expect(items.count == 2)
+        #expect(items[0].alt == "A")
+        #expect(items[1].alt == "B")
+    }
+
+    @Test
+    func `renderer drops trailing whitespace after an image but keeps text before it`() {
+        // The whitespace immediately before an image becomes its own text
+        // segment. It should not produce an empty paragraph — the trim in
+        // flushText drops it. Equally, trailing whitespace after a final
+        // image at end of paragraph should not produce an empty trailing
+        // paragraph either.
+        let renderer = MarkdownRenderer()
+        let blocks = renderer.blocks(
+            for: "intro ![alone](alone.png)",
+            darkAppearance: false,
+        )
+
+        #expect(blocks.count == 2)
+        guard case .paragraph = blocks.first else {
+            Issue.record("Expected paragraph first; got \(blocks)")
+            return
+        }
+        #expect(blocks[1] == .image(alt: "alone", source: "alone.png", title: nil, style: .plain))
     }
 
     @Test
