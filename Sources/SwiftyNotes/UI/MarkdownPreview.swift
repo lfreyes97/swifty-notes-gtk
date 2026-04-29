@@ -51,10 +51,11 @@ final class MarkdownPreview {
     /* A list item the author put behind a blank line in the source
        gets paragraph-style top margin — only the items that were
        blank-separated push apart, contiguous tight runs stay
-       together. The flag is per-item, not per-list, so the spacing
-       lands exactly where the author drew the gap. */
+       together. The gap matches the container's 20px inter-block
+       spacing so a blank-separated item visually reads as the start
+       of a fresh sub-list, identical to having two distinct lists. */
     .preview-loose-list-row {
-        margin-top: 8px;
+        margin-top: 18px;
     }
 
     .preview-compact-list-label,
