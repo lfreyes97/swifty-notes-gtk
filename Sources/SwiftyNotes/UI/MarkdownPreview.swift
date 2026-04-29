@@ -48,12 +48,13 @@ final class MarkdownPreview {
         margin-bottom: 2px;
     }
 
-    /* CommonMark "loose" lists carry author-intended blank-line
-       breathing room between items; honour that with paragraph-style
-       margin instead of the default tight spacing. */
+    /* A list item the author put behind a blank line in the source
+       gets paragraph-style top margin — only the items that were
+       blank-separated push apart, contiguous tight runs stay
+       together. The flag is per-item, not per-list, so the spacing
+       lands exactly where the author drew the gap. */
     .preview-loose-list-row {
         margin-top: 8px;
-        margin-bottom: 8px;
     }
 
     .preview-compact-list-label,

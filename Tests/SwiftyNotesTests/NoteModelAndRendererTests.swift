@@ -381,29 +381,29 @@ struct NoteModelAndRendererTests {
     }
 
     @Test
-    func `renderer marks every item of a loose list as loose so the preview can space them with paragraph-style margins`() {
-        // CommonMark treats a list with blank lines between items as
-        // a single loose list. Our flat block stream needs to carry
-        // that flag through so the preview can apply extra inter-item
-        // spacing — without it, loose lists render identically to
-        // tight ones and the author's blank-line cue is lost.
+    func `renderer marks list items preceded by a blank line as loose, leaving items in a tight run unflagged`() {
+        // The flag is per-item, not per-list — this is what lets the
+        // preview keep a contiguous tight run together while pushing
+        // blank-separated items apart, matching what users expect
+        // when they write `- a\n- b\n\n- c` (read as "two items, gap,
+        // one item", not as "three uniformly-loose items").
         let renderer = MarkdownRenderer()
         let blocks = renderer.blocks(for: """
-        - First
+        - This
+        - Is
+        - A
+        - List
 
-        - Second
+        - This is a single item list
 
-        - Third
+        - As is this
         """, darkAppearance: false)
 
-        #expect(blocks.count == 3)
-        for block in blocks {
-            guard case let .listItem(_, _, _, loose) = block else {
-                Issue.record("Expected list item, got \(block)")
-                continue
-            }
-            #expect(loose == true)
+        let looseFlags = blocks.compactMap { block -> Bool? in
+            guard case let .listItem(_, _, _, loose) = block else { return nil }
+            return loose
         }
+        #expect(looseFlags == [false, false, false, false, true, true])
     }
 
     @Test
@@ -426,7 +426,7 @@ struct NoteModelAndRendererTests {
     }
 
     @Test
-    func `renderer carries the loose flag through to task list items so checkboxes get the same paragraph spacing as plain bullets`() {
+    func `renderer carries the loose flag through to task list items so blank-separated checkboxes get paragraph spacing`() {
         // Task lists go through a different listBlocks path: the
         // checkbox `<input>` is followed by a whitespace text node,
         // and HTMLFormatter wraps the rest of the item in `<p>`. An
@@ -447,14 +447,14 @@ struct NoteModelAndRendererTests {
         - [ ] Third
         """, darkAppearance: false)
 
-        #expect(blocks.count == 3)
-        for block in blocks {
-            guard case let .listItem(_, _, _, loose) = block else {
-                Issue.record("Expected task list item, got \(block)")
-                continue
-            }
-            #expect(loose == true)
+        let looseFlags = blocks.compactMap { block -> Bool? in
+            guard case let .listItem(_, _, _, loose) = block else { return nil }
+            return loose
         }
+        // `First` is the first item — no preceding blank inside the
+        // list, so it stays tight. `Second` and `Third` follow a
+        // blank line and get the loose flag.
+        #expect(looseFlags == [false, true, true])
     }
 
     @Test
