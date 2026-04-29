@@ -236,10 +236,10 @@ final class MarkdownPreview {
             makeSeparator()
         case let .table(headers, rows, alignments):
             makeTable(headers: headers, rows: rows, alignments: alignments)
-        case let .image(alt, source, title):
-            makeImageBlock(alt: alt, source: source, title: title)
-        case let .imageGroup(items):
-            makeImageGroup(items)
+        case let .image(alt, source, title, style):
+            makeImageBlock(alt: alt, source: source, title: title, style: style)
+        case let .imageGroup(items, style):
+            makeImageGroup(items, style: style)
         }
     }
 
@@ -569,7 +569,19 @@ final class MarkdownPreview {
         label.maxWidthChars = 40
     }
 
-    private func makeImageBlock(alt: String, source: String?, title: String?) -> Widget {
+    private func makeImageBlock(alt: String, source: String?, title: String?, style: ImageBlockStyle) -> Widget {
+        switch style {
+        case .card:
+            return makeCardImageBlock(alt: alt, source: source, title: title)
+        case .plain:
+            return makePlainImageBlock(alt: alt, source: source, title: title)
+        }
+    }
+
+    /// Featured-image rendering used when the markdown puts the image in
+    /// its own paragraph (blank lines around it). Wraps the picture in a
+    /// libadwaita `.card` with a caption underneath.
+    private func makeCardImageBlock(alt: String, source: String?, title: String?) -> Widget {
         let wrapper = Box(orientation: .vertical, spacing: 0)
         wrapper.addCSSClass("card")
 
@@ -591,7 +603,23 @@ final class MarkdownPreview {
         return wrapper
     }
 
-    private func makeImageGroup(_ items: [RenderedImageItem]) -> Widget {
+    /// Tight, in-flow rendering used when the image lives on its own line
+    /// inside a mixed-content paragraph. No card chrome and no caption —
+    /// the picture sits in the same column as the surrounding prose so the
+    /// transition between text and image stays visually contiguous.
+    private func makePlainImageBlock(alt: String, source: String?, title: String?) -> Widget {
+        let wrapper = Box(orientation: .vertical, spacing: 0)
+        wrapper.hexpand = true
+        if let image = makeBlockImageWidget(alt: alt, source: source, title: title) {
+            wrapper.append(image)
+        }
+        return wrapper
+    }
+
+    private func makeImageGroup(_ items: [RenderedImageItem], style _: ImageBlockStyle) -> Widget {
+        // Image groups (typically badge rows) historically render without
+        // any chrome regardless of how the source paragraph framed them,
+        // so we accept the style flag for API symmetry but ignore it.
         let row = Box(orientation: .horizontal, spacing: PreviewMetrics.badgeSpacing)
         row.halign = .start
         row.valign = .start

@@ -185,6 +185,141 @@ struct NoteModelAndRendererTests {
         ])
     }
 
+    // MARK: - Image-only line segmentation (#16)
+    //
+    // CommonMark glues an image-only line that follows a paragraph (or
+    // any other block) without an intervening blank line into the
+    // previous paragraph as inline content. The renderer used to fall
+    // back to a [Image: …] placeholder for those cases. We now segment
+    // mixed-content paragraphs by line and promote image-only lines to
+    // their own block, marking them as `.plain` so the preview renders
+    // them in-flow without the heavier `.card` chrome.
+
+    @Test
+    func `renderer promotes an image right under a paragraph to a plain block image`() {
+        let renderer = MarkdownRenderer()
+        let blocks = renderer.blocks(for: """
+        Some paragraph text
+        ![alt text](image.png)
+        """, darkAppearance: false)
+
+        #expect(blocks.count == 2)
+        guard case let .paragraph(text) = blocks.first else {
+            Issue.record("Expected paragraph as the first block; got \(String(describing: blocks.first))")
+            return
+        }
+        #expect(text.plainText.contains("Some paragraph text"))
+        #expect(blocks.last == .image(
+            alt: "alt text",
+            source: "image.png",
+            title: nil,
+            style: .plain,
+        ))
+    }
+
+    @Test
+    func `renderer promotes an image right above a paragraph to a plain block image`() {
+        let renderer = MarkdownRenderer()
+        let blocks = renderer.blocks(for: """
+        ![alt text](image.png)
+        More paragraph text
+        """, darkAppearance: false)
+
+        #expect(blocks.count == 2)
+        #expect(blocks.first == .image(
+            alt: "alt text",
+            source: "image.png",
+            title: nil,
+            style: .plain,
+        ))
+        guard case let .paragraph(text) = blocks.last else {
+            Issue.record("Expected paragraph as the last block; got \(String(describing: blocks.last))")
+            return
+        }
+        #expect(text.plainText.contains("More paragraph text"))
+    }
+
+    @Test
+    func `renderer keeps card style for an image surrounded by blank lines`() {
+        let renderer = MarkdownRenderer()
+        let blocks = renderer.blocks(for: """
+        Above
+
+        ![alt](image.png)
+
+        Below
+        """, darkAppearance: false)
+
+        // Three blocks in order: paragraph, card image, paragraph.
+        #expect(blocks.count == 3)
+        #expect(blocks[1] == .image(
+            alt: "alt",
+            source: "image.png",
+            title: nil,
+            style: .card,
+        ))
+    }
+
+    @Test
+    func `renderer keeps an inline image inside a sentence as part of the paragraph`() {
+        // Image not on its own line — embedded mid-sentence with text on
+        // both sides of the same line. Must NOT be split out; stays inline
+        // in the paragraph (current placeholder fallback behaviour).
+        let renderer = MarkdownRenderer()
+        let blocks = renderer.blocks(
+            for: "Click ![icon](icon.png) here to continue.",
+            darkAppearance: false,
+        )
+
+        #expect(blocks.count == 1)
+        guard case .paragraph = blocks.first else {
+            Issue.record("Expected a single paragraph block; got \(String(describing: blocks.first))")
+            return
+        }
+    }
+
+    @Test
+    func `renderer splits multiple image-only lines mixed with text into separate plain blocks`() {
+        let renderer = MarkdownRenderer()
+        let blocks = renderer.blocks(for: """
+        Look at these:
+        ![one](one.png)
+        ![two](two.png)
+        ![three](three.png)
+        """, darkAppearance: false)
+
+        // Paragraph then 3 plain image blocks — no grouping, since the
+        // text introduces them and each line stands on its own.
+        #expect(blocks.count == 4)
+        guard case let .paragraph(intro) = blocks.first else {
+            Issue.record("Expected intro paragraph; got \(String(describing: blocks.first))")
+            return
+        }
+        #expect(intro.plainText.contains("Look at these"))
+        #expect(blocks[1] == .image(alt: "one", source: "one.png", title: nil, style: .plain))
+        #expect(blocks[2] == .image(alt: "two", source: "two.png", title: nil, style: .plain))
+        #expect(blocks[3] == .image(alt: "three", source: "three.png", title: nil, style: .plain))
+    }
+
+    @Test
+    func `renderer keeps a pure image-only paragraph as a card image group`() {
+        // No surrounding text in the paragraph at all — author wants a
+        // gallery-style standalone block. Card stays.
+        let renderer = MarkdownRenderer()
+        let blocks = renderer.blocks(for: """
+        ![one](one.png)
+        ![two](two.png)
+        """, darkAppearance: false)
+
+        #expect(blocks.count == 1)
+        guard case let .imageGroup(items, style) = blocks.first else {
+            Issue.record("Expected an image group; got \(String(describing: blocks.first))")
+            return
+        }
+        #expect(style == .card)
+        #expect(items.count == 2)
+    }
+
     @Test
     func `renderer builds aligned table block`() {
         let renderer = MarkdownRenderer()

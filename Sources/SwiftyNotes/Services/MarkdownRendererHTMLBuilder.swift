@@ -32,15 +32,26 @@ struct HTMLPreviewDocumentBuilder {
                 let level = Int(String(name.dropFirst())) ?? 1
                 return [.heading(level: level, text: inlineText(from: children))]
             case "p":
+                // Pure-image paragraphs (the author put blank lines around
+                // the image / image group): keep the existing card styling.
                 if let imageGroup = standaloneImageGroup(from: children) {
                     if imageGroup.count == 1, imageGroup[0].linkDestination == nil {
                         let image = imageGroup[0]
-                        return [.image(alt: image.alt, source: image.source, title: image.title)]
+                        return [.image(alt: image.alt, source: image.source, title: image.title, style: .card)]
                     }
-                    return [.imageGroup(items: imageGroup)]
+                    return [.imageGroup(items: imageGroup, style: .card)]
                 }
                 if let image = standaloneImage(from: children) {
-                    return [.image(alt: image.alt, source: image.source, title: image.title)]
+                    return [.image(alt: image.alt, source: image.source, title: image.title, style: .card)]
+                }
+                // Mixed content: an image-only line glued onto a paragraph
+                // (no blank line) is parsed by CommonMark as inline. Promote
+                // each image-only line into its own plain block image so it
+                // renders properly instead of falling back to the
+                // [Image: …] placeholder. Surrounding text lines coalesce
+                // back into paragraphs.
+                if let segmented = segmentParagraphIfImagesPresent(children: children) {
+                    return segmented
                 }
                 let text = inlineText(from: children)
                 return text.plainText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? [] : [.paragraph(text)]
@@ -175,6 +186,97 @@ struct HTMLPreviewDocumentBuilder {
             }
 
         return headers.isEmpty && rows.isEmpty ? [] : [.table(headers: headers, rows: rows, alignments: alignments)]
+    }
+
+    /// Splits a paragraph's children into per-line groups by walking text
+    /// nodes and treating embedded `\n` characters as line boundaries.
+    /// Returns `nil` if no line contains a single image (i.e. the
+    /// paragraph is plain text and segmentation buys nothing). Otherwise
+    /// emits a heterogeneous block sequence: text-only lines coalesce
+    /// into a single paragraph, image-only lines become plain block
+    /// images.
+    func segmentParagraphIfImagesPresent(children: [HTMLNode]) -> [RenderedBlock]? {
+        let lines = paragraphLines(from: children)
+        guard lines.contains(where: { extractSingleImage(from: $0) != nil }) else {
+            return nil
+        }
+
+        var result: [RenderedBlock] = []
+        var textBuffer: [HTMLNode] = []
+
+        func flushText() {
+            guard !textBuffer.isEmpty else { return }
+            let text = inlineText(from: textBuffer)
+            textBuffer.removeAll(keepingCapacity: true)
+            if !text.plainText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                result.append(.paragraph(text))
+            }
+        }
+
+        for line in lines {
+            if let imageItem = extractSingleImage(from: line) {
+                flushText()
+                if imageItem.linkDestination != nil {
+                    result.append(.imageGroup(items: [imageItem], style: .plain))
+                } else {
+                    result.append(.image(
+                        alt: imageItem.alt,
+                        source: imageItem.source,
+                        title: imageItem.title,
+                        style: .plain,
+                    ))
+                }
+            } else {
+                if !textBuffer.isEmpty {
+                    textBuffer.append(.text("\n"))
+                }
+                textBuffer.append(contentsOf: line)
+            }
+        }
+        flushText()
+
+        return result
+    }
+
+    /// Walks `<p>`'s children and returns them grouped by visual line —
+    /// every `\n` inside a text node terminates the current line.
+    /// Whitespace-only lines (no nodes after the split) are dropped.
+    private func paragraphLines(from children: [HTMLNode]) -> [[HTMLNode]] {
+        var lines: [[HTMLNode]] = [[]]
+        for child in children {
+            switch child.kind {
+            case let .text(text):
+                let parts = text.components(separatedBy: "\n")
+                for (index, piece) in parts.enumerated() {
+                    if index > 0 {
+                        lines.append([])
+                    }
+                    if !piece.isEmpty {
+                        lines[lines.count - 1].append(.text(piece))
+                    }
+                }
+            case .element:
+                lines[lines.count - 1].append(child)
+            }
+        }
+        return lines.filter { !$0.isEmpty }
+    }
+
+    /// Returns a `RenderedImageItem` if `nodes` represents exactly one
+    /// image (or an `<a>` wrapping a single image), surrounded only by
+    /// whitespace text. Otherwise returns `nil` — used to decide whether
+    /// a `<p>`-line is an image-only line that deserves its own block.
+    private func extractSingleImage(from nodes: [HTMLNode]) -> RenderedImageItem? {
+        let meaningful = nodes.compactMap { node -> HTMLNode? in
+            switch node.kind {
+            case let .text(text):
+                return text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : node
+            case .element:
+                return node
+            }
+        }
+        guard meaningful.count == 1 else { return nil }
+        return renderedImageItem(from: meaningful[0])
     }
 
     func standaloneImage(from nodes: [HTMLNode]) -> (alt: String, source: String?, title: String?)? {
@@ -396,15 +498,16 @@ struct HTMLPreviewDocumentBuilder {
 
         for block in blocks {
             switch block {
-            case let .image(alt, source, title) where nextImageIndex < images.count:
+            case let .image(alt, source, title, style) where nextImageIndex < images.count:
                 let markdownImage = images[nextImageIndex]
                 restored.append(.image(
                     alt: alt.isEmpty ? markdownImage.alt : alt,
                     source: source ?? markdownImage.source,
                     title: title ?? markdownImage.title,
+                    style: style,
                 ))
                 nextImageIndex += 1
-            case let .imageGroup(items):
+            case let .imageGroup(items, style):
                 var restoredItems: [RenderedImageItem] = []
                 restoredItems.reserveCapacity(items.count)
 
@@ -424,7 +527,7 @@ struct HTMLPreviewDocumentBuilder {
                     nextImageIndex += 1
                 }
 
-                restored.append(.imageGroup(items: restoredItems))
+                restored.append(.imageGroup(items: restoredItems, style: style))
             default:
                 restored.append(block)
             }

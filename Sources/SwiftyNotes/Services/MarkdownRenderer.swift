@@ -68,6 +68,20 @@ public enum RenderedBlockStyle: Sendable, Equatable {
     case image
 }
 
+/// Visual treatment for rendered images. Reflects the markdown author's
+/// own framing of the image:
+///
+/// - ``card``: the markdown puts the image alone in a paragraph (i.e. the
+///   author put blank lines around it). Renders as a featured block with
+///   the standard libadwaita `.card` styling and a caption underneath.
+/// - ``plain``: the image lives on its own line inside a mixed-content
+///   paragraph (no blank lines). Renders as a flat block that flows in
+///   with the surrounding prose — no card chrome, no caption.
+public enum ImageBlockStyle: Sendable, Equatable {
+    case card
+    case plain
+}
+
 public enum RenderedBlock: Sendable, Equatable {
     case heading(level: Int, text: RenderedText)
     case paragraph(RenderedText)
@@ -76,8 +90,8 @@ public enum RenderedBlock: Sendable, Equatable {
     case listItem(text: RenderedText, depth: Int, marker: String)
     case thematicBreak
     case table(headers: [RenderedText], rows: [[RenderedText]], alignments: [RenderedTableAlignment])
-    case image(alt: String, source: String?, title: String?)
-    case imageGroup(items: [RenderedImageItem])
+    case image(alt: String, source: String?, title: String?, style: ImageBlockStyle = .card)
+    case imageGroup(items: [RenderedImageItem], style: ImageBlockStyle = .card)
 
     public var style: RenderedBlockStyle {
         switch self {
@@ -123,13 +137,13 @@ public enum RenderedBlock: Sendable, Equatable {
             let headerLine = headers.map(\.plainText).joined(separator: " | ")
             let rowLines = rows.map { $0.map(\.plainText).joined(separator: " | ") }
             return ([headerLine] + rowLines).joined(separator: "\n")
-        case let .image(alt, source, title):
+        case let .image(alt, source, title, _):
             let description = [alt, title, source].compactMap { value in
                 guard let value, !value.isEmpty else { return nil }
                 return value
             }.joined(separator: " — ")
             return description.isEmpty ? "Image" : "Image: \(description)"
-        case let .imageGroup(items):
+        case let .imageGroup(items, _):
             return items.map(\.plainText).joined(separator: "\n")
         }
     }
