@@ -14,7 +14,7 @@ final class MarkdownPreview {
     private enum PreviewMetrics {
         static let listIndentPerLevel = 10
         static let listMarkerSpacing = 4
-        static let badgeImageHeight = 18
+        static let badgeImageHeight = 22
         static let badgeSpacing = 6
         static let badgeLineSpacing = 4
     }
@@ -82,11 +82,16 @@ final class MarkdownPreview {
         padding-bottom: 3px;
     }
 
-    .preview-image-link-button {
+    .preview-image-link {
         padding: 0;
         margin: 0;
         min-width: 0;
         min-height: 0;
+        background: transparent;
+    }
+
+    .preview-image-link:hover {
+        opacity: 0.85;
     }
 
     .preview-image-group {
@@ -667,19 +672,25 @@ final class MarkdownPreview {
         if let link = item.linkDestination?.trimmingCharacters(in: .whitespacesAndNewlines),
            !link.isEmpty
         {
-            let button = Button(label: "")
-            button.hasFrame = false
-            button.addCSSClass(.flat)
-            button.addCSSClass("preview-image-link-button")
-            button.halign = .start
-            button.valign = .center
-            button.child = picture
-            button.tooltipText = item.alt.isEmpty ? link : item.alt
-            button.onClicked { [weak window] in
+            // Wrapping the picture in a `Button` worked but inherited the
+            // libadwaita min-height (~30px), which silently capped how
+            // large badges could render even when the Picture itself
+            // requested more. A plain Box with a `GestureClick` keeps the
+            // hit target without imposing size constraints or chrome.
+            let wrapper = Box(orientation: .horizontal, spacing: 0)
+            wrapper.addCSSClass("preview-image-link")
+            wrapper.halign = .start
+            wrapper.valign = .center
+            wrapper.append(picture)
+            wrapper.tooltipText = item.alt.isEmpty ? link : item.alt
+
+            let click = GestureClick()
+            click.onReleased { [weak window] _, _, _ in
                 let launcher = UriLauncher(uri: link)
                 launcher.launch(parent: window)
             }
-            return button
+            wrapper.addController(click)
+            return wrapper
         }
 
         picture.tooltipText = item.alt.isEmpty ? item.plainText : item.alt
@@ -732,7 +743,11 @@ final class MarkdownPreview {
     ) -> Picture {
         let picture = Picture()
         picture.alternativeText = imageAlternativeText(alt: alt, source: source, title: title)
-        picture.canShrink = true
+        // For badges (preferredHeight set) we must NOT let GTK shrink the
+        // Picture below its size request — otherwise a late-arriving
+        // image (remote SVG) lands after initial layout already settled
+        // on a 0-width allocation and the badge ends up rendered tiny.
+        picture.canShrink = preferredHeight == nil
         picture.contentFit = .contain
         picture.hexpand = expandsHorizontally
         picture.vexpand = expandsHorizontally
