@@ -77,8 +77,6 @@ modules:
       - install -m644 cs_CZ/cs_CZ.aff cs_CZ/cs_CZ.dic /app/share/hunspell/
       # Hungarian
       - install -m644 hu_HU/hu_HU.aff hu_HU/hu_HU.dic /app/share/hunspell/
-      # Turkish
-      - install -m644 tr_TR/tr_TR.aff tr_TR/tr_TR.dic /app/share/hunspell/
       # Greek
       - install -m644 el_GR/el_GR.aff el_GR/el_GR.dic /app/share/hunspell/
       # Romanian — upstream dir is "ro" but file stem is ro_RO already
@@ -97,7 +95,7 @@ modules:
       - mkdir -p /app/share/licenses/me.spaceinbox.swiftynotes/hunspell-dictionaries
       - |
         for src in en de fr_FR es it_IT pt_BR pt_PT ru_RU nl_NL pl_PL sv_SE \
-                   cs_CZ hu_HU tr_TR el_GR ro ar da_DK no bg_BG; do
+                   cs_CZ hu_HU el_GR ro ar da_DK no bg_BG; do
           dest="/app/share/licenses/me.spaceinbox.swiftynotes/hunspell-dictionaries/${src}"
           mkdir -p "${dest}"
           for f in "${src}"/Copyright* "${src}"/COPYING* "${src}"/README* "${src}"/LICENSE* "${src}"/license*; do
