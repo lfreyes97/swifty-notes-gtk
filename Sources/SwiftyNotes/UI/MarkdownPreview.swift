@@ -48,6 +48,14 @@ final class MarkdownPreview {
         margin-bottom: 2px;
     }
 
+    /* CommonMark "loose" lists carry author-intended blank-line
+       breathing room between items; honour that with paragraph-style
+       margin instead of the default tight spacing. */
+    .preview-loose-list-row {
+        margin-top: 8px;
+        margin-bottom: 8px;
+    }
+
     .preview-compact-list-label,
     .preview-compact-list-marker,
     .preview-task-list-label,
@@ -207,10 +215,10 @@ final class MarkdownPreview {
         while index < blocks.count {
             let block = blocks[index]
             if case .listItem = block {
-                var items: [(text: RenderedText, depth: Int, marker: String)] = []
+                var items: [(text: RenderedText, depth: Int, marker: String, loose: Bool)] = []
                 while index < blocks.count {
-                    guard case let .listItem(text, depth, marker) = blocks[index] else { break }
-                    items.append((text, depth, marker))
+                    guard case let .listItem(text, depth, marker, loose) = blocks[index] else { break }
+                    items.append((text, depth, marker, loose))
                     index += 1
                 }
                 container.append(makeList(items))
@@ -436,7 +444,7 @@ final class MarkdownPreview {
         return row
     }
 
-    private func makeList(_ items: [(text: RenderedText, depth: Int, marker: String)]) -> Widget {
+    private func makeList(_ items: [(text: RenderedText, depth: Int, marker: String, loose: Bool)]) -> Widget {
         let list = Box(orientation: .vertical, spacing: 0)
         for item in items {
             list.append(makeListItem(
@@ -444,16 +452,20 @@ final class MarkdownPreview {
                 depth: item.depth,
                 marker: item.marker,
                 compact: !isTaskListMarker(item.marker),
+                loose: item.loose,
             ))
         }
         return list
     }
 
-    private func makeListItem(text: RenderedText, depth: Int, marker: String, compact: Bool) -> Widget {
+    private func makeListItem(text: RenderedText, depth: Int, marker: String, compact: Bool, loose: Bool) -> Widget {
         let row = Box(orientation: .horizontal, spacing: PreviewMetrics.listMarkerSpacing)
         row.marginStart = PreviewMetrics.listIndentPerLevel * depth
         row.addCSSClass("preview-list-row")
         row.addCSSClass(compact ? "preview-compact-list-row" : "preview-task-list-row")
+        if loose {
+            row.addCSSClass("preview-loose-list-row")
+        }
         if depth > 0 {
             row.addCSSClass("preview-nested-list-row")
         }

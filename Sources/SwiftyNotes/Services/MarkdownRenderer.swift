@@ -87,7 +87,7 @@ public enum RenderedBlock: Sendable, Equatable {
     case paragraph(RenderedText)
     case codeBlock(code: String, language: String?)
     case blockquote(RenderedText)
-    case listItem(text: RenderedText, depth: Int, marker: String)
+    case listItem(text: RenderedText, depth: Int, marker: String, loose: Bool = false)
     case thematicBreak
     case table(headers: [RenderedText], rows: [[RenderedText]], alignments: [RenderedTableAlignment])
     case image(alt: String, source: String?, title: String?, style: ImageBlockStyle = .card)
@@ -103,7 +103,7 @@ public enum RenderedBlock: Sendable, Equatable {
             .codeBlock(language: language)
         case .blockquote:
             .blockquote
-        case let .listItem(_, depth, _):
+        case let .listItem(_, depth, _, _):
             .listItem(depth: depth)
         case .thematicBreak:
             .thematicBreak
@@ -129,7 +129,7 @@ public enum RenderedBlock: Sendable, Equatable {
                 return "\(language)\n\(code)"
             }
             return code
-        case let .listItem(text, _, marker):
+        case let .listItem(text, _, marker, _):
             return "\(marker) \(text.plainText)"
         case .thematicBreak:
             return "----------------"

@@ -2,10 +2,25 @@ import Adwaita
 import Foundation
 import Markdown
 
-struct HTMLPreviewDocumentBuilder {
+final class HTMLPreviewDocumentBuilder {
     let darkAppearance: Bool
 
+    /// Per-list "is loose" flags collected from the source AST in
+    /// document order. swift-markdown's `HTMLFormatter` doesn't honour
+    /// CommonMark's tight/loose distinction (it wraps every list-item's
+    /// text in `<p>` regardless), so we walk the `Document` separately
+    /// to recover the flag and look it up by list-index in document
+    /// order during HTML processing.
+    private var listLooseness: [Bool] = []
+    private var listLoosenessCursor = 0
+
+    init(darkAppearance: Bool) {
+        self.darkAppearance = darkAppearance
+    }
+
     func render(markdown: String) -> [RenderedBlock] {
+        listLooseness = collectListLooseness(from: markdown)
+        listLoosenessCursor = 0
         let html = HTMLFormatter.format(markdown)
         let nodes = HTMLSubsetParser().parse(html)
         let rendered = restoringImageMetadata(
@@ -16,6 +31,95 @@ struct HTMLPreviewDocumentBuilder {
             return [.paragraph(.plain("Nothing to preview yet."))]
         }
         return rendered
+    }
+
+    /// Returns one `Bool` per list found in the source markdown
+    /// (`true` ⇒ loose) in document order — same order that
+    /// `HTMLFormatter` emits `<ul>` / `<ol>` tags, so the HTML
+    /// processor can pop entries as it walks the list nodes.
+    ///
+    /// swift-markdown's AST and HTMLFormatter both drop the
+    /// CommonMark tight/loose distinction (the `Document` types
+    /// don't expose `isTight`, and the formatter wraps every item's
+    /// content in `<p>` regardless), so we re-derive it ourselves
+    /// from the source: a list is loose if any blank line appears
+    /// between two of its items at the same indentation.
+    private func collectListLooseness(from markdown: String) -> [Bool] {
+        struct OpenList {
+            let resultIndex: Int
+            let indent: Int
+            var sawBlank: Bool
+        }
+        var results: [Bool] = []
+        var stack: [OpenList] = []
+        for line in markdown.components(separatedBy: "\n") {
+            let leading = Self.leadingSpaceWidth(of: line)
+            let trimmed = line.drop(while: { $0 == " " || $0 == "\t" })
+            if trimmed.isEmpty {
+                for i in stack.indices {
+                    stack[i].sawBlank = true
+                }
+                continue
+            }
+            if Self.isListItemMarker(trimmed) {
+                while let top = stack.last, top.indent > leading {
+                    stack.removeLast()
+                }
+                if let top = stack.last, top.indent == leading {
+                    if top.sawBlank {
+                        results[top.resultIndex] = true
+                    }
+                    stack[stack.count - 1].sawBlank = false
+                } else {
+                    results.append(false)
+                    stack.append(OpenList(resultIndex: results.count - 1, indent: leading, sawBlank: false))
+                }
+            } else if leading <= (stack.last?.indent ?? Int.max) {
+                while let top = stack.last, top.indent >= leading {
+                    stack.removeLast()
+                }
+            }
+        }
+        return results
+    }
+
+    private static func leadingSpaceWidth(of line: String) -> Int {
+        var count = 0
+        for char in line {
+            if char == " " {
+                count += 1
+            } else if char == "\t" {
+                count += 4
+            } else {
+                break
+            }
+        }
+        return count
+    }
+
+    private static func isListItemMarker(_ trimmed: Substring) -> Bool {
+        if let first = trimmed.first, first == "-" || first == "*" || first == "+" {
+            let next = trimmed.index(after: trimmed.startIndex)
+            if next == trimmed.endIndex { return false }
+            return trimmed[next] == " "
+        }
+        // Ordered list: one or more digits followed by `.` or `)` and a space.
+        var index = trimmed.startIndex
+        while index < trimmed.endIndex, trimmed[index].isNumber {
+            index = trimmed.index(after: index)
+        }
+        guard index != trimmed.startIndex, index < trimmed.endIndex else { return false }
+        let punct = trimmed[index]
+        guard punct == "." || punct == ")" else { return false }
+        let afterPunct = trimmed.index(after: index)
+        return afterPunct < trimmed.endIndex && trimmed[afterPunct] == " "
+    }
+
+    private func consumeNextListLooseness() -> Bool {
+        guard listLoosenessCursor < listLooseness.count else { return false }
+        let value = listLooseness[listLoosenessCursor]
+        listLoosenessCursor += 1
+        return value
     }
 
     func blocks(from nodes: [HTMLNode], listDepth: Int) -> [RenderedBlock] {
@@ -68,10 +172,12 @@ struct HTMLPreviewDocumentBuilder {
                     .map { String($0.dropFirst("language-".count)) }
                 return [.codeBlock(code: code, language: language)]
             case "ul":
-                return listBlocks(from: children, listDepth: listDepth, ordered: false, startIndex: 1)
+                let isLoose = consumeNextListLooseness()
+                return listBlocks(from: children, listDepth: listDepth, ordered: false, startIndex: 1, isLoose: isLoose)
             case "ol":
                 let start = Int(attributes["start"] ?? "") ?? 1
-                return listBlocks(from: children, listDepth: listDepth, ordered: true, startIndex: start)
+                let isLoose = consumeNextListLooseness()
+                return listBlocks(from: children, listDepth: listDepth, ordered: true, startIndex: start, isLoose: isLoose)
             case "table":
                 return tableBlock(from: children)
             case "hr":
@@ -93,7 +199,7 @@ struct HTMLPreviewDocumentBuilder {
         }
     }
 
-    func listBlocks(from nodes: [HTMLNode], listDepth: Int, ordered: Bool, startIndex: Int) -> [RenderedBlock] {
+    func listBlocks(from nodes: [HTMLNode], listDepth: Int, ordered: Bool, startIndex: Int, isLoose: Bool) -> [RenderedBlock] {
         var output: [RenderedBlock] = []
         var ordinal = startIndex
 
@@ -122,11 +228,25 @@ struct HTMLPreviewDocumentBuilder {
                         nestedBlocks.append(contentsOf: block(from: child, listDepth: listDepth + 1))
                     }
                 case "ul":
-                    nestedBlocks.append(contentsOf: listBlocks(from: child.children, listDepth: listDepth + 1, ordered: false, startIndex: 1))
+                    let nestedLoose = consumeNextListLooseness()
+                    nestedBlocks.append(contentsOf: listBlocks(from: child.children, listDepth: listDepth + 1, ordered: false, startIndex: 1, isLoose: nestedLoose))
                 case "ol":
                     let nestedStart = Int(child.attributes["start"] ?? "") ?? 1
-                    nestedBlocks.append(contentsOf: listBlocks(from: child.children, listDepth: listDepth + 1, ordered: true, startIndex: nestedStart))
+                    let nestedLoose = consumeNextListLooseness()
+                    nestedBlocks.append(contentsOf: listBlocks(from: child.children, listDepth: listDepth + 1, ordered: true, startIndex: nestedStart, isLoose: nestedLoose))
                 case nil:
+                    // Skip pure-whitespace text nodes between sibling
+                    // elements (e.g. the space `<input/>` inserts after
+                    // itself in a task-list `<li>`). Letting them into
+                    // inlineNodes blocks the `<p>`-as-first-paragraph
+                    // shortcut above and pushes task-item content into
+                    // the nested-block path, which loses the per-item
+                    // `loose` flag.
+                    if case let .text(text) = child.kind,
+                       text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    {
+                        break
+                    }
                     inlineNodes.append(child)
                 default:
                     if nestedBlocks.isEmpty, inlineNodes.isEmpty {
@@ -162,7 +282,7 @@ struct HTMLPreviewDocumentBuilder {
                 plainText: rawText.plainText.trimmingCharacters(in: .whitespacesAndNewlines),
             )
             if !trimmed.plainText.isEmpty {
-                output.append(.listItem(text: trimmed, depth: listDepth, marker: marker))
+                output.append(.listItem(text: trimmed, depth: listDepth, marker: marker, loose: isLoose))
             }
             output.append(contentsOf: nestedBlocks)
             ordinal += 1
