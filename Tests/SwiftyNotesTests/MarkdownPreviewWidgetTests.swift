@@ -215,6 +215,74 @@ struct MarkdownPreviewWidgetTests {
     }
 
     @Test @MainActor
+    func `presented preview re-sizes block image when the preview pane is widened after initial layout`() throws {
+        // Regression: the previous resize hook used `notify::width`, which
+        // GtkWidget never emits — so when the user widened the preview
+        // pane after a note was already open, `Clamp.maximumSize` stayed
+        // pinned at the initial width and the image visibly stopped
+        // growing even though the surrounding card kept expanding. The
+        // fix replaces the hook with a per-frame tick callback that
+        // actually fires on allocation changes; this test pins the
+        // contract by simulating the user dragging the splitter wider
+        // and asserting that the image's clamp width grew with it.
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: temp) }
+        try FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
+
+        let imageURL = temp.appendingPathComponent("hero-large.svg", isDirectory: false)
+        try Data("""
+        <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+          <rect width="1600" height="900" fill="#0a84ff"/>
+        </svg>
+        """.utf8).write(to: imageURL, options: .atomic)
+
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.preview-grows-on-resize")
+        try app.register()
+
+        let preview = MarkdownPreview(remoteImageLoader: { _, _ in })
+        let window = ApplicationWindow(application: app)
+        let editorHost = Box(orientation: .vertical, spacing: 0)
+        editorHost.setSizeRequest(width: 600, height: 400)
+        let pane = Paned(orientation: .horizontal)
+        pane.startChild = editorHost
+        pane.endChild = preview.rootScroll
+        pane.resizeStartChild = true
+        pane.resizeEndChild = true
+        pane.shrinkStartChild = true
+        pane.shrinkEndChild = true
+        window.setDefaultSize(width: 1100, height: 760)
+        window.setContent(pane)
+        preview.attach(to: window)
+        window.present()
+        pumpMainContext(for: .milliseconds(40))
+
+        preview.render(blocks: [
+            .image(alt: "Hero artwork", source: imageURL.path(), title: nil),
+        ])
+        pumpMainContext(for: .milliseconds(120))
+
+        guard let initialClamp = firstClamp(in: preview.container) else {
+            Issue.record("Expected initial clamp")
+            return
+        }
+        let initialMax = initialClamp.maximumSize
+        #expect(initialMax > 0)
+        #expect(initialMax < 1600)
+
+        // Shrink the editor pane to widen the preview pane: this is the
+        // programmatic equivalent of the user dragging the splitter to
+        // the left in the running app.
+        editorHost.setSizeRequest(width: 200, height: 400)
+        pumpMainContext(for: .milliseconds(200))
+
+        guard let resizedClamp = firstClamp(in: preview.container) else {
+            Issue.record("Expected clamp after resize")
+            return
+        }
+        #expect(resizedClamp.maximumSize > initialMax)
+    }
+
+    @Test @MainActor
     func `block image Picture keeps canShrink so wide images can scale into narrow preview columns`() throws {
         // Block images (cards, plain in-flow) need to scale down when
         // the preview pane is narrow — that is `Picture.canShrink`'s

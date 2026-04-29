@@ -126,8 +126,7 @@ final class MarkdownPreview {
     private weak var window: ApplicationWindow?
     private let remoteImageLoader: PreviewRemoteImageLoadHandler
     private var animatedImagePlayers: [PreviewAnimatedImagePlayer] = []
-    private var blockImageRefreshTimerID: UInt32?
-    private var lastRefreshedPreviewWidth: Int = -1
+    private var lastObservedPreviewWidth: Int = -1
 
     init(remoteImageLoader: @escaping PreviewRemoteImageLoadHandler = { url, completion in
         PreviewRemoteImageLoader.shared.loadImage(url, completion: completion)
@@ -144,24 +143,22 @@ final class MarkdownPreview {
         rootScroll.minContentWidth = MainWindow.minimumPreviewWidth
         rootScroll.setAccessibleLabel("Markdown Preview")
         rootScroll.overlayScrolling = false
-        rootScroll.onSizeAllocate { [weak self] _, _ in
-            self?.scheduleBlockImageRefresh()
-        }
-    }
 
-    private func scheduleBlockImageRefresh() {
-        let width = rootScroll.width
-        guard width != lastRefreshedPreviewWidth else { return }
-        if let id = blockImageRefreshTimerID {
-            MainContext.cancel(sourceId: id)
-            blockImageRefreshTimerID = nil
-        }
-        blockImageRefreshTimerID = MainContext.timeout(every: .milliseconds(120)) { [weak self] in
+        // GtkWidget does not expose `width` as a GObject property, so
+        // `notify::width` (the basis for swift-adwaita's onSizeAllocate)
+        // never fires on resize. A per-frame tick callback is the
+        // robust way to react to allocation changes — it's a single
+        // integer compare per frame, only triggers a refresh when the
+        // width actually changes, and avoids missing the case where
+        // the user widens the preview pane beyond its initial width.
+        rootScroll.addTickCallback { [weak self] in
             guard let self else { return false }
-            blockImageRefreshTimerID = nil
-            lastRefreshedPreviewWidth = rootScroll.width
-            refreshBlockImageHeights()
-            return false
+            let width = rootScroll.width
+            if width > 0, width != lastObservedPreviewWidth {
+                lastObservedPreviewWidth = width
+                refreshBlockImageHeights()
+            }
+            return true
         }
     }
 
@@ -944,17 +941,11 @@ final class MarkdownPreview {
         return .local(URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent(expanded))
     }
 
-    private func firstPicture(in widget: Widget) -> Picture? {
-        if let picture = widget.tryCast(Picture.self) {
-            return picture
-        }
-
-        for child in widget.children() {
-            if let picture = firstPicture(in: child) {
-                return picture
-            }
-        }
-        return nil
+    private func resolvedBlockImageWidth() -> Int {
+        let horizontalInsets = 2 * 20 + 2 * 14
+        let measured = rootScroll.width - horizontalInsets
+        if measured > 0 { return measured }
+        return max(rootScroll.minContentWidth - horizontalInsets, 1)
     }
 
     private func refreshBlockImageHeights() {
@@ -976,10 +967,15 @@ final class MarkdownPreview {
         return nil
     }
 
-    private func resolvedBlockImageWidth() -> Int {
-        let horizontalInsets = 2 * 20 + 2 * 14
-        let measured = rootScroll.width - horizontalInsets
-        if measured > 0 { return measured }
-        return max(rootScroll.minContentWidth - horizontalInsets, 1)
+    private func firstPicture(in widget: Widget) -> Picture? {
+        if let picture = widget.tryCast(Picture.self) {
+            return picture
+        }
+        for child in widget.children() {
+            if let picture = firstPicture(in: child) {
+                return picture
+            }
+        }
+        return nil
     }
 }
