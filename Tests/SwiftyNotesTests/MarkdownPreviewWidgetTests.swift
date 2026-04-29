@@ -95,8 +95,14 @@ struct MarkdownPreviewWidgetTests {
     }
 
     @Test @MainActor
-    func `preview renders linked badge groups without fixed width padding`() throws {
-        let app = Application(id: "me.spaceinbox.swiftynotes.tests.remote-preview-badge-layout")
+    func `preview wraps linked badge in chromeless Box without inheriting Button min-height`() throws {
+        // Regression: an earlier version wrapped linked badges in a
+        // libadwaita `Button`. The Button enforced a ~30px min-height
+        // that silently capped how tall the inner Picture could grow,
+        // so badges rendered visibly smaller than the preferredHeight
+        // they requested. The wrapper is now a plain `Box` with a
+        // `GestureClick` controller for click handling.
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.linked-badge-box-wrapper")
         try app.register()
 
         let preview = MarkdownPreview(remoteImageLoader: { _, _ in })
@@ -111,20 +117,30 @@ struct MarkdownPreviewWidgetTests {
             ]),
         ])
 
-        guard let button = firstButton(in: preview.container),
-              let child = buttonChild(button)
-        else {
-            Issue.record("Expected linked badge button content")
+        #expect(firstButton(in: preview.container) == nil)
+
+        guard let picture = firstPicture(in: preview.container) else {
+            Issue.record("Expected a Picture inside the linked badge")
             return
         }
 
-        let size = child.sizeRequest
-        let buttonNaturalHeight = measuredNaturalSize(of: button, orientation: .vertical)
-
-        #expect(child.isInstance(of: Picture.self))
+        let size = picture.sizeRequest
         #expect(size.width == -1)
-        #expect(size.height == 18)
-        #expect(buttonNaturalHeight <= 22)
+        #expect(size.height == 22)
+
+        // The wrapper that owns the click target sits one level above
+        // the Picture and must have the `preview-image-link` class so
+        // the chromeless hover styling applies.
+        guard let wrapper = picture.parent else {
+            Issue.record("Expected a wrapper around the Picture")
+            return
+        }
+        #expect(wrapper.hasCSSClass("preview-image-link"))
+
+        let wrapperHeight = measuredNaturalSize(of: wrapper, orientation: .vertical)
+        // Box wrapper must not pad the badge — its natural height is
+        // the Picture's request. A Button here would be ~30+.
+        #expect(wrapperHeight <= 22)
     }
 
     @Test @MainActor
@@ -155,17 +171,74 @@ struct MarkdownPreviewWidgetTests {
             ]),
         ])
 
-        guard let button = firstButton(in: preview.container),
-              let child = buttonChild(button)
-        else {
-            Issue.record("Expected linked badge button content")
+        guard let picture = firstPicture(in: preview.container) else {
+            Issue.record("Expected linked badge Picture")
             return
         }
 
-        let size = child.sizeRequest
+        let size = picture.sizeRequest
 
-        #expect(size.width == 108)
-        #expect(size.height == 18)
+        // 120×20 SVG scaled to badge height = 22 → width = 132.
+        #expect(size.width == 132)
+        #expect(size.height == 22)
+    }
+
+    @Test @MainActor
+    func `badge Picture disables canShrink so async-loaded SVG honours its size request`() throws {
+        // Regression: before this fix the Picture had `canShrink = true`
+        // unconditionally. A linked badge's remote SVG arrives async,
+        // after initial layout has already settled on a zero-width
+        // allocation. With canShrink=true GTK happily kept the badge
+        // squashed at 0×height even though setSizeRequest reported the
+        // proper size. canShrink=false makes setSizeRequest a hard
+        // minimum so the badge ends up rendered at its requested size.
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.badge-picture-cannot-shrink")
+        try app.register()
+
+        let preview = MarkdownPreview(remoteImageLoader: { _, _ in })
+        preview.render(blocks: [
+            .imageGroup(items: [
+                .init(
+                    alt: "Swift badge",
+                    source: "https://img.shields.io/badge/Swift-6.0+-F05138.svg",
+                    title: nil,
+                    linkDestination: "https://swift.org",
+                ),
+            ]),
+        ])
+
+        guard let picture = firstPicture(in: preview.container) else {
+            Issue.record("Expected badge Picture")
+            return
+        }
+        #expect(picture.canShrink == false)
+    }
+
+    @Test @MainActor
+    func `block image Picture keeps canShrink so wide images can scale into narrow preview columns`() throws {
+        // Block images (cards, plain in-flow) need to scale down when
+        // the preview pane is narrow — that is `Picture.canShrink`'s
+        // raison d'être. The fix above is targeted at badges via
+        // `preferredHeight`; block images (no preferredHeight) must be
+        // unaffected.
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.block-image-can-shrink")
+        try app.register()
+
+        let preview = MarkdownPreview(remoteImageLoader: { _, _ in })
+        preview.render(blocks: [
+            .image(
+                alt: "Wide showcase",
+                source: "https://example.invalid/showcase.png",
+                title: nil,
+                style: .card,
+            ),
+        ])
+
+        guard let picture = firstPicture(in: preview.container) else {
+            Issue.record("Expected block image Picture")
+            return
+        }
+        #expect(picture.canShrink == true)
     }
 
     @Test @MainActor
