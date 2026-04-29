@@ -11,6 +11,17 @@ public struct Note: Identifiable, Sendable, Equatable {
     public var updatedAt: Date
     public var content: String
 
+    /// Non-nil only for notes currently in the trash. Tracks when the
+    /// note was soft-deleted; the auto-prune sweep on app launch
+    /// permanently deletes entries whose age exceeds the configured
+    /// retention.
+    public let deletedAt: Date?
+
+    /// The folder the note lived in before it was soft-deleted, kept
+    /// so `restore` can put the note back where it came from. `nil`
+    /// for notes that aren't in the trash.
+    public let originalFolderPath: String?
+
     public init(
         id: UUID,
         filename: String,
@@ -18,6 +29,8 @@ public struct Note: Identifiable, Sendable, Equatable {
         createdAt: Date,
         updatedAt: Date,
         content: String,
+        deletedAt: Date? = nil,
+        originalFolderPath: String? = nil,
     ) {
         self.id = id
         self.filename = filename
@@ -25,6 +38,8 @@ public struct Note: Identifiable, Sendable, Equatable {
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.content = content
+        self.deletedAt = deletedAt
+        self.originalFolderPath = originalFolderPath
     }
 
     public var title: String {

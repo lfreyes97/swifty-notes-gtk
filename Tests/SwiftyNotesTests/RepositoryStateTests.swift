@@ -819,4 +819,196 @@ struct RepositoryStateTests {
         #expect(MainWindow.resolvedPreviewWidth(storedWidth: 720, availableWidth: 1600) == 720)
         #expect(MainWindow.resolvedPreviewWidth(storedWidth: 720, availableWidth: 900) == 540)
     }
+
+    // MARK: - Trash auto-prune (pure)
+
+    @Test
+    func `moveToTrash relocates the note directory under dot-trash and stamps deletedAt plus originalFolderPath in meta`() throws {
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let repository = NotesRepository(notesDirectory: temp)
+        try repository.createFolder(at: "Projects")
+        var note = try repository.createNote(initialContent: "# Doomed", in: "Projects")
+
+        let directoryBeforeTrash = repository.noteDirectoryURL(for: note)
+        #expect(FileManager.default.fileExists(atPath: directoryBeforeTrash.path()))
+
+        try repository.moveToTrash(note: note)
+
+        // Original directory is gone …
+        #expect(!FileManager.default.fileExists(atPath: directoryBeforeTrash.path()))
+
+        // … and the note is now under `.trash/<uuid>/` with the
+        // metadata extended.
+        let trashedDirectory = temp
+            .appendingPathComponent(".trash", isDirectory: true)
+            .appendingPathComponent(note.id.uuidString.lowercased(), isDirectory: true)
+        #expect(FileManager.default.fileExists(atPath: trashedDirectory.path()))
+
+        let trashed = try repository.trashedNotes()
+        #expect(trashed.count == 1)
+        guard let restored = trashed.first else { return }
+        #expect(restored.id == note.id)
+        #expect(restored.originalFolderPath == "Projects")
+        #expect(restored.deletedAt != nil)
+        #expect(restored.content == "# Doomed")
+        _ = note
+    }
+
+    @Test
+    func `loadNotes excludes notes that live under dot-trash so the sidebar list stays clean`() throws {
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let repository = NotesRepository(notesDirectory: temp)
+        let keep = try repository.createNote(initialContent: "# Keep")
+        let toss = try repository.createNote(initialContent: "# Toss")
+        try repository.moveToTrash(note: toss)
+
+        let surfaced = try repository.loadNotes().map(\.id)
+        #expect(surfaced.contains(keep.id))
+        #expect(!surfaced.contains(toss.id))
+    }
+
+    @Test
+    func `restore moves a trashed note back to its original folder, recreating the folder if it disappeared in the meantime`() throws {
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let repository = NotesRepository(notesDirectory: temp)
+        try repository.createFolder(at: "Projects/Inbox")
+        let note = try repository.createNote(initialContent: "# Body", in: "Projects/Inbox")
+        try repository.moveToTrash(note: note)
+
+        // User scrubbed the folder while the note was in the trash —
+        // restore must rebuild the path rather than leaving the note
+        // stranded in the bin.
+        try repository.deleteFolderRecursively(at: "Projects/Inbox")
+
+        try repository.restore(noteWithID: note.id)
+
+        let surfaced = try repository.loadNotes().first { $0.id == note.id }
+        #expect(surfaced?.folderPath == "Projects/Inbox")
+        #expect(surfaced?.content == "# Body")
+        #expect(try repository.trashedNotes().isEmpty)
+    }
+
+    @Test
+    func `permanentlyDelete erases a single trashed note from disk and emptyTrash wipes the rest`() throws {
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let repository = NotesRepository(notesDirectory: temp)
+        let alpha = try repository.createNote(initialContent: "# Alpha")
+        let beta = try repository.createNote(initialContent: "# Beta")
+        let gamma = try repository.createNote(initialContent: "# Gamma")
+
+        try repository.moveToTrash(note: alpha)
+        try repository.moveToTrash(note: beta)
+        try repository.moveToTrash(note: gamma)
+
+        try repository.permanentlyDelete(noteWithID: beta.id)
+        let afterPermanent = try repository.trashedNotes().map(\.id).sorted { $0.uuidString < $1.uuidString }
+        #expect(afterPermanent == [alpha.id, gamma.id].sorted { $0.uuidString < $1.uuidString })
+
+        try repository.emptyTrash()
+        #expect(try repository.trashedNotes().isEmpty)
+
+        let trashRoot = temp.appendingPathComponent(".trash", isDirectory: true)
+        if FileManager.default.fileExists(atPath: trashRoot.path()) {
+            let leftovers = try FileManager.default.contentsOfDirectory(at: trashRoot, includingPropertiesForKeys: nil)
+            #expect(leftovers.isEmpty)
+        }
+    }
+
+    @Test
+    func `pruneTrashIfNeeded permanently deletes only entries older than the retention window`() throws {
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let repository = NotesRepository(notesDirectory: temp)
+        let young = try repository.createNote(initialContent: "# Young")
+        let stale = try repository.createNote(initialContent: "# Stale")
+
+        try repository.moveToTrash(note: young)
+        try repository.moveToTrash(note: stale)
+
+        // Backdate `stale` to 60 days ago by rewriting its meta.json
+        // directly. `young` keeps its just-trashed timestamp.
+        let staleDir = temp
+            .appendingPathComponent(".trash", isDirectory: true)
+            .appendingPathComponent(stale.id.uuidString.lowercased(), isDirectory: true)
+        let staleMeta = staleDir.appendingPathComponent("meta.json", isDirectory: false)
+        var raw = try Data(contentsOf: staleMeta)
+        if var dict = try JSONSerialization.jsonObject(with: raw) as? [String: Any] {
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            dict["deletedAt"] = formatter.string(from: Date().addingTimeInterval(-60 * 24 * 3600))
+            raw = try JSONSerialization.data(withJSONObject: dict, options: [.prettyPrinted, .sortedKeys])
+            try raw.write(to: staleMeta, options: .atomic)
+        }
+
+        try repository.pruneTrashIfNeeded(retention: .days(30), now: Date())
+
+        let remaining = try repository.trashedNotes().map(\.id)
+        #expect(remaining == [young.id])
+    }
+
+    @Test
+    func `trash prune leaves every entry alone when retention is never`() {
+        let now = Date(timeIntervalSince1970: 1_000_000_000)
+        let entries: [TrashEntry] = [
+            .init(id: UUID(), deletedAt: now.addingTimeInterval(-100_000_000)),
+            .init(id: UUID(), deletedAt: now.addingTimeInterval(-1)),
+        ]
+        #expect(NotesRepository.entriesEligibleForPrune(in: entries, retention: .never, now: now) == [])
+    }
+
+    @Test
+    func `trash prune returns only entries whose deletedAt is older than the retention window`() {
+        let now = Date(timeIntervalSince1970: 1_000_000_000)
+        let day: TimeInterval = 24 * 3600
+        let young = TrashEntry(id: UUID(), deletedAt: now.addingTimeInterval(-29 * day))
+        let onTheEdge = TrashEntry(id: UUID(), deletedAt: now.addingTimeInterval(-30 * day + 1))
+        let stale = TrashEntry(id: UUID(), deletedAt: now.addingTimeInterval(-31 * day))
+        let ancient = TrashEntry(id: UUID(), deletedAt: now.addingTimeInterval(-365 * day))
+
+        let due = NotesRepository.entriesEligibleForPrune(
+            in: [young, onTheEdge, stale, ancient],
+            retention: .days(30),
+            now: now,
+        )
+        #expect(due.map(\.id) == [stale.id, ancient.id])
+    }
+
+    @Test
+    func `trash prune skips legacy entries with no deletedAt timestamp so they don't get auto-deleted before they have an age`() {
+        // Notes that landed in the trash before this feature shipped
+        // have no `deletedAt` to compare against. The repository
+        // stamps them on first encounter so the next scan will see a
+        // real timestamp; until then the safe default is "leave it
+        // alone" rather than risk wiping notes whose age we don't
+        // know.
+        let now = Date()
+        let legacy = TrashEntry(id: UUID(), deletedAt: nil)
+        let due = NotesRepository.entriesEligibleForPrune(
+            in: [legacy],
+            retention: .days(7),
+            now: now,
+        )
+        #expect(due.isEmpty)
+    }
+
+    @Test
+    func `trash prune ignores entries with deletedAt in the future so a backwards clock jump does not nuke recent notes`() {
+        let now = Date(timeIntervalSince1970: 1_000_000_000)
+        let fromTheFuture = TrashEntry(id: UUID(), deletedAt: now.addingTimeInterval(60))
+        let due = NotesRepository.entriesEligibleForPrune(
+            in: [fromTheFuture],
+            retention: .days(1),
+            now: now,
+        )
+        #expect(due.isEmpty)
+    }
 }

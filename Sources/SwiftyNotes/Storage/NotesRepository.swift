@@ -35,6 +35,14 @@ private struct StoredNoteMetadata: Codable {
     let id: UUID
     let createdAt: Date
     let updatedAt: Date
+    /// Non-nil only when the note is in the trash. Tracks when the
+    /// soft-delete happened so the auto-prune sweep can permanently
+    /// remove old entries.
+    let deletedAt: Date?
+    /// Folder the note lived in before it was soft-deleted, so
+    /// restore can put it back where it came from. Empty string if it
+    /// was at the root.
+    let originalFolderPath: String?
 }
 
 private struct StagedOrphanedAssets: Codable {
@@ -115,6 +123,10 @@ public final class NotesRepository: @unchecked Sendable {
     private static let metadataFilename = "meta.json"
     private static let assetsDirectoryName = "assets"
     private static let stagedOrphanedAssetsFilename = ".orphaned-assets.json"
+    /// Hidden directory that holds soft-deleted notes. Each entry
+    /// keeps its uuid as folder name and carries `deletedAt` /
+    /// `originalFolderPath` in `meta.json`.
+    private static let trashDirectoryName = ".trash"
     private static let storageSchemaVersion = 1
     private static let orphanedAssetsSchemaVersion = 1
     private static let supportedImageExtensions: Set<String> = [
@@ -254,6 +266,8 @@ public final class NotesRepository: @unchecked Sendable {
             id: note.id,
             createdAt: note.createdAt,
             updatedAt: note.updatedAt,
+            deletedAt: note.deletedAt,
+            originalFolderPath: note.originalFolderPath,
         )
         let data = try metadataEncoder.encode(metadata)
         try data.write(to: metadataURL, options: .atomic)
@@ -546,19 +560,244 @@ public final class NotesRepository: @unchecked Sendable {
         }
     }
 
+    /// Pure decision helper for the auto-prune sweep. Returns the
+    /// subset of `entries` whose `deletedAt` is at least `retention`
+    /// in the past relative to `now`. Legacy entries with `nil`
+    /// `deletedAt` are skipped so they aren't auto-deleted before
+    /// they have a known age, and entries with `deletedAt` in the
+    /// future are skipped to survive a backwards clock jump.
+    public static func entriesEligibleForPrune(
+        in entries: [TrashEntry],
+        retention: TrashRetention,
+        now: Date,
+    ) -> [TrashEntry] {
+        guard case let .days(days) = retention, days >= 0 else { return [] }
+        let cutoff = now.addingTimeInterval(-Double(days) * 24 * 3600)
+        return entries.filter { entry in
+            guard let deletedAt = entry.deletedAt else { return false }
+            guard deletedAt <= now else { return false }
+            return deletedAt < cutoff
+        }
+    }
+
+    /// Soft-deletes the note: moves its directory under
+    /// `notes/.trash/<uuid>/` and stamps `deletedAt` /
+    /// `originalFolderPath` into the in-trash `meta.json` so
+    /// ``restore(noteWithID:)`` can put it back where it came from
+    /// and ``pruneTrashIfNeeded(retention:now:)`` knows its age.
     public func delete(note: Note) throws {
+        try queue.sync { try moveToTrashUnlocked(note: note) }
+    }
+
+    /// Explicit alias for the soft-delete path. ``delete(note:)``
+    /// already routes here; ``moveToTrash(note:)`` is what the UI
+    /// reaches for when it wants the operation by name.
+    public func moveToTrash(note: Note) throws {
+        try queue.sync { try moveToTrashUnlocked(note: note) }
+    }
+
+    /// Returns every note currently in `.trash/<uuid>/`.
+    /// `folderPath` on the result stays empty so callers can render
+    /// these under a dedicated Trash entry; `originalFolderPath`
+    /// carries the pre-deletion location, `deletedAt` carries when
+    /// the soft-delete happened.
+    public func trashedNotes() throws -> [Note] {
         try queue.sync {
-            let directoryURL = noteDirectoryURL(for: note)
-            if fileManager.fileExists(atPath: directoryURL.path(percentEncoded: false)) {
-                try fileManager.removeItem(at: directoryURL)
+            try ensureNotesDirectoryUnlocked()
+            return try trashedNotesUnlocked()
+        }
+    }
+
+    /// Moves a soft-deleted note back to its original folder
+    /// (recreating the folder if it disappeared in the meantime) and
+    /// clears the trash metadata.
+    public func restore(noteWithID id: UUID) throws {
+        try queue.sync { try restoreUnlocked(noteID: id) }
+    }
+
+    /// Permanently removes a single trashed note from disk.
+    public func permanentlyDelete(noteWithID id: UUID) throws {
+        try queue.sync { try permanentlyDeleteUnlocked(noteID: id) }
+    }
+
+    /// Permanently removes every trashed note from disk.
+    public func emptyTrash() throws {
+        try queue.sync {
+            let trashURL = self.trashDirectoryURL
+            guard fileManager.fileExists(atPath: trashURL.path(percentEncoded: false)) else {
                 return
             }
+            try fileManager.removeItem(at: trashURL)
+        }
+    }
 
+    /// Permanently deletes every trashed note whose `deletedAt` is
+    /// older than `retention` relative to `now`. Legacy entries
+    /// without a `deletedAt` get stamped (with `now`) on first
+    /// encounter so the *next* sweep can age them out cleanly.
+    public func pruneTrashIfNeeded(retention: TrashRetention, now: Date) throws {
+        try queue.sync {
+            try ensureNotesDirectoryUnlocked()
+            let entries = try trashEntriesForPruneUnlocked(now: now)
+            let due = Self.entriesEligibleForPrune(in: entries, retention: retention, now: now)
+            for entry in due {
+                try permanentlyDeleteUnlocked(noteID: entry.id)
+            }
+        }
+    }
+
+    var trashDirectoryURL: URL {
+        notesDirectory.appendingPathComponent(Self.trashDirectoryName, isDirectory: true)
+    }
+
+    private func moveToTrashUnlocked(note: Note) throws {
+        try ensureNotesDirectoryUnlocked()
+        let sourceDirectory = noteDirectoryURL(for: note)
+        let trashDirectory = trashDirectoryURL
+        try fileManager.createDirectory(at: trashDirectory, withIntermediateDirectories: true)
+        let destinationDirectory = trashDirectory
+            .appendingPathComponent(note.id.uuidString.lowercased(), isDirectory: true)
+
+        let destinationPath = destinationDirectory.path(percentEncoded: false)
+        if fileManager.fileExists(atPath: destinationPath) {
+            // A previous trash entry with the same id is still on
+            // disk (e.g. a crash mid-operation). Wipe it so the move
+            // can proceed atomically.
+            try fileManager.removeItem(at: destinationDirectory)
+        }
+
+        if fileManager.fileExists(atPath: sourceDirectory.path(percentEncoded: false)) {
+            try fileManager.moveItem(at: sourceDirectory, to: destinationDirectory)
+        } else {
+            // Legacy path-based note (no per-note directory) — fall
+            // back to deleting the markdown file in place. This
+            // mirrors the pre-soft-delete behaviour for very old
+            // notes the user hasn't migrated yet.
             let markdownURL = noteURL(for: note)
             if fileManager.fileExists(atPath: markdownURL.path(percentEncoded: false)) {
                 try fileManager.removeItem(at: markdownURL)
             }
+            return
         }
+
+        let metadataURL = destinationDirectory.appendingPathComponent(Self.metadataFilename, isDirectory: false)
+        let metadata = StoredNoteMetadata(
+            schemaVersion: Self.storageSchemaVersion,
+            id: note.id,
+            createdAt: note.createdAt,
+            updatedAt: note.updatedAt,
+            deletedAt: Date(),
+            originalFolderPath: note.folderPath,
+        )
+        let data = try metadataEncoder.encode(metadata)
+        try data.write(to: metadataURL, options: .atomic)
+    }
+
+    private func trashedNotesUnlocked() throws -> [Note] {
+        let trashURL = trashDirectoryURL
+        guard fileManager.fileExists(atPath: trashURL.path(percentEncoded: false)) else {
+            return []
+        }
+        let children = try fileManager.contentsOfDirectory(
+            at: trashURL,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [],
+        )
+        return try children
+            .filter(\.hasDirectoryPath)
+            .compactMap { url -> Note? in
+                let noteFile = url.appendingPathComponent(Self.noteFilename, isDirectory: false)
+                guard fileManager.fileExists(atPath: noteFile.path(percentEncoded: false)) else {
+                    return nil
+                }
+                return try loadNoteUnlocked(from: url, folderPath: "")
+            }
+            .sorted { ($0.deletedAt ?? Date.distantPast) > ($1.deletedAt ?? Date.distantPast) }
+    }
+
+    private func restoreUnlocked(noteID: UUID) throws {
+        let trashedDirectory = trashDirectoryURL
+            .appendingPathComponent(noteID.uuidString.lowercased(), isDirectory: true)
+        guard fileManager.fileExists(atPath: trashedDirectory.path(percentEncoded: false)) else {
+            return
+        }
+        let note = try loadNoteUnlocked(from: trashedDirectory, folderPath: "")
+        let target = note.originalFolderPath ?? ""
+        let restoredFolderURL = target.isEmpty ? notesDirectory : folderURL(for: target)
+        // Recreate the original folder path if it disappeared while
+        // the note was in the trash. Skip the validation that
+        // ``createFolder`` runs — the path was already valid when
+        // the note was saved.
+        try fileManager.createDirectory(at: restoredFolderURL, withIntermediateDirectories: true)
+        let destination = restoredFolderURL.appendingPathComponent(
+            noteID.uuidString.lowercased(),
+            isDirectory: true,
+        )
+        if fileManager.fileExists(atPath: destination.path(percentEncoded: false)) {
+            try fileManager.removeItem(at: destination)
+        }
+        try fileManager.moveItem(at: trashedDirectory, to: destination)
+
+        // Clear the trash markers on the restored note's meta.json.
+        let metadataURL = destination.appendingPathComponent(Self.metadataFilename, isDirectory: false)
+        let cleared = StoredNoteMetadata(
+            schemaVersion: Self.storageSchemaVersion,
+            id: note.id,
+            createdAt: note.createdAt,
+            updatedAt: note.updatedAt,
+            deletedAt: nil,
+            originalFolderPath: nil,
+        )
+        let data = try metadataEncoder.encode(cleared)
+        try data.write(to: metadataURL, options: .atomic)
+    }
+
+    private func permanentlyDeleteUnlocked(noteID: UUID) throws {
+        let trashedDirectory = trashDirectoryURL
+            .appendingPathComponent(noteID.uuidString.lowercased(), isDirectory: true)
+        if fileManager.fileExists(atPath: trashedDirectory.path(percentEncoded: false)) {
+            try fileManager.removeItem(at: trashedDirectory)
+        }
+    }
+
+    private func trashEntriesForPruneUnlocked(now: Date) throws -> [TrashEntry] {
+        let trashURL = trashDirectoryURL
+        guard fileManager.fileExists(atPath: trashURL.path(percentEncoded: false)) else {
+            return []
+        }
+        let children = try fileManager.contentsOfDirectory(
+            at: trashURL,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [],
+        )
+        var entries: [TrashEntry] = []
+        for child in children where child.hasDirectoryPath {
+            let metadataURL = child.appendingPathComponent(Self.metadataFilename, isDirectory: false)
+            guard let id = UUID(uuidString: child.lastPathComponent) else { continue }
+            guard fileManager.fileExists(atPath: metadataURL.path(percentEncoded: false)) else {
+                continue
+            }
+            let data = try Data(contentsOf: metadataURL)
+            let metadata = try metadataDecoder.decode(StoredNoteMetadata.self, from: data)
+            if metadata.deletedAt == nil {
+                // Legacy entry with no timestamp — stamp with `now`
+                // so the next sweep can age it out.
+                let stamped = StoredNoteMetadata(
+                    schemaVersion: metadata.schemaVersion,
+                    id: metadata.id,
+                    createdAt: metadata.createdAt,
+                    updatedAt: metadata.updatedAt,
+                    deletedAt: now,
+                    originalFolderPath: metadata.originalFolderPath ?? "",
+                )
+                let stampedData = try metadataEncoder.encode(stamped)
+                try stampedData.write(to: metadataURL, options: .atomic)
+                entries.append(TrashEntry(id: id, deletedAt: nil))
+            } else {
+                entries.append(TrashEntry(id: id, deletedAt: metadata.deletedAt))
+            }
+        }
+        return entries
     }
 
     public func directorySnapshot() throws -> NotesDirectorySnapshot {
@@ -778,6 +1017,8 @@ public final class NotesRepository: @unchecked Sendable {
             createdAt: createdAt,
             updatedAt: updatedAt,
             content: content,
+            deletedAt: metadata?.deletedAt,
+            originalFolderPath: metadata?.originalFolderPath,
         )
     }
 
@@ -837,6 +1078,8 @@ public final class NotesRepository: @unchecked Sendable {
             id: note.id,
             createdAt: note.createdAt,
             updatedAt: note.updatedAt,
+            deletedAt: note.deletedAt,
+            originalFolderPath: note.originalFolderPath,
         )
         let metadataData = try metadataEncoder.encode(metadata)
         try metadataData.write(to: metadataURL, options: .atomic)
