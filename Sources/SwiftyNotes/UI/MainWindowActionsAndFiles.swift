@@ -232,6 +232,36 @@ extension MainWindow {
         editor.view.addController(dropTarget)
     }
 
+    func installEditorClipboardImagePaste() {
+        editor.view.onPasteClipboard { [weak self] in
+            guard let self else { return }
+            // The paste-clipboard signal fires before GTK does the
+            // actual paste, so we have one synchronous chance to
+            // intercept it for image content. The async texture read
+            // that follows lands several main-loop turns later — by
+            // which point the default text-paste path has already
+            // run. Probe the formats up front and short-circuit only
+            // when we know we'll be handling the paste ourselves.
+            let clipboard = editor.view.clipboard
+            guard clipboard.containsImage else { return }
+            editor.view.stopSignalEmission(named: "paste-clipboard")
+            clipboard.readTexture { [weak self] texture in
+                guard let self,
+                      let texture,
+                      let pngData = texture.encodedPNGData()
+                else { return }
+                do {
+                    try importPastedImage(pngData: pngData)
+                } catch {
+                    presentError(
+                        heading: "Could not paste image",
+                        body: error.localizedDescription,
+                    )
+                }
+            }
+        }
+    }
+
     func importDroppedImages(from sourceURLs: [URL]) throws {
         guard let selected = currentEditedNoteSnapshot() else {
             throw DroppedImageImportError.noSelectedNote

@@ -241,6 +241,7 @@ final class MainWindow {
         editorContent.hexpand = true
         editorContent.vexpand = true
         installEditorImageDropTarget()
+        installEditorClipboardImagePaste()
 
         editorContent.append(editorFormattingToolbar.scrolled)
         editorContent.append(Separator())
