@@ -458,6 +458,29 @@ struct NoteModelAndRendererTests {
     }
 
     @Test
+    func `renderer restarts ordered list numbering when the author writes a fresh ordinal after a blank line`() {
+        // CommonMark merges `1. a\n2. b\n3. c\n\n1. d` into one list
+        // and renumbers the trailing `1.` as `4.` — the explicit
+        // number in source is dropped. That's confusing for authors
+        // who type `1.` after a gap to start a fresh logical group.
+        // Honour the explicit ordinal in that case.
+        let renderer = MarkdownRenderer()
+        let blocks = renderer.blocks(for: """
+        1. Step one
+        2. Step two
+        3. Step three
+
+        1. Stand-alone follow-up
+        """, darkAppearance: false)
+
+        let markers = blocks.compactMap { block -> String? in
+            guard case let .listItem(_, _, marker, _) = block else { return nil }
+            return marker
+        }
+        #expect(markers == ["1.", "2.", "3.", "1."])
+    }
+
+    @Test
     func `renderer trims trailing whitespace from list item text so wrapping labels don't grow an empty second line`() {
         // swift-markdown's HTMLFormatter emits tight list items as
         // `<li>First\n</li>` with a literal trailing newline. A

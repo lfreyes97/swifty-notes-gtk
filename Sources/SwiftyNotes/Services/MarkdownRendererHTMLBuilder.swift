@@ -5,27 +5,37 @@ import Markdown
 final class HTMLPreviewDocumentBuilder {
     let darkAppearance: Bool
 
-    /// Per-item "is loose" flags collected from the source markdown in
-    /// document order. An item is loose when a blank line precedes it
-    /// inside its list — the author's blank-line cue applies to *that*
-    /// item, not to the whole list. (CommonMark itself promotes loose
-    /// to a list-wide property and ours used to do the same; that
-    /// flattens the user's grouping intent — `- a\n- b\n\n- c` reads
-    /// as "two items, gap, one item" and not as "three uniformly-loose
-    /// items".)
+    /// Per-item metadata recovered from the source markdown in
+    /// document order. Order matches `HTMLFormatter`'s depth-first
+    /// `<li>` emission so the HTML processor can pop one entry per
+    /// list item it walks.
     ///
-    /// Order matches `HTMLFormatter`'s `<li>` emission order, so the
-    /// HTML processor can pop a flag for each list item it walks.
-    private var listItemLooseness: [Bool] = []
-    private var listItemLoosenessCursor = 0
+    /// - `loose`: this specific item is preceded by a blank line in
+    ///   its list, so the preview should add paragraph-style top
+    ///   spacing. The flag is per-item — not per-list — so contiguous
+    ///   tight runs stay together while only blank-separated items
+    ///   push apart.
+    /// - `ordinalRestart`: only set on ordered-list items that follow
+    ///   a blank line and re-state an explicit number. CommonMark
+    ///   merges `1. a\n2. b\n\n1. c` into one list with auto-numbered
+    ///   `1, 2, 3` — but the author's `1.` after the blank is a clear
+    ///   intent to start a fresh logical group, so we honour it by
+    ///   resetting the visual ordinal to that value.
+    private struct ListItemMeta {
+        let loose: Bool
+        let ordinalRestart: Int?
+    }
+
+    private var listItemMetadata: [ListItemMeta] = []
+    private var listItemMetadataCursor = 0
 
     init(darkAppearance: Bool) {
         self.darkAppearance = darkAppearance
     }
 
     func render(markdown: String) -> [RenderedBlock] {
-        listItemLooseness = collectListItemLooseness(from: markdown)
-        listItemLoosenessCursor = 0
+        listItemMetadata = collectListItemMetadata(from: markdown)
+        listItemMetadataCursor = 0
         let html = HTMLFormatter.format(markdown)
         let nodes = HTMLSubsetParser().parse(html)
         let rendered = restoringImageMetadata(
@@ -38,18 +48,15 @@ final class HTMLPreviewDocumentBuilder {
         return rendered
     }
 
-    /// Returns one `Bool` per list item found in the source markdown
-    /// (`true` ⇒ this specific item is preceded by a blank line within
-    /// its list, so it should render with paragraph-style top spacing)
-    /// in document order. Order matches `HTMLFormatter`'s depth-first
-    /// `<li>` emission so the HTML processor can pop a flag for each
-    /// list item it walks.
-    private func collectListItemLooseness(from markdown: String) -> [Bool] {
+    /// Walks the source markdown and emits one ``ListItemMeta`` per
+    /// list item in document order. See ``listItemMetadata`` for what
+    /// each field carries.
+    private func collectListItemMetadata(from markdown: String) -> [ListItemMeta] {
         struct OpenList {
             let indent: Int
             var sawBlank: Bool
         }
-        var results: [Bool] = []
+        var results: [ListItemMeta] = []
         var stack: [OpenList] = []
         for line in markdown.components(separatedBy: "\n") {
             let leading = Self.leadingSpaceWidth(of: line)
@@ -60,15 +67,24 @@ final class HTMLPreviewDocumentBuilder {
                 }
                 continue
             }
-            if Self.isListItemMarker(trimmed) {
+            if let marker = Self.parseListMarker(trimmed) {
                 while let top = stack.last, top.indent > leading {
                     stack.removeLast()
                 }
                 if let top = stack.last, top.indent == leading {
-                    results.append(top.sawBlank)
+                    let loose = top.sawBlank
+                    let restart: Int? = {
+                        // An explicit ordered marker after a blank
+                        // line within the same list means the author
+                        // is restarting the count — usually `1.`, but
+                        // honour any explicit number they typed.
+                        guard loose, case let .ordered(number) = marker else { return nil }
+                        return number
+                    }()
+                    results.append(ListItemMeta(loose: loose, ordinalRestart: restart))
                     stack[stack.count - 1].sawBlank = false
                 } else {
-                    results.append(false)
+                    results.append(ListItemMeta(loose: false, ordinalRestart: nil))
                     stack.append(OpenList(indent: leading, sawBlank: false))
                 }
             } else if leading <= (stack.last?.indent ?? Int.max) {
@@ -94,28 +110,35 @@ final class HTMLPreviewDocumentBuilder {
         return count
     }
 
-    private static func isListItemMarker(_ trimmed: Substring) -> Bool {
+    private enum SourceListMarker {
+        case bullet
+        case ordered(Int)
+    }
+
+    private static func parseListMarker(_ trimmed: Substring) -> SourceListMarker? {
         if let first = trimmed.first, first == "-" || first == "*" || first == "+" {
             let next = trimmed.index(after: trimmed.startIndex)
-            if next == trimmed.endIndex { return false }
-            return trimmed[next] == " "
+            if next == trimmed.endIndex { return nil }
+            return trimmed[next] == " " ? .bullet : nil
         }
-        // Ordered list: one or more digits followed by `.` or `)` and a space.
         var index = trimmed.startIndex
         while index < trimmed.endIndex, trimmed[index].isNumber {
             index = trimmed.index(after: index)
         }
-        guard index != trimmed.startIndex, index < trimmed.endIndex else { return false }
+        guard index != trimmed.startIndex, index < trimmed.endIndex else { return nil }
         let punct = trimmed[index]
-        guard punct == "." || punct == ")" else { return false }
+        guard punct == "." || punct == ")" else { return nil }
         let afterPunct = trimmed.index(after: index)
-        return afterPunct < trimmed.endIndex && trimmed[afterPunct] == " "
+        guard afterPunct < trimmed.endIndex, trimmed[afterPunct] == " " else { return nil }
+        return Int(String(trimmed[trimmed.startIndex..<index])).map { .ordered($0) }
     }
 
-    private func consumeNextListItemLooseness() -> Bool {
-        guard listItemLoosenessCursor < listItemLooseness.count else { return false }
-        let value = listItemLooseness[listItemLoosenessCursor]
-        listItemLoosenessCursor += 1
+    private func consumeNextListItemMetadata() -> ListItemMeta {
+        guard listItemMetadataCursor < listItemMetadata.count else {
+            return ListItemMeta(loose: false, ordinalRestart: nil)
+        }
+        let value = listItemMetadata[listItemMetadataCursor]
+        listItemMetadataCursor += 1
         return value
     }
 
@@ -199,10 +222,14 @@ final class HTMLPreviewDocumentBuilder {
         var ordinal = startIndex
 
         for node in nodes where node.name == "li" {
-            // Pop the looseness flag in source order so each `<li>`
-            // emitted by HTMLFormatter aligns with the corresponding
-            // line in the source scan.
-            let itemIsLoose = consumeNextListItemLooseness()
+            // Pop the per-item metadata in source order so each
+            // `<li>` emitted by HTMLFormatter aligns with the
+            // corresponding line in the source scan.
+            let meta = consumeNextListItemMetadata()
+            if let restart = meta.ordinalRestart {
+                ordinal = restart
+            }
+            let itemIsLoose = meta.loose
             let checkboxNode = firstCheckboxNode(in: node.children)
 
             let checkboxMarker: String? = if let checkboxNode {
