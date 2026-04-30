@@ -32,7 +32,7 @@ modules:
     sources:
       - type: git
         url: https://gitlab.gnome.org/GNOME/libspelling.git
-        tag: "0.4.9"
+        tag: "0.4.10"
 
   # Bundle hunspell dictionaries for the most common languages so spellcheck
   # works out-of-the-box on every Flatpak install. Without this the runtime's
@@ -110,7 +110,7 @@ modules:
         path: @SOURCE_PATH@
       - type: git
         url: https://github.com/makoni/swift-adwaita.git
-        commit: a060a229e54037bff473d8c35f458f73488e975b
+        commit: 0c4bcc4bd657949a8a5ca7d56df1a13028abe397
         dest: flatpak-deps/swift-adwaita
       - type: git
         url: https://github.com/swiftlang/swift-markdown.git
