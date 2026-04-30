@@ -230,6 +230,12 @@ final class MainWindow {
         viewModeSwitcher.append(splitModeToggle)
         viewModeSwitcher.append(previewModeToggle)
         editorFormattingToolbar.onAction = { [weak self] action in
+            // Block formatting toolbar input while a trashed note
+            // is being previewed read-only — otherwise toolbar
+            // buttons end-run around `editor.view.editable = false`
+            // and silently rewrite the previously-active regular
+            // note's content.
+            guard self?.previewedTrashedNoteID == nil else { return }
             self?.applyEditorFormatting(action)
         }
         configureToolbarAccessibility()

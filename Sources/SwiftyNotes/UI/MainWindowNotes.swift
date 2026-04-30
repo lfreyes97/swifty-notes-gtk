@@ -116,6 +116,7 @@ extension MainWindow {
         suppressEditorChange = false
         editor.view.editable = false
         editor.view.opacity = 0.85
+        editorFormattingToolbar.scrolled.sensitive = false
         let renderer = MarkdownRenderer()
         let blocks = renderer.blocks(for: note.content)
         schedulePreviewRefresh(blocks: blocks, baseDirectory: repository.notesDirectoryURL)
@@ -130,6 +131,7 @@ extension MainWindow {
         previewedTrashedNoteID = nil
         editor.view.editable = true
         editor.view.opacity = 1.0
+        editorFormattingToolbar.scrolled.sensitive = true
         trashedNoteBanner.revealed = false
     }
 
