@@ -32,8 +32,19 @@ extension MainWindow {
         requestID: UInt,
         remainingAttempts: Int = 20,
     ) {
+        // Look up the row by its index in `sidebar.renderedItems`,
+        // which matches the ListBox row order one-to-one. Looking
+        // it up in `displayedNotes` (which filters out folders and
+        // the trash entry) used to skew the index whenever the
+        // sidebar had any folder rows above the clicked note —
+        // `rowAt(skewedIndex)` then resolved to the row above the
+        // one the user clicked, so the popover arrow planted into
+        // the wrong row.
         guard requestID == noteContextMenuRequestID,
-              let rowIndex = displayedNotes.firstIndex(where: { $0.id == noteID }),
+              let rowIndex = sidebar.renderedItems.firstIndex(where: { item in
+                  if case let .note(noteItem) = item { return noteItem.note.id == noteID }
+                  return false
+              }),
               let row = sidebar.list.rowAt(rowIndex)
         else {
             return
