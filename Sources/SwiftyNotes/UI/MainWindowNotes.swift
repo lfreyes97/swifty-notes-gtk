@@ -82,12 +82,13 @@ extension MainWindow {
             isTrashExpanded.toggle()
             refreshSidebar()
         case let .trashedNote(trashedNote):
-            // Selecting a trashed note shows it in the preview pane
-            // read-only by clearing the active selection — the user
-            // is only viewing it from the Trash, not editing.
-            state.select(noteID: nil)
+            // Show the trashed note read-only without touching the
+            // selectedNoteID — the user is browsing the bin, not
+            // re-opening a note for editing. Keeping `selectedNoteID`
+            // pinned to the previously-active note also stops
+            // ListBox from re-asserting selection on the first row
+            // after the next refresh.
             previewTrashedNote(trashedNote.note)
-            refreshSidebar()
         }
     }
 
@@ -235,8 +236,19 @@ extension MainWindow {
         dialog.present(window)
     }
 
-    func presentTrashedNoteContextMenu(forNoteID noteID: UUID, fromRow row: ListBoxRow, x: Int, y: Int) {
+    func presentTrashedNoteContextMenu(forNoteID noteID: UUID, x: Int, y: Int) {
+        dismissNoteContextMenu()
+        dismissFolderContextMenu()
         dismissTrashContextMenu()
+
+        guard let rowIndex = sidebar.renderedItems.firstIndex(where: { item in
+            if case let .trashedNote(trashedNote) = item { return trashedNote.note.id == noteID }
+            return false
+        }),
+              let row = sidebar.list.rowAt(rowIndex)
+        else { return }
+        guard row.root != nil else { return }
+
         let popover = Popover()
         popover.hasArrow = true
         popover.position = .bottom
@@ -260,17 +272,24 @@ extension MainWindow {
             if popover.root != nil { popover.unparent() }
             if trashContextMenu === popover { trashContextMenu = nil }
         }
-        guard popover.present(from: row, x: x, y: y) else {
-            popover.unparent()
-            return
-        }
+        guard popover.present(from: row, x: x, y: y) else { return }
         trashContextMenu = popover
     }
 
-    func presentTrashHeaderContextMenu(fromRow row: ListBoxRow, x: Int, y: Int) {
+    func presentTrashHeaderContextMenu(x: Int, y: Int) {
+        dismissNoteContextMenu()
+        dismissFolderContextMenu()
         dismissTrashContextMenu()
+
         let count = state.trashedNotes.count
         guard count > 0 else { return }
+        guard let rowIndex = sidebar.renderedItems.firstIndex(where: { item in
+            if case .trashHeader = item { return true }
+            return false
+        }),
+              let row = sidebar.list.rowAt(rowIndex)
+        else { return }
+        guard row.root != nil else { return }
 
         let popover = Popover()
         popover.hasArrow = true
@@ -291,10 +310,7 @@ extension MainWindow {
             if popover.root != nil { popover.unparent() }
             if trashContextMenu === popover { trashContextMenu = nil }
         }
-        guard popover.present(from: row, x: x, y: y) else {
-            popover.unparent()
-            return
-        }
+        guard popover.present(from: row, x: x, y: y) else { return }
         trashContextMenu = popover
     }
 
@@ -383,15 +399,13 @@ extension MainWindow {
                     self?.presentFolderContextMenu(forFolderPath: folder.path, x: Int(x), y: Int(y))
                 }
             case .trashHeader:
-                row.onRightClick { [weak self, weak row] x, y in
-                    guard let self, let row else { return }
-                    presentTrashHeaderContextMenu(fromRow: row, x: Int(x), y: Int(y))
+                row.onRightClick { [weak self] x, y in
+                    self?.presentTrashHeaderContextMenu(x: Int(x), y: Int(y))
                 }
             case let .trashedNote(trashedNote):
                 let noteID = trashedNote.note.id
-                row.onRightClick { [weak self, weak row] x, y in
-                    guard let self, let row else { return }
-                    presentTrashedNoteContextMenu(forNoteID: noteID, fromRow: row, x: Int(x), y: Int(y))
+                row.onRightClick { [weak self] x, y in
+                    self?.presentTrashedNoteContextMenu(forNoteID: noteID, x: Int(x), y: Int(y))
                 }
             }
         }
