@@ -97,19 +97,32 @@ extension MainWindow {
     }
 
     func previewTrashedNote(_ note: Note) {
-        // Mark the editor as showing a trashed note. Three knobs
+        // Flush any pending unsaved edits in the previously-active
+        // regular note BEFORE we swap the editor buffer. Without
+        // this, a scheduled autosave timer would fire after the
+        // swap, snapshot the now-trashed-content from the buffer,
+        // and write it back into `state.selectedNote` (the regular
+        // note) — the same data-loss bug `editable = false` closes
+        // for keystrokes, just arriving via the timer instead.
+        if editor.buffer.modified, currentEditedNoteSnapshot() != nil {
+            saveCurrentEditedNote(announceSuccess: false)
+        }
+        autosave.cancel()
+
+        // Mark the editor as showing a trashed note. Four knobs
         // make this safe:
-        //   1. `previewedTrashedNoteID` is set so any subsequent
-        //      change handler can tell we're in trash-preview mode
-        //      (and skip the autosave path that would otherwise
-        //      route edits to the previously-active regular note).
+        //   1. `previewedTrashedNoteID` flags trash-preview mode
+        //      so any subsequent code path (renderSelection,
+        //      external-reload, formatting toolbar, change handler)
+        //      can refuse to overwrite the editor buffer.
         //   2. `editor.view.editable = false` blocks keystrokes —
         //      typing into a soft-deleted note would silently
-        //      rewrite a different note's content, which is the
-        //      bug this whole mode-switch closes.
-        //   3. Banner above the editor announces the read-only
-        //      state and offers a Restore action that brings the
-        //      note back and re-enables editing.
+        //      rewrite a different note's content.
+        //   3. Toolbar `sensitive = false` and the action guard
+        //      block formatting input, which would otherwise route
+        //      around the `editable` flag.
+        //   4. Banner above the editor announces the read-only
+        //      state and offers a Restore action.
         previewedTrashedNoteID = note.id
         suppressEditorChange = true
         editor.setText(note.content)
@@ -413,6 +426,19 @@ extension MainWindow {
     func renderSelection() {
         refreshSidebar()
         updateActionAvailability()
+
+        // While a trashed note is being previewed, leave the editor
+        // / preview / banner state alone. `renderSelection` is
+        // called from background paths (external-change reload,
+        // post-save refresh, …) — without this guard those paths
+        // would overwrite the trashed-note buffer with the
+        // previously-active regular note's content, undoing the
+        // trash-preview without disabling the read-only mode.
+        if previewedTrashedNoteID != nil {
+            updateHeaderSubtitle()
+            return
+        }
+
         guard let selected = state.selectedNote else {
             suppressEditorChange = true
             editor.setText("")
