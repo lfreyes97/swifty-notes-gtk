@@ -30,13 +30,22 @@ extension MainWindow {
             try? repository.pruneTrashIfNeeded(retention: appSettings.trashRetention, now: Date())
 
             var notes = try repository.loadNotes()
+            var seededOnboarding = false
             if notes.isEmpty {
-                _ = try repository.seedDefaultNotesIfNeeded()
+                let seeded = try repository.seedDefaultNotesIfNeeded()
+                seededOnboarding = !seeded.isEmpty
                 notes = try repository.loadNotes()
             }
             state.setNotes(notes)
             state.setTrashedNotes(try repository.trashedNotes())
             state.setFolders(try repository.listFolders())
+            if seededOnboarding {
+                // Expand the seeded "Guides" folder on first launch
+                // so the onboarding notes are immediately visible
+                // and folders are discovered as a feature instead of
+                // a hidden surprise.
+                state.setFolderExpanded(NotesRepository.defaultSeedGuidesFolder, expanded: true)
+            }
             directorySnapshot = try repository.directorySnapshot()
             renderSelection()
             flushPendingPreviewRefresh()

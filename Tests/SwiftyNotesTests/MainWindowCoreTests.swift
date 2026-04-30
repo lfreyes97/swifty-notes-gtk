@@ -57,13 +57,16 @@ struct MainWindowCoreTests {
         )
 
         window.debugLoadInitialNotes()
+        // The seeded onboarding layout puts the explanatory guides
+        // inside an expanded "Guides" folder so they appear first in
+        // the sidebar, with the root-level showcase below them.
         #expect(window.debugDisplayedNoteTitles == [
-            "Markdown Showcase",
             "About Swifty Notes",
             "Using Swifty Notes CLI",
+            "Markdown Showcase",
         ])
 
-        window.debugSelectDisplayedNote(at: 2)
+        window.debugSelectDisplayedNote(at: 1)
 
         #expect(window.debugSelectedNoteStableID() != nil)
         #expect(window.debugSelectedNoteContent == SwiftyNotesCLISeed.content)

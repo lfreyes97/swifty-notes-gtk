@@ -264,6 +264,13 @@ struct RepositoryStateTests {
         #expect(notesAfterSeed[0].filename.hasSuffix("/note.md"))
         #expect(notesAfterSeed[1].filename.hasSuffix("/note.md"))
         #expect(notesAfterSeed[2].filename.hasSuffix("/note.md"))
+        // Showcase stays at root; the explanatory guides land in the
+        // "Guides" sub-folder so first-launch users discover folders
+        // as a feature rather than a hidden setting.
+        #expect(notesAfterSeed[0].folderPath == "")
+        #expect(notesAfterSeed[1].folderPath == NotesRepository.defaultSeedGuidesFolder)
+        #expect(notesAfterSeed[2].folderPath == NotesRepository.defaultSeedGuidesFolder)
+        #expect(try repository.listFolders() == [NotesRepository.defaultSeedGuidesFolder])
         let imageURL = repository
             .noteAssetsDirectoryURL(for: notesAfterSeed[0])
             .appendingPathComponent(MarkdownShowcaseSeed.imageFilename, isDirectory: false)
@@ -274,6 +281,30 @@ struct RepositoryStateTests {
         let notesAfterSecondSeed = try repository.loadNotes()
         #expect(secondSeed.isEmpty)
         #expect(notesAfterSecondSeed.count == 3)
+    }
+
+    @Test
+    func `repository skips seeding when notes are empty but trash has entries`() throws {
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let repository = NotesRepository(notesDirectory: temp)
+        let userNote = try repository.createNote(initialContent: "# User content")
+        try repository.moveToTrash(note: userNote)
+
+        // Live notes are empty, but trash holds the user's deleted
+        // note — they've already engaged with the app and shouldn't
+        // be greeted with the onboarding seed again on next launch.
+        #expect(try repository.loadNotes().isEmpty)
+        let seeded = try repository.seedDefaultNotesIfNeeded()
+        #expect(seeded.isEmpty)
+        #expect(try repository.loadNotes().isEmpty)
+
+        // Emptying the trash signals "fresh start" — the seed is
+        // allowed to fire again so default content reappears.
+        try repository.emptyTrash()
+        let reSeeded = try repository.seedDefaultNotesIfNeeded()
+        #expect(reSeeded.count == 3)
     }
 
     @Test

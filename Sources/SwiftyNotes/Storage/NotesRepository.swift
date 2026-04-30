@@ -819,6 +819,24 @@ public final class NotesRepository: @unchecked Sendable {
         return entries
     }
 
+    /// Lightweight emptiness check for the trash directory — used by
+    /// the seed gate so we don't decode `meta.json` files just to ask
+    /// "did the user ever delete anything?".
+    private func trashEntryIDsUnlocked() throws -> [UUID] {
+        let trashURL = trashDirectoryURL
+        guard fileManager.fileExists(atPath: trashURL.path(percentEncoded: false)) else {
+            return []
+        }
+        let children = try fileManager.contentsOfDirectory(
+            at: trashURL,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [],
+        )
+        return children
+            .filter(\.hasDirectoryPath)
+            .compactMap { UUID(uuidString: $0.lastPathComponent) }
+    }
+
     public func directorySnapshot() throws -> NotesDirectorySnapshot {
         try queue.sync {
             try ensureNotesDirectoryUnlocked()
@@ -867,6 +885,11 @@ public final class NotesRepository: @unchecked Sendable {
         }
     }
 
+    /// Folder the seeded onboarding guides land in. Surfaces the
+    /// folder feature on first launch so users immediately see that
+    /// notes can be grouped.
+    public static let defaultSeedGuidesFolder = "Guides"
+
     @discardableResult
     public func seedDefaultNotesIfNeeded(createdAt: Date = Date()) throws -> [Note] {
         try queue.sync { () throws -> [Note] in
@@ -874,20 +897,35 @@ public final class NotesRepository: @unchecked Sendable {
             if try !storedNoteEntriesUnlocked().isEmpty {
                 return []
             }
+            // A non-empty Trash means the user has already
+            // interacted with the app and chose to delete things.
+            // Re-seeding would surprise them with marketing notes
+            // alongside their bin. Empty Trash → the user is asking
+            // for a fresh start, so let the seed fire again.
+            if try !trashEntryIDsUnlocked().isEmpty {
+                return []
+            }
 
             let showcase = makeNewNote(content: MarkdownShowcaseSeed.content, createdAt: createdAt)
             try persistUnlocked(showcase)
             try persistShowcaseImageUnlockedIfNeeded(for: showcase)
 
+            try fileManager.createDirectory(
+                at: folderURL(for: Self.defaultSeedGuidesFolder),
+                withIntermediateDirectories: true,
+            )
+
             let overview = makeNewNote(
                 content: SwiftyNotesOverviewSeed.content,
                 createdAt: createdAt.addingTimeInterval(-1),
+                folderPath: Self.defaultSeedGuidesFolder,
             )
             try persistUnlocked(overview)
 
             let cliGuide = makeNewNote(
                 content: SwiftyNotesCLISeed.content,
                 createdAt: createdAt.addingTimeInterval(-2),
+                folderPath: Self.defaultSeedGuidesFolder,
             )
             try persistUnlocked(cliGuide)
 

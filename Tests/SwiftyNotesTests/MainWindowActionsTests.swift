@@ -24,11 +24,14 @@ struct MainWindowActionsTests {
         )
 
         window.debugLoadInitialNotes()
-        window.debugOpenContextMenuForDisplayedNote(at: 0)
+        // Seeded sidebar order with "Guides" expanded:
+        // [About, Using CLI, Markdown Showcase]. Picking index 0
+        // (About) keeps the test exercising the same selection path.
+        window.debugOpenContextMenuForDisplayedNote(at: 2)
         #expect(window.debugHasContextMenu)
         #expect(!window.debugNoteContextMenuLabels.isEmpty)
 
-        window.selectNote(at: 1)
+        window.selectNote(at: 0)
 
         #expect(!window.debugHasContextMenu)
         #expect(window.debugNoteContextMenuLabels.isEmpty)
