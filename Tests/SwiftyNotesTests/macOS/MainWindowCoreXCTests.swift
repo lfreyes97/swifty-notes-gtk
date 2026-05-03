@@ -1,12 +1,11 @@
-#if !os(macOS)
+#if os(macOS)
 import Adwaita
 import Foundation
 @testable import SwiftyNotes
-import Testing
+import XCTest
 
-struct MainWindowCoreTests {
-    @Test @MainActor
-    func `main window creates initial note and updates preview`() throws {
+final class MainWindowCoreXCTests: XCTestCase {
+    @MainActor func test_main_window_creates_initial_note_and_updates_preview() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -25,21 +24,20 @@ struct MainWindowCoreTests {
         )
 
         window.debugLoadInitialNotes()
-        #expect(window.debugNotesCount == 3)
-        #expect(window.debugSelectedNoteContent == MarkdownShowcaseSeed.content)
-        #expect(window.debugPreviewText.contains("Markdown Showcase"))
-        #expect(window.debugPreviewText.contains("screenshot-ready note"))
-        #expect(window.debugPreviewText.contains("Feature Snapshot"))
-        #expect(window.debugPreviewText.contains("Toolbar"))
+        XCTAssertTrue(window.debugNotesCount == 3)
+        XCTAssertTrue(window.debugSelectedNoteContent == MarkdownShowcaseSeed.content)
+        XCTAssertTrue(window.debugPreviewText.contains("Markdown Showcase"))
+        XCTAssertTrue(window.debugPreviewText.contains("screenshot-ready note"))
+        XCTAssertTrue(window.debugPreviewText.contains("Feature Snapshot"))
+        XCTAssertTrue(window.debugPreviewText.contains("Toolbar"))
 
         window.debugSetEditorText("# Title\n\nBody")
-        #expect(window.debugSelectedNoteContent == "# Title\n\nBody")
-        #expect(window.debugPreviewText.contains("Title"))
-        #expect(window.debugPreviewText.contains("Body"))
+        XCTAssertTrue(window.debugSelectedNoteContent == "# Title\n\nBody")
+        XCTAssertTrue(window.debugPreviewText.contains("Title"))
+        XCTAssertTrue(window.debugPreviewText.contains("Body"))
     }
 
-    @Test @MainActor
-    func `main window selecting CLI seeded note updates preview`() throws {
+    @MainActor func test_main_window_selecting_CLI_seeded_note_updates_preview() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -61,7 +59,7 @@ struct MainWindowCoreTests {
         // The seeded onboarding layout puts the explanatory guides
         // inside an expanded "Guides" folder so they appear first in
         // the sidebar, with the root-level showcase below them.
-        #expect(window.debugDisplayedNoteTitles == [
+        XCTAssertTrue(window.debugDisplayedNoteTitles == [
             "About Swifty Notes",
             "Using Swifty Notes CLI",
             "Markdown Showcase",
@@ -69,15 +67,14 @@ struct MainWindowCoreTests {
 
         window.debugSelectDisplayedNote(at: 1)
 
-        #expect(window.debugSelectedNoteStableID() != nil)
-        #expect(window.debugSelectedNoteContent == SwiftyNotesCLISeed.content)
-        #expect(window.debugPreviewText.contains("Using Swifty Notes CLI"))
-        #expect(window.debugPreviewText.contains("swiftynotes cli list"))
-        #expect(window.debugPreviewText.contains("swiftynotes cli update"))
+        XCTAssertNotNil(window.debugSelectedNoteStableID())
+        XCTAssertTrue(window.debugSelectedNoteContent == SwiftyNotesCLISeed.content)
+        XCTAssertTrue(window.debugPreviewText.contains("Using Swifty Notes CLI"))
+        XCTAssertTrue(window.debugPreviewText.contains("swiftynotes cli list"))
+        XCTAssertTrue(window.debugPreviewText.contains("swiftynotes cli update"))
     }
 
-    @Test @MainActor
-    func `main window present renders preview for initially selected note`() async throws {
+    @MainActor func test_main_window_present_renders_preview_for_initially_selected_note() async throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -101,13 +98,12 @@ struct MainWindowCoreTests {
         window.present()
         try await Task.sleep(for: .milliseconds(40))
 
-        #expect(window.debugSelectedNoteContent == "# Initial\n\nPreview body")
-        #expect(window.debugPreviewText.contains("Initial"))
-        #expect(window.debugPreviewText.contains("Preview body"))
+        XCTAssertTrue(window.debugSelectedNoteContent == "# Initial\n\nPreview body")
+        XCTAssertTrue(window.debugPreviewText.contains("Initial"))
+        XCTAssertTrue(window.debugPreviewText.contains("Preview body"))
     }
 
-    @Test @MainActor
-    func `main window applies configured editor autosave and appearance preferences at startup`() throws {
+    @MainActor func test_main_window_applies_configured_editor_autosave_and_appearance_preferences_at_startup() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -136,17 +132,16 @@ struct MainWindowCoreTests {
             ),
         )
 
-        #expect(window.debugEditorWrapsLines == false)
-        #expect(window.debugEditorFontSize == 18)
-        #expect(window.debugEditorTabWidth == 2)
-        #expect(window.debugEditorInsertsSpacesInsteadOfTabs == false)
-        #expect(window.debugAutosaveDelaySeconds == 5)
-        #expect(window.debugAppearanceMode == .dark)
-        #expect(StyleManager.default.colorScheme == .forceDark)
+        XCTAssertTrue(window.debugEditorWrapsLines == false)
+        XCTAssertTrue(window.debugEditorFontSize == 18)
+        XCTAssertTrue(window.debugEditorTabWidth == 2)
+        XCTAssertTrue(window.debugEditorInsertsSpacesInsteadOfTabs == false)
+        XCTAssertTrue(window.debugAutosaveDelaySeconds == 5)
+        XCTAssertTrue(window.debugAppearanceMode == .dark)
+        XCTAssertTrue(StyleManager.default.colorScheme == .forceDark)
     }
 
-    @Test @MainActor
-    func `main window create note adds another note`() throws {
+    @MainActor func test_main_window_create_note_adds_another_note() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -165,14 +160,13 @@ struct MainWindowCoreTests {
         )
 
         window.debugLoadInitialNotes()
-        #expect(window.debugNotesCount == 3)
+        XCTAssertTrue(window.debugNotesCount == 3)
 
         window.debugCreateNote()
-        #expect(window.debugNotesCount == 4)
+        XCTAssertTrue(window.debugNotesCount == 4)
     }
 
-    @Test @MainActor
-    func `main window create note after present keeps selection stable`() async throws {
+    @MainActor func test_main_window_create_note_after_present_keeps_selection_stable() async throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -196,13 +190,12 @@ struct MainWindowCoreTests {
         window.debugCreateNote()
         try await Task.sleep(for: .milliseconds(40))
 
-        #expect(window.debugNotesCount == 4)
-        #expect(window.debugSelectedNoteContent == "")
-        #expect(window.debugHeaderSubtitle.contains("Saved"))
+        XCTAssertTrue(window.debugNotesCount == 4)
+        XCTAssertTrue(window.debugSelectedNoteContent == "")
+        XCTAssertTrue(window.debugHeaderSubtitle.contains("Saved"))
     }
 
-    @Test @MainActor
-    func `main window imports dropped image into selected note assets and markdown`() throws {
+    @MainActor func test_main_window_imports_dropped_image_into_selected_note_assets_and_markdown() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -224,22 +217,21 @@ struct MainWindowCoreTests {
         )
 
         window.debugLoadInitialNotes()
-        #expect(window.debugSelectedNoteStableID() == existing.stableID)
+        XCTAssertTrue(window.debugSelectedNoteStableID() == existing.stableID)
 
         let sourceImageURL = temp.appendingPathComponent("Dragged Diagram.PNG", isDirectory: false)
         try Data("dropped-image".utf8).write(to: sourceImageURL, options: .atomic)
 
         try window.importDroppedImages(from: [sourceImageURL])
-        #expect(window.debugSelectedNoteContent?.contains("![Dragged Diagram](assets/dragged-diagram.png)") == true)
+        XCTAssertTrue(window.debugSelectedNoteContent?.contains("![Dragged Diagram](assets/dragged-diagram.png)") == true)
 
         window.saveSelectedNoteNow()
         let reloaded = try repository.loadNotes()
-        #expect(reloaded[0].content.contains("![Dragged Diagram](assets/dragged-diagram.png)"))
-        #expect(try Data(contentsOf: repository.noteAssetsDirectoryURL(for: reloaded[0]).appendingPathComponent("dragged-diagram.png")) == Data("dropped-image".utf8))
+        XCTAssertTrue(reloaded[0].content.contains("![Dragged Diagram](assets/dragged-diagram.png)"))
+        XCTAssertTrue(try Data(contentsOf: repository.noteAssetsDirectoryURL(for: reloaded[0]).appendingPathComponent("dragged-diagram.png")) == Data("dropped-image".utf8))
     }
 
-    @Test @MainActor
-    func `main window imports pasted image into selected note assets and markdown`() throws {
+    @MainActor func test_main_window_imports_pasted_image_into_selected_note_assets_and_markdown() throws {
         // Clipboard paste mirrors the drop-target import: the bytes the
         // clipboard handed us land in the note's `assets/` folder under
         // a unique `pasted.png` / `pasted-2.png` filename, and a
@@ -266,28 +258,27 @@ struct MainWindowCoreTests {
         )
 
         window.debugLoadInitialNotes()
-        #expect(window.debugSelectedNoteStableID() == existing.stableID)
+        XCTAssertTrue(window.debugSelectedNoteStableID() == existing.stableID)
 
         let pngBytes = Data("pasted-image".utf8)
         try window.importPastedImage(pngData: pngBytes)
-        #expect(window.debugSelectedNoteContent?.contains("![](assets/pasted.png)") == true)
+        XCTAssertTrue(window.debugSelectedNoteContent?.contains("![](assets/pasted.png)") == true)
 
         // A second paste collides on filename and gets the standard `-2`
         // suffix, same as the URL-based drop-import path.
         try window.importPastedImage(pngData: Data("second-paste".utf8))
-        #expect(window.debugSelectedNoteContent?.contains("![](assets/pasted-2.png)") == true)
+        XCTAssertTrue(window.debugSelectedNoteContent?.contains("![](assets/pasted-2.png)") == true)
 
         window.saveSelectedNoteNow()
         let reloaded = try repository.loadNotes()
-        #expect(reloaded[0].content.contains("![](assets/pasted.png)"))
-        #expect(reloaded[0].content.contains("![](assets/pasted-2.png)"))
+        XCTAssertTrue(reloaded[0].content.contains("![](assets/pasted.png)"))
+        XCTAssertTrue(reloaded[0].content.contains("![](assets/pasted-2.png)"))
         let assetsDir = repository.noteAssetsDirectoryURL(for: reloaded[0])
-        #expect(try Data(contentsOf: assetsDir.appendingPathComponent("pasted.png")) == pngBytes)
-        #expect(try Data(contentsOf: assetsDir.appendingPathComponent("pasted-2.png")) == Data("second-paste".utf8))
+        XCTAssertTrue(try Data(contentsOf: assetsDir.appendingPathComponent("pasted.png")) == pngBytes)
+        XCTAssertTrue(try Data(contentsOf: assetsDir.appendingPathComponent("pasted-2.png")) == Data("second-paste".utf8))
     }
 
-    @Test @MainActor
-    func `main window paste URL with no selection wraps it as a markdown link`() throws {
+    @MainActor func test_main_window_paste_URL_with_no_selection_wraps_it_as_a_markdown_link() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -318,11 +309,10 @@ struct MainWindowCoreTests {
             textBefore: "Cursor here: ",
         )
 
-        #expect(window.debugEditorText == "Cursor here: [https://example.com](https://example.com)")
+        XCTAssertTrue(window.debugEditorText == "Cursor here: [https://example.com](https://example.com)")
     }
 
-    @Test @MainActor
-    func `main window paste URL with selection wraps the selection as link text`() throws {
+    @MainActor func test_main_window_paste_URL_with_selection_wraps_the_selection_as_link_text() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -353,11 +343,10 @@ struct MainWindowCoreTests {
             textBefore: "",
         )
 
-        #expect(window.debugEditorText == "[click here](https://example.com) please")
+        XCTAssertTrue(window.debugEditorText == "[click here](https://example.com) please")
     }
 
-    @Test @MainActor
-    func `main window paste plain text inserts text without wrapping`() throws {
+    @MainActor func test_main_window_paste_plain_text_inserts_text_without_wrapping() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -388,11 +377,10 @@ struct MainWindowCoreTests {
             textBefore: "Prefix: ",
         )
 
-        #expect(window.debugEditorText == "Prefix: just some words")
+        XCTAssertTrue(window.debugEditorText == "Prefix: just some words")
     }
 
-    @Test @MainActor
-    func `main window paste URL inside code block keeps URL raw`() throws {
+    @MainActor func test_main_window_paste_URL_inside_code_block_keeps_URL_raw() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -424,11 +412,10 @@ struct MainWindowCoreTests {
             textBefore: prefix,
         )
 
-        #expect(window.debugEditorText == "```\ncurl https://example.com")
+        XCTAssertTrue(window.debugEditorText == "```\ncurl https://example.com")
     }
 
-    @Test @MainActor
-    func `main window paste image throws when no note is selected`() throws {
+    @MainActor func test_main_window_paste_image_throws_when_no_note_is_selected() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -447,15 +434,12 @@ struct MainWindowCoreTests {
         )
 
         // Deliberately skip `debugLoadInitialNotes()` — no note selected.
-        #expect {
-            try window.importPastedImage(pngData: Data("any".utf8))
-        } throws: { error in
-            (error as? DroppedImageImportError) == .noSelectedNote
+        XCTAssertThrowsError(try window.importPastedImage(pngData: Data("any".utf8))) { error in
+            XCTAssertTrue((error as? DroppedImageImportError) == .noSelectedNote)
         }
     }
 
-    @Test @MainActor
-    func `main window create note request creates note after main loop drain`() throws {
+    @MainActor func test_main_window_create_note_request_creates_note_after_main_loop_drain() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
         let deferredScheduler = TestMainActorScheduler()
@@ -476,15 +460,14 @@ struct MainWindowCoreTests {
         )
 
         window.debugLoadInitialNotes()
-        #expect(window.debugNotesCount == 3)
+        XCTAssertTrue(window.debugNotesCount == 3)
 
         window.debugRequestCreateNote()
         deferredScheduler.runPendingActions()
-        #expect(window.debugNotesCount == 4)
+        XCTAssertTrue(window.debugNotesCount == 4)
     }
 
-    @Test @MainActor
-    func `main window deferred selection switch runs after main loop drain`() throws {
+    @MainActor func test_main_window_deferred_selection_switch_runs_after_main_loop_drain() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -524,19 +507,18 @@ struct MainWindowCoreTests {
 
         window.debugLoadInitialNotes()
 
-        #expect(window.debugSelectedNoteStableID() == savedSecond.stableID)
+        XCTAssertTrue(window.debugSelectedNoteStableID() == savedSecond.stableID)
 
         window.debugRequestSelectDisplayedNote(at: 1)
-        #expect(window.debugSelectedNoteStableID() == savedSecond.stableID)
+        XCTAssertTrue(window.debugSelectedNoteStableID() == savedSecond.stableID)
 
         deferredScheduler.runPendingActions()
-        #expect(window.debugSelectedNoteStableID() == savedFirst.stableID)
-        #expect(window.debugPreviewText.contains("First"))
-        #expect(window.debugPreviewText.contains("One"))
+        XCTAssertTrue(window.debugSelectedNoteStableID() == savedFirst.stableID)
+        XCTAssertTrue(window.debugPreviewText.contains("First"))
+        XCTAssertTrue(window.debugPreviewText.contains("One"))
     }
 
-    @Test @MainActor
-    func `main window toolbar buttons expose standard tooltips`() throws {
+    @MainActor func test_main_window_toolbar_buttons_expose_standard_tooltips() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -555,27 +537,26 @@ struct MainWindowCoreTests {
         )
 
         window.debugLoadInitialNotes()
-        #expect(window.debugToolbarTooltips["sidebar"] == "Hide Notes Sidebar")
-        #expect(window.debugToolbarTooltips["new"] == "New Note")
-        #expect(window.debugToolbarTooltips["save"] == "Save Note")
-        #expect(window.debugToolbarTooltips["delete"] == "Delete Note")
-        #expect(window.debugToolbarTooltips["menu"] == "Main Menu")
-        #expect(window.debugToolbarTooltips["editorMode"] == "Editor only")
-        #expect(window.debugToolbarTooltips["splitMode"] == "Split view")
-        #expect(window.debugToolbarTooltips["previewMode"] == "Preview only")
-        #expect(window.debugToolbarTooltips["formatHeading"] == "Turn the current line into a heading")
-        #expect(window.debugToolbarTooltips["formatBold"] == "Wrap the selection in bold markdown")
-        #expect(window.debugToolbarTooltips["formatItalic"] == "Wrap the selection in italic markdown")
-        #expect(window.debugToolbarTooltips["formatCode"] == "Insert inline code or a fenced code block")
-        #expect(window.debugToolbarTooltips["formatLink"] == "Insert a markdown link")
-        #expect(window.debugToolbarTooltips["formatQuote"] == "Prefix the selected lines as a quote")
-        #expect(window.debugToolbarTooltips["formatBullet"] == "Prefix the selected lines as a bulleted list")
-        #expect(window.debugToolbarTooltips["formatNumbered"] == "Prefix the selected lines as a numbered list")
-        #expect(window.debugToolbarTooltips["formatTask"] == "Prefix the selected lines as a task list")
+        XCTAssertTrue(window.debugToolbarTooltips["sidebar"] == "Hide Notes Sidebar")
+        XCTAssertTrue(window.debugToolbarTooltips["new"] == "New Note")
+        XCTAssertTrue(window.debugToolbarTooltips["save"] == "Save Note")
+        XCTAssertTrue(window.debugToolbarTooltips["delete"] == "Delete Note")
+        XCTAssertTrue(window.debugToolbarTooltips["menu"] == "Main Menu")
+        XCTAssertTrue(window.debugToolbarTooltips["editorMode"] == "Editor only")
+        XCTAssertTrue(window.debugToolbarTooltips["splitMode"] == "Split view")
+        XCTAssertTrue(window.debugToolbarTooltips["previewMode"] == "Preview only")
+        XCTAssertTrue(window.debugToolbarTooltips["formatHeading"] == "Turn the current line into a heading")
+        XCTAssertTrue(window.debugToolbarTooltips["formatBold"] == "Wrap the selection in bold markdown")
+        XCTAssertTrue(window.debugToolbarTooltips["formatItalic"] == "Wrap the selection in italic markdown")
+        XCTAssertTrue(window.debugToolbarTooltips["formatCode"] == "Insert inline code or a fenced code block")
+        XCTAssertTrue(window.debugToolbarTooltips["formatLink"] == "Insert a markdown link")
+        XCTAssertTrue(window.debugToolbarTooltips["formatQuote"] == "Prefix the selected lines as a quote")
+        XCTAssertTrue(window.debugToolbarTooltips["formatBullet"] == "Prefix the selected lines as a bulleted list")
+        XCTAssertTrue(window.debugToolbarTooltips["formatNumbered"] == "Prefix the selected lines as a numbered list")
+        XCTAssertTrue(window.debugToolbarTooltips["formatTask"] == "Prefix the selected lines as a task list")
     }
 
-    @Test @MainActor
-    func `main window formatting toolbar uses compact icon mode when editor narrows`() throws {
+    @MainActor func test_main_window_formatting_toolbar_uses_compact_icon_mode_when_editor_narrows() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -610,7 +591,7 @@ struct MainWindowCoreTests {
             .taskList: "[ ]",
             .table: "Table",
         ]
-        #expect(window.debugEditorFormattingToolbarSnapshot == .init(
+        XCTAssertTrue(window.debugEditorFormattingToolbarSnapshot == .init(
             isCompact: false,
             usesTwoRows: false,
             labelsByAction: expandedLabels,
@@ -630,24 +611,23 @@ struct MainWindowCoreTests {
             .taskList: "[ ]",
             .table: nil,
         ]
-        #expect(window.debugEditorFormattingToolbarSnapshot == .init(
+        XCTAssertTrue(window.debugEditorFormattingToolbarSnapshot == .init(
             isCompact: true,
             usesTwoRows: false,
             labelsByAction: compactLabels,
         ))
-        #expect(window.debugToolbarTooltips["formatBold"] == "Wrap the selection in bold markdown")
+        XCTAssertTrue(window.debugToolbarTooltips["formatBold"] == "Wrap the selection in bold markdown")
 
         window.debugSetEditorFormattingToolbarWidth(wideEnough)
 
-        #expect(window.debugEditorFormattingToolbarSnapshot == .init(
+        XCTAssertTrue(window.debugEditorFormattingToolbarSnapshot == .init(
             isCompact: false,
             usesTwoRows: false,
             labelsByAction: expandedLabels,
         ))
     }
 
-    @Test @MainActor
-    func `main window formatting toolbar wraps into two rows when compact row still does not fit`() throws {
+    @MainActor func test_main_window_formatting_toolbar_wraps_into_two_rows_when_compact_row_still_does_not_fit() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -680,24 +660,23 @@ struct MainWindowCoreTests {
             .taskList: "[ ]",
             .table: nil,
         ]
-        #expect(window.debugEditorFormattingToolbarSnapshot == .init(
+        XCTAssertTrue(window.debugEditorFormattingToolbarSnapshot == .init(
             isCompact: true,
             usesTwoRows: true,
             labelsByAction: compactLabels,
         ))
-        #expect(window.debugToolbarTooltips["formatNumbered"] == "Prefix the selected lines as a numbered list")
+        XCTAssertTrue(window.debugToolbarTooltips["formatNumbered"] == "Prefix the selected lines as a numbered list")
 
         window.debugSetEditorFormattingToolbarWidth(window.debugEditorFormattingToolbarCompactThreshold - 1)
 
-        #expect(window.debugEditorFormattingToolbarSnapshot == .init(
+        XCTAssertTrue(window.debugEditorFormattingToolbarSnapshot == .init(
             isCompact: true,
             usesTwoRows: false,
             labelsByAction: compactLabels,
         ))
     }
 
-    @Test @MainActor
-    func `main window uses application icon name`() throws {
+    @MainActor func test_main_window_uses_application_icon_name() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -715,11 +694,10 @@ struct MainWindowCoreTests {
             autosave: AutosaveCoordinator(),
         )
 
-        #expect(window.debugWindowIconName == AppIdentity.identifier)
+        XCTAssertTrue(window.debugWindowIconName == AppIdentity.identifier)
     }
 
-    @Test @MainActor
-    func `main window sidebar toggle hides and shows sidebar`() throws {
+    @MainActor func test_main_window_sidebar_toggle_hides_and_shows_sidebar() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -738,20 +716,19 @@ struct MainWindowCoreTests {
         )
 
         window.debugLoadInitialNotes()
-        #expect(window.debugSidebarVisible)
-        #expect(window.debugToolbarTooltips["sidebar"] == "Hide Notes Sidebar")
+        XCTAssertTrue(window.debugSidebarVisible)
+        XCTAssertTrue(window.debugToolbarTooltips["sidebar"] == "Hide Notes Sidebar")
 
         window.debugEmitSidebarToggleClicked()
-        #expect(!window.debugSidebarVisible)
-        #expect(window.debugToolbarTooltips["sidebar"] == "Show Notes Sidebar")
+        XCTAssertFalse(window.debugSidebarVisible)
+        XCTAssertTrue(window.debugToolbarTooltips["sidebar"] == "Show Notes Sidebar")
 
         window.debugEmitSidebarToggleClicked()
-        #expect(window.debugSidebarVisible)
-        #expect(window.debugToolbarTooltips["sidebar"] == "Hide Notes Sidebar")
+        XCTAssertTrue(window.debugSidebarVisible)
+        XCTAssertTrue(window.debugToolbarTooltips["sidebar"] == "Hide Notes Sidebar")
     }
 
-    @Test @MainActor
-    func `main window search entry filters displayed notes and persists query`() async throws {
+    @MainActor func test_main_window_search_entry_filters_displayed_notes_and_persists_query() async throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -775,18 +752,17 @@ struct MainWindowCoreTests {
         )
 
         window.debugLoadInitialNotes()
-        #expect(window.debugDisplayedNoteTitles == ["Beta", "Alpha"])
+        XCTAssertTrue(window.debugDisplayedNoteTitles == ["Beta", "Alpha"])
 
         window.debugSetSearchQuery("alp")
 
-        #expect(window.debugSearchQuery == "alp")
-        #expect(window.debugDisplayedNotesCount == 1)
-        #expect(window.debugDisplayedNoteTitles == ["Alpha"])
-        #expect(try stateStore.load().searchQuery == "alp")
+        XCTAssertTrue(window.debugSearchQuery == "alp")
+        XCTAssertTrue(window.debugDisplayedNotesCount == 1)
+        XCTAssertTrue(window.debugDisplayedNoteTitles == ["Alpha"])
+        XCTAssertTrue(try stateStore.load().searchQuery == "alp")
     }
 
-    @Test @MainActor
-    func `main window view mode switcher updates layout`() async throws {
+    @MainActor func test_main_window_view_mode_switcher_updates_layout() async throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -805,26 +781,25 @@ struct MainWindowCoreTests {
         )
 
         window.debugLoadInitialNotes()
-        #expect(window.debugIsPreviewPaneAttached)
-        #expect(window.debugViewMode == .split)
+        XCTAssertTrue(window.debugIsPreviewPaneAttached)
+        XCTAssertTrue(window.debugViewMode == .split)
 
         window.debugSelectViewMode(.editor)
         try await Task.sleep(for: .milliseconds(80))
-        #expect(!window.debugIsPreviewPaneAttached)
-        #expect(window.debugViewMode == .editor)
+        XCTAssertFalse(window.debugIsPreviewPaneAttached)
+        XCTAssertTrue(window.debugViewMode == .editor)
 
         window.debugSelectViewMode(.preview)
         try await Task.sleep(for: .milliseconds(80))
-        #expect(!window.debugIsPreviewPaneAttached)
-        #expect(window.debugViewMode == .preview)
+        XCTAssertFalse(window.debugIsPreviewPaneAttached)
+        XCTAssertTrue(window.debugViewMode == .preview)
 
         window.debugSelectViewMode(.split)
-        #expect(window.debugIsPreviewPaneAttached)
-        #expect(window.debugViewMode == .split)
+        XCTAssertTrue(window.debugIsPreviewPaneAttached)
+        XCTAssertTrue(window.debugViewMode == .split)
     }
 
-    @Test @MainActor
-    func `main window formatting toolbar applies bold to selected editor text`() throws {
+    @MainActor func test_main_window_formatting_toolbar_applies_bold_to_selected_editor_text() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -848,13 +823,12 @@ struct MainWindowCoreTests {
 
         window.debugEmitEditorFormattingButtonClicked(.bold)
 
-        #expect(window.debugEditorText == "Hello **world**")
-        #expect(window.debugSelectedNoteContent == "Hello **world**")
-        #expect(window.debugEditorSelectionRange == 6 ..< 15)
+        XCTAssertTrue(window.debugEditorText == "Hello **world**")
+        XCTAssertTrue(window.debugSelectedNoteContent == "Hello **world**")
+        XCTAssertTrue(window.debugEditorSelectionRange == 6 ..< 15)
     }
 
-    @Test @MainActor
-    func `main window formatting toolbar remembers last chosen table size and alignments`() throws {
+    @MainActor func test_main_window_formatting_toolbar_remembers_last_chosen_table_size_and_alignments() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -880,15 +854,14 @@ struct MainWindowCoreTests {
         window.debugPickTableSize(rows: 3, cols: 2, alignments: [.right, .center])
 
         let persisted = try store.load()
-        #expect(persisted.lastTableRows == 3)
-        #expect(persisted.lastTableCols == 2)
-        #expect(persisted.lastTableAlignments == [.right, .center])
-        #expect(window.debugEditorText.contains("| Column 1 | Column 2 |"))
-        #expect(window.debugEditorText.contains("| -------: | :------: |"))
+        XCTAssertTrue(persisted.lastTableRows == 3)
+        XCTAssertTrue(persisted.lastTableCols == 2)
+        XCTAssertTrue(persisted.lastTableAlignments == [.right, .center])
+        XCTAssertTrue(window.debugEditorText.contains("| Column 1 | Column 2 |"))
+        XCTAssertTrue(window.debugEditorText.contains("| -------: | :------: |"))
     }
 
-    @Test @MainActor
-    func `main window formatting toolbar insert table writes scaffold at the cursor and selects the first header cell`() throws {
+    @MainActor func test_main_window_formatting_toolbar_insert_table_writes_scaffold_at_the_cursor_and_selects_the_first_header_cell() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -920,19 +893,18 @@ struct MainWindowCoreTests {
         |          |          |          |
         |          |          |          |
         """ + "\n"
-        #expect(window.debugEditorText == expected)
-        #expect(window.debugSelectedNoteContent == expected)
+        XCTAssertTrue(window.debugEditorText == expected)
+        XCTAssertTrue(window.debugSelectedNoteContent == expected)
         // "Column 1" is selected so the user can start typing straight away.
         let selection = window.debugEditorSelectionRange
         let headerStart = try expected.distance(
             from: expected.startIndex,
-            to: #require(expected.range(of: "Column 1")?.lowerBound),
+            to: XCTUnwrap(expected.range(of: "Column 1")?.lowerBound),
         )
-        #expect(selection == headerStart ..< (headerStart + "Column 1".count))
+        XCTAssertTrue(selection == headerStart ..< (headerStart + "Column 1".count))
     }
 
-    @Test @MainActor
-    func `main window formatting toolbar toggles bold off for formatted selection`() throws {
+    @MainActor func test_main_window_formatting_toolbar_toggles_bold_off_for_formatted_selection() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -956,13 +928,12 @@ struct MainWindowCoreTests {
 
         window.debugEmitEditorFormattingButtonClicked(.bold)
 
-        #expect(window.debugEditorText == "Hello world")
-        #expect(window.debugSelectedNoteContent == "Hello world")
-        #expect(window.debugEditorSelectionRange == 6 ..< 11)
+        XCTAssertTrue(window.debugEditorText == "Hello world")
+        XCTAssertTrue(window.debugSelectedNoteContent == "Hello world")
+        XCTAssertTrue(window.debugEditorSelectionRange == 6 ..< 11)
     }
 
-    @Test @MainActor
-    func `main window formatting toolbar toggles task list at cursor across whole line`() throws {
+    @MainActor func test_main_window_formatting_toolbar_toggles_task_list_at_cursor_across_whole_line() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -985,16 +956,15 @@ struct MainWindowCoreTests {
         window.debugSelectEditorRange(4 ..< 4)
 
         window.debugEmitEditorFormattingButtonClicked(.taskList)
-        #expect(window.debugEditorText == "- [ ] Ship it")
-        #expect(window.debugEditorSelectionRange == 0 ..< 13)
+        XCTAssertTrue(window.debugEditorText == "- [ ] Ship it")
+        XCTAssertTrue(window.debugEditorSelectionRange == 0 ..< 13)
 
         window.debugEmitEditorFormattingButtonClicked(.taskList)
-        #expect(window.debugEditorText == "Ship it")
-        #expect(window.debugEditorSelectionRange == 0 ..< 7)
+        XCTAssertTrue(window.debugEditorText == "Ship it")
+        XCTAssertTrue(window.debugEditorSelectionRange == 0 ..< 7)
     }
 
-    @Test @MainActor
-    func `main window restores persisted workspace state for filtering and visibility`() throws {
+    @MainActor func test_main_window_restores_persisted_workspace_state_for_filtering_and_visibility() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -1028,16 +998,15 @@ struct MainWindowCoreTests {
 
         window.debugLoadInitialNotes()
 
-        #expect(!window.debugSidebarVisible)
-        #expect(!window.debugIsPreviewPaneAttached)
-        #expect(window.debugViewMode == .editor)
-        #expect(window.debugSearchQuery == "a")
-        #expect(window.debugSortMode == .title)
-        #expect(window.debugDisplayedNoteTitles == ["Alpha", "Beta"])
+        XCTAssertFalse(window.debugSidebarVisible)
+        XCTAssertFalse(window.debugIsPreviewPaneAttached)
+        XCTAssertTrue(window.debugViewMode == .editor)
+        XCTAssertTrue(window.debugSearchQuery == "a")
+        XCTAssertTrue(window.debugSortMode == .title)
+        XCTAssertTrue(window.debugDisplayedNoteTitles == ["Alpha", "Beta"])
     }
 
-    @Test @MainActor
-    func `main window save button persists current editor text`() async throws {
+    @MainActor func test_main_window_save_button_persists_current_editor_text() async throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -1059,24 +1028,23 @@ struct MainWindowCoreTests {
 
         window.debugLoadInitialNotes()
         window.debugSetEditorText("# Saved Title\n\nSaved body")
-        #expect(window.debugEditorModified)
+        XCTAssertTrue(window.debugEditorModified)
 
         window.debugEmitSaveClicked()
         try await Task.sleep(for: .milliseconds(80))
 
         let saved = try repository.loadNotes()
-        #expect(saved.count == 3)
-        #expect(saved[0].content == "# Saved Title\n\nSaved body")
-        #expect(saved[0].title == "Saved Title")
-        #expect(!window.debugEditorModified)
+        XCTAssertTrue(saved.count == 3)
+        XCTAssertTrue(saved[0].content == "# Saved Title\n\nSaved body")
+        XCTAssertTrue(saved[0].title == "Saved Title")
+        XCTAssertFalse(window.debugEditorModified)
         // The seeded "Guides" folder is expanded by default, so its
         // children (About / CLI guide) sort above root-level notes
         // in the sidebar; assert presence rather than first-position.
-        #expect(window.debugDisplayedNoteTitles.contains("Saved Title"))
+        XCTAssertTrue(window.debugDisplayedNoteTitles.contains("Saved Title"))
     }
 
-    @Test @MainActor
-    func `main window autosave waits for last edit before saving`() throws {
+    @MainActor func test_main_window_autosave_waits_for_last_edit_before_saving() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -1101,24 +1069,23 @@ struct MainWindowCoreTests {
         let originalContent = try repository.loadNotes()[0].content
 
         window.debugSetEditorText("# First draft\n\nA")
-        #expect(window.debugHeaderSubtitle.contains("Unsaved changes"))
-        #expect(try repository.loadNotes()[0].content == originalContent)
+        XCTAssertTrue(window.debugHeaderSubtitle.contains("Unsaved changes"))
+        XCTAssertTrue(try repository.loadNotes()[0].content == originalContent)
 
         window.debugSetEditorText("# Final draft\n\nB")
-        #expect(window.debugHeaderSubtitle.contains("Unsaved changes"))
-        #expect(try repository.loadNotes()[0].content == originalContent)
+        XCTAssertTrue(window.debugHeaderSubtitle.contains("Unsaved changes"))
+        XCTAssertTrue(try repository.loadNotes()[0].content == originalContent)
 
         autosaveScheduler.runPendingActions()
         let autosaved = try repository.loadNotes()
-        #expect(autosaved[0].content == "# Final draft\n\nB")
-        #expect(autosaved[0].title == "Final draft")
-        #expect(!window.debugEditorModified)
-        #expect(window.debugHeaderSubtitle.contains("Saved"))
-        #expect(!window.debugHeaderSubtitle.contains("Unsaved changes"))
+        XCTAssertTrue(autosaved[0].content == "# Final draft\n\nB")
+        XCTAssertTrue(autosaved[0].title == "Final draft")
+        XCTAssertFalse(window.debugEditorModified)
+        XCTAssertTrue(window.debugHeaderSubtitle.contains("Saved"))
+        XCTAssertTrue(!window.debugHeaderSubtitle.contains("Unsaved changes"))
     }
 
-    @Test @MainActor
-    func `main window reloads external create after poll`() throws {
+    @MainActor func test_main_window_reloads_external_create_after_poll() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -1140,17 +1107,16 @@ struct MainWindowCoreTests {
         )
 
         window.debugLoadInitialNotes()
-        #expect(window.debugNotesCount == 3)
+        XCTAssertTrue(window.debugNotesCount == 3)
 
         _ = try externalRepository.createNote(initialContent: "# External\n\nCreated from CLI")
         window.debugPollForExternalChanges()
 
-        #expect(window.debugNotesCount == 4)
-        #expect(window.debugDisplayedNotesCount == 4)
+        XCTAssertTrue(window.debugNotesCount == 4)
+        XCTAssertTrue(window.debugDisplayedNotesCount == 4)
     }
 
-    @Test @MainActor
-    func `main window reloads external update after poll`() throws {
+    @MainActor func test_main_window_reloads_external_update_after_poll() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -1173,19 +1139,19 @@ struct MainWindowCoreTests {
         )
 
         window.debugLoadInitialNotes()
-        #expect(window.debugNotesCount == 1)
-        #expect(window.debugSelectedNoteContent == original.content)
+        XCTAssertTrue(window.debugNotesCount == 1)
+        XCTAssertTrue(window.debugSelectedNoteContent == original.content)
 
         var externallyUpdated = try externalRepository.loadNotes().first
-        #expect(externallyUpdated != nil)
+        XCTAssertNotNil(externallyUpdated)
         externallyUpdated?.content = "# Updated\n\nFresh text"
-        _ = try externalRepository.save(note: #require(externallyUpdated))
+        _ = try externalRepository.save(note: XCTUnwrap(externallyUpdated))
 
         window.debugPollForExternalChanges()
 
-        #expect(window.debugSelectedNoteContent == "# Updated\n\nFresh text")
-        #expect(window.debugPreviewText.contains("Updated"))
-        #expect(window.debugPreviewText.contains("Fresh text"))
+        XCTAssertTrue(window.debugSelectedNoteContent == "# Updated\n\nFresh text")
+        XCTAssertTrue(window.debugPreviewText.contains("Updated"))
+        XCTAssertTrue(window.debugPreviewText.contains("Fresh text"))
     }
 }
 #endif

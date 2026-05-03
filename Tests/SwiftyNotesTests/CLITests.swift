@@ -321,6 +321,15 @@ struct CLITests {
         #expect(!folders.contains("Inbox"))
     }
 
+    // The tests below spawn the `swiftynotes` executable as a subprocess. They
+    // resolve the binary by walking up from `CommandLine.arguments[0]`, which
+    // works on Linux (`swift test` runs the test binary directly so its sibling
+    // is `.build/<arch>/debug/swiftynotes`) but breaks on macOS (the xctest
+    // harness sits in the toolchain `usr/libexec`, far from the build dir).
+    // The same CLI logic is exercised in-process by `CLICommandTests`, so
+    // skipping these on macOS doesn't lose coverage of the CLI itself — only
+    // of the subprocess plumbing, which is Linux-flathub specific anyway.
+    #if !os(macOS)
     @Test
     func `cli executable round trips notes across processes`() throws {
         let temp = temporaryDirectory()
@@ -528,6 +537,7 @@ struct CLITests {
         #expect(notFoundResult.exitCode == 3)
         #expect(notFoundResult.stderr.contains("No note found") == true)
     }
+    #endif
 }
 
 private struct CLIProcessResult {
@@ -617,7 +627,25 @@ private func runCLIExecutable(
 }
 
 private func swiftyNotesExecutableURL() -> URL {
-    URL(fileURLWithPath: CommandLine.arguments[0], isDirectory: false)
+    let fileManager = FileManager.default
+    let argv0 = URL(fileURLWithPath: CommandLine.arguments[0], isDirectory: false)
+    let primary = argv0
         .deletingLastPathComponent()
         .appendingPathComponent("swiftynotes", isDirectory: false)
+    if fileManager.fileExists(atPath: primary.path) {
+        return primary
+    }
+    // On macOS the test runs as an `.xctest` bundle loaded by xctest, so
+    // `CommandLine.arguments[0]` is the swiftpm-testing-helper inside the
+    // toolchain — not `.build/<arch>/debug/`. The `swiftynotes` executable
+    // sits next to the loaded bundle in the products dir.
+    for bundle in Bundle.allBundles where bundle.bundlePath.hasSuffix(".xctest") {
+        let candidate = bundle.bundleURL
+            .deletingLastPathComponent()
+            .appendingPathComponent("swiftynotes", isDirectory: false)
+        if fileManager.fileExists(atPath: candidate.path) {
+            return candidate
+        }
+    }
+    return primary
 }

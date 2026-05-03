@@ -1,12 +1,11 @@
-#if !os(macOS)
+#if os(macOS)
 import Adwaita
 import Foundation
 @testable import SwiftyNotes
-import Testing
+import XCTest
 
-struct MainWindowActionsTests {
-    @Test @MainActor
-    func `main window selection change dismisses context menu before sidebar refresh`() throws {
+final class MainWindowActionsXCTests: XCTestCase {
+    @MainActor func test_main_window_selection_change_dismisses_context_menu_before_sidebar_refresh() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -29,18 +28,17 @@ struct MainWindowActionsTests {
         // [About, Using CLI, Markdown Showcase]. Picking index 0
         // (About) keeps the test exercising the same selection path.
         window.debugOpenContextMenuForDisplayedNote(at: 2)
-        #expect(window.debugHasContextMenu)
-        #expect(!window.debugNoteContextMenuLabels.isEmpty)
+        XCTAssertTrue(window.debugHasContextMenu)
+        XCTAssertFalse(window.debugNoteContextMenuLabels.isEmpty)
 
         window.selectNote(at: 0)
 
-        #expect(!window.debugHasContextMenu)
-        #expect(window.debugNoteContextMenuLabels.isEmpty)
-        #expect(window.debugSelectedNoteContent == SwiftyNotesOverviewSeed.content)
+        XCTAssertFalse(window.debugHasContextMenu)
+        XCTAssertTrue(window.debugNoteContextMenuLabels.isEmpty)
+        XCTAssertTrue(window.debugSelectedNoteContent == SwiftyNotesOverviewSeed.content)
     }
 
-    @Test @MainActor
-    func `main window create note dismisses existing context menu before sidebar refresh`() throws {
+    @MainActor func test_main_window_create_note_dismisses_existing_context_menu_before_sidebar_refresh() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -60,16 +58,15 @@ struct MainWindowActionsTests {
 
         window.debugLoadInitialNotes()
         window.debugOpenContextMenuForDisplayedNote(at: 0)
-        #expect(window.debugHasContextMenu)
+        XCTAssertTrue(window.debugHasContextMenu)
 
         window.debugCreateNote()
 
-        #expect(!window.debugHasContextMenu)
-        #expect(window.debugNotesCount == 4)
+        XCTAssertFalse(window.debugHasContextMenu)
+        XCTAssertTrue(window.debugNotesCount == 4)
     }
 
-    @Test @MainActor
-    func `main window context menu actions execute for selected row after sidebar refresh`() throws {
+    @MainActor func test_main_window_context_menu_actions_execute_for_selected_row_after_sidebar_refresh() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -89,9 +86,9 @@ struct MainWindowActionsTests {
 
         window.present()
         window.debugCreateNote()
-        #expect(window.debugNotesCount == 4)
-        #expect(window.debugOverflowMenuSectionTitles == ["Library", "Help"])
-        #expect(window.debugOverflowMenuItemsBySection == [
+        XCTAssertTrue(window.debugNotesCount == 4)
+        XCTAssertTrue(window.debugOverflowMenuSectionTitles == ["Library", "Help"])
+        XCTAssertTrue(window.debugOverflowMenuItemsBySection == [
             "Library": [
                 "Settings",
                 "Open Markdown File…",
@@ -105,8 +102,8 @@ struct MainWindowActionsTests {
         ])
 
         window.debugOpenContextMenuForDisplayedNote(at: 1)
-        #expect(window.debugHasContextMenu)
-        #expect(window.debugNoteContextMenuLabels == [
+        XCTAssertTrue(window.debugHasContextMenu)
+        XCTAssertTrue(window.debugNoteContextMenuLabels == [
             "Rename note…",
             "Duplicate note",
             "Move to…",
@@ -116,21 +113,20 @@ struct MainWindowActionsTests {
         ])
 
         let selectedStableID = window.debugSelectedNoteStableID()
-        #expect(selectedStableID != nil)
-        #expect(window.debugInvokeContextMenuAction(label: "Copy note ID"))
-        #expect(!window.debugHasContextMenu)
-        #expect(window.debugLastCopiedNoteID == selectedStableID)
+        XCTAssertNotNil(selectedStableID)
+        XCTAssertTrue(window.debugInvokeContextMenuAction(label: "Copy note ID"))
+        XCTAssertFalse(window.debugHasContextMenu)
+        XCTAssertTrue(window.debugLastCopiedNoteID == selectedStableID)
 
         window.debugOpenContextMenuForDisplayedNote(at: 1)
-        #expect(window.debugHasContextMenu)
-        #expect(window.debugInvokeContextMenuAction(label: "Duplicate note"))
-        #expect(!window.debugHasContextMenu)
-        #expect(window.debugNotesCount == 5)
-        #expect(Set(window.debugDisplayedNoteStableIDs).count == window.debugDisplayedNoteStableIDs.count)
+        XCTAssertTrue(window.debugHasContextMenu)
+        XCTAssertTrue(window.debugInvokeContextMenuAction(label: "Duplicate note"))
+        XCTAssertFalse(window.debugHasContextMenu)
+        XCTAssertTrue(window.debugNotesCount == 5)
+        XCTAssertTrue(Set(window.debugDisplayedNoteStableIDs).count == window.debugDisplayedNoteStableIDs.count)
     }
 
-    @Test @MainActor
-    func `main window settings action presents settings window`() throws {
+    @MainActor func test_main_window_settings_action_presents_settings_window() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -169,9 +165,9 @@ struct MainWindowActionsTests {
         window.present()
         window.debugActivateSettingsAction()
 
-        #expect(window.debugHasSettingsWindow)
-        #expect(window.debugSettingsWindowDefaultHeight == 546)
-        #expect(window.debugSettingsWindowSnapshot == .init(
+        XCTAssertTrue(window.debugHasSettingsWindow)
+        XCTAssertTrue(window.debugSettingsWindowDefaultHeight == 546)
+        XCTAssertTrue(window.debugSettingsWindowSnapshot == .init(
             notesDirectoryPath: temp.standardizedFileURL.path(),
             wrapsEditorLines: false,
             editorFontSize: 18,
@@ -184,8 +180,7 @@ struct MainWindowActionsTests {
         ))
     }
 
-    @Test @MainActor
-    func `main window changing notes directory moves notes and persists setting`() throws {
+    @MainActor func test_main_window_changing_notes_directory_moves_notes_and_persists_setting() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -222,16 +217,15 @@ struct MainWindowActionsTests {
         window.present()
         try window.debugChangeNotesDirectory(to: destinationDirectory)
 
-        #expect(!FileManager.default.fileExists(atPath: sourceDirectory.path()))
+        XCTAssertTrue(!FileManager.default.fileExists(atPath: sourceDirectory.path()))
         let movedNotes = try NotesRepository(notesDirectory: destinationDirectory).loadNotes()
-        #expect(movedNotes.count == 1)
-        #expect(movedNotes.first?.title == "Moved note")
-        #expect(window.debugSelectedNoteContent?.contains("Moved note") == true)
-        #expect(try settingsStore.load().customNotesDirectoryURL?.standardizedFileURL == destinationDirectory.standardizedFileURL)
+        XCTAssertTrue(movedNotes.count == 1)
+        XCTAssertTrue(movedNotes.first?.title == "Moved note")
+        XCTAssertTrue(window.debugSelectedNoteContent?.contains("Moved note") == true)
+        XCTAssertTrue(try settingsStore.load().customNotesDirectoryURL?.standardizedFileURL == destinationDirectory.standardizedFileURL)
     }
 
-    @Test @MainActor
-    func `main window settings window controls apply and persist preferences`() throws {
+    @MainActor func test_main_window_settings_window_controls_apply_and_persist_preferences() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -262,7 +256,7 @@ struct MainWindowActionsTests {
 
         window.present()
         window.debugActivateSettingsAction()
-        #expect(window.debugHasSettingsWindow)
+        XCTAssertTrue(window.debugHasSettingsWindow)
 
         window.debugSettingsSetWrapLines(false)
         window.debugSettingsSetFontSize(19)
@@ -271,14 +265,14 @@ struct MainWindowActionsTests {
         window.debugSettingsSetAutosaveDelaySeconds(9)
         window.debugSettingsSetAppearanceMode(.dark)
 
-        #expect(window.debugEditorWrapsLines == false)
-        #expect(window.debugEditorFontSize == 19)
-        #expect(window.debugEditorTabWidth == 6)
-        #expect(window.debugEditorInsertsSpacesInsteadOfTabs == false)
-        #expect(window.debugAutosaveDelaySeconds == 9)
-        #expect(window.debugAppearanceMode == .dark)
-        #expect(StyleManager.default.colorScheme == .forceDark)
-        #expect(window.debugSettingsWindowSnapshot == .init(
+        XCTAssertTrue(window.debugEditorWrapsLines == false)
+        XCTAssertTrue(window.debugEditorFontSize == 19)
+        XCTAssertTrue(window.debugEditorTabWidth == 6)
+        XCTAssertTrue(window.debugEditorInsertsSpacesInsteadOfTabs == false)
+        XCTAssertTrue(window.debugAutosaveDelaySeconds == 9)
+        XCTAssertTrue(window.debugAppearanceMode == .dark)
+        XCTAssertTrue(StyleManager.default.colorScheme == .forceDark)
+        XCTAssertTrue(window.debugSettingsWindowSnapshot == .init(
             notesDirectoryPath: temp.standardizedFileURL.path(),
             wrapsEditorLines: false,
             editorFontSize: 19,
@@ -291,12 +285,12 @@ struct MainWindowActionsTests {
         ))
 
         let stored = try settingsStore.load()
-        #expect(stored.wrapsEditorLines == false)
-        #expect(stored.editorFontSize == 19)
-        #expect(stored.editorTabWidth == 6)
-        #expect(stored.editorIndentStyle == .tabs)
-        #expect(stored.autosaveDelaySeconds == 9)
-        #expect(stored.appearanceMode == .dark)
+        XCTAssertTrue(stored.wrapsEditorLines == false)
+        XCTAssertTrue(stored.editorFontSize == 19)
+        XCTAssertTrue(stored.editorTabWidth == 6)
+        XCTAssertTrue(stored.editorIndentStyle == .tabs)
+        XCTAssertTrue(stored.autosaveDelaySeconds == 9)
+        XCTAssertTrue(stored.appearanceMode == .dark)
 
         let relaunched = MainWindow(
             application: app,
@@ -310,16 +304,15 @@ struct MainWindowActionsTests {
             appSettingsStore: settingsStore,
             appSettings: stored,
         )
-        #expect(relaunched.debugEditorWrapsLines == false)
-        #expect(relaunched.debugEditorFontSize == 19)
-        #expect(relaunched.debugEditorTabWidth == 6)
-        #expect(relaunched.debugEditorInsertsSpacesInsteadOfTabs == false)
-        #expect(relaunched.debugAutosaveDelaySeconds == 9)
-        #expect(relaunched.debugAppearanceMode == .dark)
+        XCTAssertTrue(relaunched.debugEditorWrapsLines == false)
+        XCTAssertTrue(relaunched.debugEditorFontSize == 19)
+        XCTAssertTrue(relaunched.debugEditorTabWidth == 6)
+        XCTAssertTrue(relaunched.debugEditorInsertsSpacesInsteadOfTabs == false)
+        XCTAssertTrue(relaunched.debugAutosaveDelaySeconds == 9)
+        XCTAssertTrue(relaunched.debugAppearanceMode == .dark)
     }
 
-    @Test @MainActor
-    func `main window updating preferences persists and applies them at runtime`() throws {
+    @MainActor func test_main_window_updating_preferences_persists_and_applies_them_at_runtime() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -357,26 +350,25 @@ struct MainWindowActionsTests {
             appearanceMode: .light,
         ))
 
-        #expect(window.debugEditorWrapsLines == false)
-        #expect(window.debugEditorFontSize == 17)
-        #expect(window.debugEditorTabWidth == 8)
-        #expect(window.debugEditorInsertsSpacesInsteadOfTabs == false)
-        #expect(window.debugAutosaveDelaySeconds == 7)
-        #expect(window.debugAppearanceMode == .light)
-        #expect(window.debugSettingsWindowSnapshot == nil)
-        #expect(StyleManager.default.colorScheme == .forceLight)
+        XCTAssertTrue(window.debugEditorWrapsLines == false)
+        XCTAssertTrue(window.debugEditorFontSize == 17)
+        XCTAssertTrue(window.debugEditorTabWidth == 8)
+        XCTAssertTrue(window.debugEditorInsertsSpacesInsteadOfTabs == false)
+        XCTAssertTrue(window.debugAutosaveDelaySeconds == 7)
+        XCTAssertTrue(window.debugAppearanceMode == .light)
+        XCTAssertNil(window.debugSettingsWindowSnapshot)
+        XCTAssertTrue(StyleManager.default.colorScheme == .forceLight)
 
         let stored = try settingsStore.load()
-        #expect(stored.wrapsEditorLines == false)
-        #expect(stored.editorFontSize == 17)
-        #expect(stored.editorTabWidth == 8)
-        #expect(stored.editorIndentStyle == .tabs)
-        #expect(stored.autosaveDelaySeconds == 7)
-        #expect(stored.appearanceMode == .light)
+        XCTAssertTrue(stored.wrapsEditorLines == false)
+        XCTAssertTrue(stored.editorFontSize == 17)
+        XCTAssertTrue(stored.editorTabWidth == 8)
+        XCTAssertTrue(stored.editorIndentStyle == .tabs)
+        XCTAssertTrue(stored.autosaveDelaySeconds == 7)
+        XCTAssertTrue(stored.appearanceMode == .light)
     }
 
-    @Test @MainActor
-    func `main window open notes folder uses injected directory opener`() throws {
+    @MainActor func test_main_window_open_notes_folder_uses_injected_directory_opener() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -401,15 +393,14 @@ struct MainWindowActionsTests {
         window.debugLoadInitialNotes()
         window.debugOpenNotesFolder()
 
-        #expect(openedURL.snapshot()?.standardizedFileURL == temp.standardizedFileURL)
+        XCTAssertTrue(openedURL.snapshot()?.standardizedFileURL == temp.standardizedFileURL)
 
         var isDirectory: ObjCBool = false
-        #expect(FileManager.default.fileExists(atPath: temp.path(), isDirectory: &isDirectory))
-        #expect(isDirectory.boolValue)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: temp.path(), isDirectory: &isDirectory))
+        XCTAssertTrue(isDirectory.boolValue)
     }
 
-    @Test @MainActor
-    func `main window open notes folder menu action uses injected directory opener`() throws {
+    @MainActor func test_main_window_open_notes_folder_menu_action_uses_injected_directory_opener() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -434,11 +425,10 @@ struct MainWindowActionsTests {
         window.present()
         window.debugActivateOpenNotesFolderAction()
 
-        #expect(openedURL.snapshot()?.standardizedFileURL == temp.standardizedFileURL)
+        XCTAssertTrue(openedURL.snapshot()?.standardizedFileURL == temp.standardizedFileURL)
     }
 
-    @Test
-    func `open directory in system file manager uses default URI handler first`() throws {
+    func test_open_directory_in_system_file_manager_uses_default_URI_handler_first() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         let expectedURI = temp.standardizedFileURL.absoluteString
 
@@ -455,12 +445,11 @@ struct MainWindowActionsTests {
             },
         )
 
-        #expect(launchedURIs == [expectedURI])
-        #expect(fallbackURIs.isEmpty)
+        XCTAssertTrue(launchedURIs == [expectedURI])
+        XCTAssertTrue(fallbackURIs.isEmpty)
     }
 
-    @Test
-    func `open directory in system file manager falls back to XDG open when default handler fails`() throws {
+    func test_open_directory_in_system_file_manager_falls_back_to_XDG_open_when_default_handler_fails() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         let expectedURI = temp.standardizedFileURL.absoluteString
 
@@ -478,12 +467,11 @@ struct MainWindowActionsTests {
             },
         )
 
-        #expect(launchedURIs == [expectedURI])
-        #expect(fallbackURIs == [expectedURI])
+        XCTAssertTrue(launchedURIs == [expectedURI])
+        XCTAssertTrue(fallbackURIs == [expectedURI])
     }
 
-    @Test @MainActor
-    func `main window about menu action presents about dialog`() throws {
+    @MainActor func test_main_window_about_menu_action_presents_about_dialog() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -504,8 +492,8 @@ struct MainWindowActionsTests {
         window.present()
         window.debugActivateAboutAction()
 
-        #expect(window.debugHasAboutDialog)
-        #expect(window.debugAboutDialogSnapshot == .init(
+        XCTAssertTrue(window.debugHasAboutDialog)
+        XCTAssertTrue(window.debugAboutDialogSnapshot == .init(
             applicationName: "Swifty Notes",
             version: "1.1.5",
             developerName: "Sergey Armodin",
@@ -516,11 +504,10 @@ struct MainWindowActionsTests {
         ))
 
         window.debugCloseAboutDialog()
-        #expect(!window.debugHasAboutDialog)
+        XCTAssertFalse(window.debugHasAboutDialog)
     }
 
-    @Test @MainActor
-    func `main window about dialog uses release version environment when provided`() throws {
+    @MainActor func test_main_window_about_dialog_uses_release_version_environment_when_provided() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -551,13 +538,12 @@ struct MainWindowActionsTests {
         window.present()
         window.debugActivateAboutAction()
 
-        #expect(window.debugAboutDialogSnapshot?.version == "1.2.3")
+        XCTAssertTrue(window.debugAboutDialogSnapshot?.version == "1.2.3")
 
         window.debugCloseAboutDialog()
     }
 
-    @Test @MainActor
-    func `main window switching between notes refreshes preview`() async throws {
+    @MainActor func test_main_window_switching_between_notes_refreshes_preview() async throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -595,25 +581,24 @@ struct MainWindowActionsTests {
 
         window.debugLoadInitialNotes()
         try await Task.sleep(for: .milliseconds(30))
-        #expect(window.debugPreviewText.contains("Second"))
-        #expect(window.debugPreviewText.contains("Two"))
+        XCTAssertTrue(window.debugPreviewText.contains("Second"))
+        XCTAssertTrue(window.debugPreviewText.contains("Two"))
 
         window.present()
         try await Task.sleep(for: .milliseconds(30))
 
         window.debugSelectDisplayedNote(at: 1)
         try await Task.sleep(for: .milliseconds(10))
-        #expect(window.debugPreviewText.contains("First"))
-        #expect(window.debugPreviewText.contains("One"))
+        XCTAssertTrue(window.debugPreviewText.contains("First"))
+        XCTAssertTrue(window.debugPreviewText.contains("One"))
 
         window.debugSelectDisplayedNote(at: 0)
         try await Task.sleep(for: .milliseconds(10))
-        #expect(window.debugPreviewText.contains("Second"))
-        #expect(window.debugPreviewText.contains("Two"))
+        XCTAssertTrue(window.debugPreviewText.contains("Second"))
+        XCTAssertTrue(window.debugPreviewText.contains("Two"))
     }
 
-    @Test @MainActor
-    func `main window sidebar sort control reflects and changes sort mode`() throws {
+    @MainActor func test_main_window_sidebar_sort_control_reflects_and_changes_sort_mode() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
@@ -650,20 +635,20 @@ struct MainWindowActionsTests {
         )
 
         window.debugLoadInitialNotes()
-        #expect(window.debugSortMode == .newestFirst)
-        #expect(window.debugSidebarSortSelection == 0)
-        #expect(window.debugDisplayedNoteTitles == ["Zeta", "Alpha"])
+        XCTAssertTrue(window.debugSortMode == .newestFirst)
+        XCTAssertTrue(window.debugSidebarSortSelection == 0)
+        XCTAssertTrue(window.debugDisplayedNoteTitles == ["Zeta", "Alpha"])
 
         window.debugEmitSortButtonClicked()
-        #expect(window.debugSortMode == .oldestFirst)
-        #expect(window.debugSidebarSortSelection == 1)
-        #expect(window.debugDisplayedNoteTitles == ["Alpha", "Zeta"])
+        XCTAssertTrue(window.debugSortMode == .oldestFirst)
+        XCTAssertTrue(window.debugSidebarSortSelection == 1)
+        XCTAssertTrue(window.debugDisplayedNoteTitles == ["Alpha", "Zeta"])
 
         window.debugSelectSidebarSort(at: 2)
 
-        #expect(window.debugSortMode == .title)
-        #expect(window.debugSidebarSortSelection == 2)
-        #expect(window.debugDisplayedNoteTitles == ["Alpha", "Zeta"])
+        XCTAssertTrue(window.debugSortMode == .title)
+        XCTAssertTrue(window.debugSidebarSortSelection == 2)
+        XCTAssertTrue(window.debugDisplayedNoteTitles == ["Alpha", "Zeta"])
     }
 }
 #endif

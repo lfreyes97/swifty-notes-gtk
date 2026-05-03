@@ -1,12 +1,11 @@
-#if !os(macOS)
+#if os(macOS)
 import Adwaita
 import Foundation
 @testable import SwiftyNotes
-import Testing
+import XCTest
 
-struct SwiftyNotesLauncherTests {
-    @Test @MainActor
-    func `app controller open documents creates external windows without main window`() throws {
+final class SwiftyNotesLauncherXCTests: XCTestCase {
+    @MainActor func test_app_controller_open_documents_creates_external_windows_without_main_window() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
         try FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
@@ -33,24 +32,22 @@ struct SwiftyNotesLauncherTests {
 
         controller.openDocuments(at: [firstURL, secondURL], application: app)
 
-        #expect(!controller.debugHasMainWindow)
-        #expect(controller.debugExternalDocumentFileURLs == [
+        XCTAssertFalse(controller.debugHasMainWindow)
+        XCTAssertTrue(controller.debugExternalDocumentFileURLs == [
             firstURL.standardizedFileURL,
             secondURL.standardizedFileURL,
         ])
     }
 
-    @Test
-    func `application id falls back to AppIdentity outside override`() {
+    func test_application_id_falls_back_to_AppIdentity_outside_override() {
         let resolved = SwiftyNotesLauncher.resolveApplicationID(
             override: nil,
             env: ["PATH": "/usr/bin"],
         )
-        #expect(resolved == AppIdentity.identifier)
+        XCTAssertTrue(resolved == AppIdentity.identifier)
     }
 
-    @Test
-    func `application id honors SWIFTY_NOTES_APP_ID override regardless of snap environment`() {
+    func test_application_id_honors_SWIFTY_NOTES_APP_ID_override_regardless_of_snap_environment() {
         let resolved = SwiftyNotesLauncher.resolveApplicationID(
             override: "me.example.custom",
             env: [
@@ -58,11 +55,10 @@ struct SwiftyNotesLauncherTests {
                 "SNAP_NAME": "swifty-notes",
             ],
         )
-        #expect(resolved == "me.example.custom")
+        XCTAssertTrue(resolved == "me.example.custom")
     }
 
-    @Test
-    func `application id stays canonical even under snap environment`() {
+    func test_application_id_stays_canonical_even_under_snap_environment() {
         let resolved = SwiftyNotesLauncher.resolveApplicationID(
             override: nil,
             env: [
@@ -70,45 +66,40 @@ struct SwiftyNotesLauncherTests {
                 "SNAP_NAME": "swifty-notes",
             ],
         )
-        #expect(resolved == AppIdentity.identifier)
+        XCTAssertTrue(resolved == AppIdentity.identifier)
     }
 
-    @Test
-    func `application id ignores empty whitespace override`() {
+    func test_application_id_ignores_empty_whitespace_override() {
         let resolved = SwiftyNotesLauncher.resolveApplicationID(
             override: "   ",
             env: [:],
         )
-        #expect(resolved == AppIdentity.identifier)
+        XCTAssertTrue(resolved == AppIdentity.identifier)
     }
 
-    @Test
-    func `application flags default to handlesOpen outside a snap environment`() {
+    func test_application_flags_default_to_handlesOpen_outside_a_snap_environment() {
         let flags = SwiftyNotesLauncher.resolveApplicationFlags(env: ["PATH": "/usr/bin"])
-        #expect(flags == .handlesOpen)
+        XCTAssertTrue(flags == .handlesOpen)
     }
 
-    @Test
-    func `application flags add nonUnique under strict-confined snap to skip session-bus binding`() {
+    func test_application_flags_add_nonUnique_under_strict_confined_snap_to_skip_session_bus_binding() {
         let flags = SwiftyNotesLauncher.resolveApplicationFlags(env: [
             "SNAP": "/snap/swifty-notes/current",
             "SNAP_NAME": "swifty-notes",
             "SNAP_INSTANCE_NAME": "swifty-notes",
         ])
-        #expect(flags.contains(.handlesOpen))
-        #expect(flags.contains(.nonUnique))
+        XCTAssertTrue(flags.contains(.handlesOpen))
+        XCTAssertTrue(flags.contains(.nonUnique))
     }
 
-    @Test
-    func `application flags add nonUnique even when only SNAP env is set`() {
+    func test_application_flags_add_nonUnique_even_when_only_SNAP_env_is_set() {
         let flags = SwiftyNotesLauncher.resolveApplicationFlags(env: [
             "SNAP": "/snap/swifty-notes/current",
         ])
-        #expect(flags.contains(.nonUnique))
+        XCTAssertTrue(flags.contains(.nonUnique))
     }
 
-    @Test @MainActor
-    func `app controller open documents reuses existing external window for same file`() throws {
+    @MainActor func test_app_controller_open_documents_reuses_existing_external_window_for_same_file() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
         try FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
@@ -137,9 +128,9 @@ struct SwiftyNotesLauncherTests {
         controller.openDocuments(at: [fileURL], application: app)
         let secondWindowID = controller.debugExternalWindowIdentifier(for: fileURL)
 
-        #expect(controller.debugExternalDocumentFileURLs == [fileURL.standardizedFileURL])
-        #expect(firstWindowID != nil)
-        #expect(firstWindowID == secondWindowID)
+        XCTAssertTrue(controller.debugExternalDocumentFileURLs == [fileURL.standardizedFileURL])
+        XCTAssertNotNil(firstWindowID)
+        XCTAssertTrue(firstWindowID == secondWindowID)
     }
 }
 #endif

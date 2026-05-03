@@ -52,6 +52,41 @@ jobs:
           xvfb-run -a dbus-run-session -- bash -lc \
             "swift test --filter 'MarkdownPreviewWidgetTests' --no-parallel"
 
+  build-macos:
+    name: Build on macOS
+    runs-on: macos-26
+    # Verifies the package compiles against the Homebrew GTK4 / libadwaita /
+    # libspelling stack on Apple Silicon. Tests are NOT run in CI: GitHub-
+    # hosted macOS runners are headless (no WindowServer session), and the
+    # GTK4 Quartz backend installs Cocoa runloop observers at `gtk_init`
+    # time that corrupt the autorelease pool on subsequent test methods in
+    # a headless process. The XCTest mirror suite under
+    # `Tests/SwiftyNotesTests/macOS/` passes locally in a normal GUI
+    # session — see CONTRIBUTING.md for the local invocation.
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      # macos-26's default Xcode is 26.2 (Swift 6.2). Pick 26.4.1 to match
+      # the swift-tools-version in Package.swift and what local devs use.
+      - name: Select Xcode 26.4.1 (Swift 6.3)
+        run: sudo xcode-select -s /Applications/Xcode_26.4.1.app
+
+      - name: Install GTK + libspelling stack via Homebrew
+        run: brew install libadwaita gtksourceview5 libspelling pkgconf
+
+      - name: Swift version
+        run: swift --version
+
+      - name: Build
+        run: swift build
+
+      - name: Build test bundle
+        # Compile-only — exercises the XCTest mirror sources and catches
+        # Swift type errors without trying to execute the suite headlessly.
+        run: swift build --build-tests
+
   ui-smoke-tests:
     name: UI smoke tests
     runs-on: ubuntu-24.04

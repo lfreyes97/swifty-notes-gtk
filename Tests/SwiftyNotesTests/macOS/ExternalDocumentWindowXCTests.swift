@@ -1,12 +1,11 @@
-#if !os(macOS)
+#if os(macOS)
 import Adwaita
 import Foundation
 @testable import SwiftyNotes
-import Testing
+import XCTest
 
-struct ExternalDocumentWindowTests {
-    @Test @MainActor
-    func `external document window loads markdown file and autosaves edits`() throws {
+final class ExternalDocumentWindowXCTests: XCTestCase {
+    @MainActor func test_external_document_window_loads_markdown_file_and_autosaves_edits() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
         try FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
@@ -28,11 +27,11 @@ struct ExternalDocumentWindowTests {
 
         window.present()
 
-        #expect(window.debugViewMode == .split)
-        #expect(window.debugEditorText == "# Opened\n\nBody")
-        #expect(window.debugPreviewText.contains("Opened"))
-        #expect(window.debugOverflowMenuSectionTitles == ["Document"])
-        #expect(window.debugOverflowMenuItemsBySection == [
+        XCTAssertTrue(window.debugViewMode == .split)
+        XCTAssertTrue(window.debugEditorText == "# Opened\n\nBody")
+        XCTAssertTrue(window.debugPreviewText.contains("Opened"))
+        XCTAssertTrue(window.debugOverflowMenuSectionTitles == ["Document"])
+        XCTAssertTrue(window.debugOverflowMenuItemsBySection == [
             "Document": [
                 "Save As…",
                 "Import into Library…",
@@ -41,17 +40,16 @@ struct ExternalDocumentWindowTests {
         ])
 
         window.debugSetEditorText("# Updated\n\nSaved from external window")
-        #expect(window.debugEditorModified)
+        XCTAssertTrue(window.debugEditorModified)
 
         autosaveScheduler.runPendingActions()
 
-        #expect(try String(contentsOf: fileURL, encoding: .utf8) == "# Updated\n\nSaved from external window")
-        #expect(!window.debugEditorModified)
-        #expect(window.debugPreviewText.contains("Saved from external window"))
+        XCTAssertTrue(try String(contentsOf: fileURL, encoding: .utf8) == "# Updated\n\nSaved from external window")
+        XCTAssertFalse(window.debugEditorModified)
+        XCTAssertTrue(window.debugPreviewText.contains("Saved from external window"))
     }
 
-    @Test @MainActor
-    func `external document window reloads changed file after poll`() throws {
+    @MainActor func test_external_document_window_reloads_changed_file_after_poll() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
         try FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
@@ -74,9 +72,9 @@ struct ExternalDocumentWindowTests {
         try "# After\n\nChanged on disk".write(to: fileURL, atomically: true, encoding: .utf8)
         window.debugPollForExternalChanges()
 
-        #expect(window.debugEditorText == "# After\n\nChanged on disk")
-        #expect(window.debugPreviewText.contains("After"))
-        #expect(window.debugPreviewText.contains("Changed on disk"))
+        XCTAssertTrue(window.debugEditorText == "# After\n\nChanged on disk")
+        XCTAssertTrue(window.debugPreviewText.contains("After"))
+        XCTAssertTrue(window.debugPreviewText.contains("Changed on disk"))
     }
 }
 #endif
