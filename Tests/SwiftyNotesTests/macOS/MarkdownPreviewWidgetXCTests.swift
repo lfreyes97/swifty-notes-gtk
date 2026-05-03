@@ -10,17 +10,29 @@ import XCTest
 /// referencing freed GObjects, which crash the next widget test that pumps
 /// the main context.
 ///
-/// On macOS these tests are skipped wholesale: the async-remote-image and
-/// AnimatedImagePlayer paths exercised here interact with Homebrew's
-/// gdk-pixbuf 2.44+ in ways that crash the xctest process before the suite
-/// completes. Individual tests pass when isolated, but the full sequence
-/// is unstable. Linux CI continues to cover this suite. See the
-/// `test_animated_GIF_player_advances_frames` comment for the libglycin
-/// migration that should eventually let this suite run on macOS too.
+/// On macOS the cumulative state issue is even tighter: even when this
+/// suite runs alone, async-remote-image and AnimatedImagePlayer paths
+/// leave residue that crashes a later test in the same process. Each
+/// individual test passes when invoked on its own.
+///
+/// To keep the default `swift test` run on macOS green, the suite is
+/// gated by the `SWIFTY_NOTES_RUN_PREVIEW_TESTS` environment variable.
+/// Without it, every test in the suite skips. To get full coverage on
+/// macOS, run `scripts/test-macos-preview.sh`, which spawns a fresh
+/// `swift test --filter` invocation per test name. Linux CI is
+/// unaffected — that path keeps using the swift-testing original (gated
+/// `#if !os(macOS)`).
 final class MarkdownPreviewWidgetXCTests: XCTestCase {
     override func setUpWithError() throws {
-        throw XCTSkip("MarkdownPreview widget suite skipped on macOS — see class comment for context.")
+        if ProcessInfo.processInfo.environment["SWIFTY_NOTES_RUN_PREVIEW_TESTS"] == nil {
+            throw XCTSkip(
+                "MarkdownPreview widget suite skipped on macOS. "
+                + "Set SWIFTY_NOTES_RUN_PREVIEW_TESTS=1 and use scripts/test-macos-preview.sh "
+                + "to run each test in its own process."
+            )
+        }
     }
+
 
     @MainActor func test_preview_loads_remote_image_when_loader_provides_local_file_after_asynchronous_completion() async throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
