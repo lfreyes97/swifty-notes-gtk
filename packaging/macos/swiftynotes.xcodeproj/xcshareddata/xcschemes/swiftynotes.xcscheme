@@ -67,7 +67,7 @@
    </LaunchAction>
    <ProfileAction
       buildConfiguration = "Release"
-      shouldUseLaunchSchemeArgsEnv = "YES"
+      shouldUseLaunchSchemeArgsEnv = "NO"
       savedToolIdentifier = ""
       useCustomWorkingDirectory = "NO"
       debugDocumentVersioning = "YES">
@@ -81,6 +81,19 @@
             ReferencedContainer = "container:swiftynotes.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
+      <!--
+      Xcode 26 Instruments (Cmd+I) does not reliably inherit
+      EnvironmentVariables from LaunchAction even with
+      shouldUseLaunchSchemeArgsEnv=YES, so set them explicitly here. The
+      GSK schema lookup needs XDG_DATA_DIRS the same way Cmd+R does.
+      -->
+      <EnvironmentVariables>
+         <EnvironmentVariable
+            key = "XDG_DATA_DIRS"
+            value = "/opt/homebrew/share"
+            isEnabled = "YES">
+         </EnvironmentVariable>
+      </EnvironmentVariables>
    </ProfileAction>
    <AnalyzeAction
       buildConfiguration = "Debug">

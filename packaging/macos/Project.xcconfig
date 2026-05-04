@@ -11,6 +11,13 @@
 // and matches the `platforms:` clause in this project's Package.swift.
 MACOSX_DEPLOYMENT_TARGET = 13.0
 
+// Apple Silicon only. Homebrew dylibs in /opt/homebrew/lib are arm64-only,
+// so the default universal Release/Profile slice (`ARCHS_STANDARD` =
+// `arm64 x86_64`) fails to link the x86_64 half. Debug already worked
+// because it defaults to `ONLY_ACTIVE_ARCH = YES`. Intel Macs would need
+// /usr/local-prefix Homebrew and a separate build of this app anyway.
+ARCHS = arm64
+
 // Match the swift-tools-version declared in Package.swift.
 SWIFT_VERSION = 6.0
 
