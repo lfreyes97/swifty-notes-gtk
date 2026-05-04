@@ -149,7 +149,14 @@ final class MarkdownPreview {
 
         rootScroll = ScrolledWindow(child: container)
         rootScroll.setPolicy(horizontal: .never, vertical: .automatic)
+        #if os(macOS)
+        // GTK4-on-Quartz layers kinetic scrolling on top of macOS's own
+        // trackpad inertia, producing visible double-acceleration jitter
+        // when scrolling rendered markdown in split view. macOS only.
+        rootScroll.kineticScrolling = false
+        #else
         rootScroll.kineticScrolling = true
+        #endif
         rootScroll.minContentWidth = MainWindow.minimumPreviewWidth
         rootScroll.setAccessibleLabel("Markdown Preview")
         rootScroll.overlayScrolling = false

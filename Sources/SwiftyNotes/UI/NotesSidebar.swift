@@ -35,6 +35,14 @@ struct NotesSidebar {
         let scroll = ScrolledWindow(child: list)
         scroll.setPolicy(horizontal: .never, vertical: .automatic)
         scroll.vexpand = true
+        #if os(macOS)
+        // GTK4 on Quartz stacks overlay scrollbar fade-in reallocations on
+        // top of macOS's own inertial trackpad input, producing visibly
+        // jittery sidebar scrolling. Linux mice / Wayland compositors don't
+        // hit either codepath the same way, so this stays macOS-only.
+        scroll.overlayScrolling = false
+        scroll.kineticScrolling = false
+        #endif
 
         titleLabel = Label("Notes")
         titleLabel.addCSSClass("heading")

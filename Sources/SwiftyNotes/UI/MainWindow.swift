@@ -258,6 +258,9 @@ final class MainWindow {
         editorScroll.hexpand = true
         editorScroll.vexpand = true
         editorScroll.overlayScrolling = false
+        #if os(macOS)
+        editorScroll.kineticScrolling = false
+        #endif
         editorContent.hexpand = true
         editorContent.vexpand = true
         installEditorImageDropTarget()
