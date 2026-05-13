@@ -464,14 +464,14 @@ struct MarkdownPreviewWidgetTests {
     }
 
     @Test @MainActor
-    func `preview incrementally reuses unchanged top-level rows around a middle edit`() throws {
+    func `preview incrementally reuses unchanged surrounding rows when middle row needs replacement`() throws {
         let app = Application(id: "me.spaceinbox.swiftynotes.tests.incremental-preview-middle-edit")
         try app.register()
 
         let preview = MarkdownPreview(remoteImageLoader: { _, _ in })
         preview.render(blocks: [
             .heading(level: 2, text: .plain("Alpha")),
-            .heading(level: 2, text: .plain("Bravo")),
+            .codeBlock(code: "let bravo = 1\n", language: "swift"),
             .heading(level: 2, text: .plain("Charlie")),
         ])
         let initialChildren = preview.container.children()
@@ -479,7 +479,7 @@ struct MarkdownPreviewWidgetTests {
 
         preview.render(blocks: [
             .heading(level: 2, text: .plain("Alpha")),
-            .heading(level: 2, text: .plain("Bravo updated")),
+            .codeBlock(code: "let bravo = 2\n", language: "swift"),
             .heading(level: 2, text: .plain("Charlie")),
         ])
         let updatedChildren = preview.container.children()
@@ -489,7 +489,36 @@ struct MarkdownPreviewWidgetTests {
         #expect(initialAddresses[0] == updatedAddresses[0])
         #expect(initialAddresses[1] != updatedAddresses[1])
         #expect(initialAddresses[2] == updatedAddresses[2])
-        #expect(labelTexts(in: preview.container).contains("Bravo updated"))
+        #expect(preview.plainText.contains("let bravo = 2"))
+    }
+
+    @Test @MainActor
+    func `preview updates compatible text rows in place within stacked mode`() throws {
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.incremental-preview-in-place-text")
+        try app.register()
+
+        let preview = MarkdownPreview(remoteImageLoader: { _, _ in })
+        preview.render(blocks: [
+            .heading(level: 2, text: .plain("Heading A")),
+            .paragraph(.plain("Paragraph A")),
+            .blockquote(.plain("Quote A")),
+        ])
+        let initialChildren = preview.container.children()
+        let initialAddresses = initialChildren.map(widgetAddress)
+
+        preview.render(blocks: [
+            .heading(level: 1, text: .plain("Heading B")),
+            .paragraph(.plain("Paragraph B")),
+            .blockquote(.plain("Quote B")),
+        ])
+        let updatedChildren = preview.container.children()
+        let updatedAddresses = updatedChildren.map(widgetAddress)
+
+        #expect(updatedChildren.count == 3)
+        #expect(initialAddresses == updatedAddresses)
+        #expect(labelTexts(in: preview.container).contains("Heading B"))
+        #expect(labelTexts(in: preview.container).contains("Paragraph B"))
+        #expect(labelTexts(in: preview.container).contains("Quote B"))
     }
 
     @Test @MainActor

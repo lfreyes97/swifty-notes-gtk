@@ -595,6 +595,17 @@ final class MarkdownPreview {
         guard diff.hasChanges else { return }
 
         let existingChildren = container.children()
+        if diff.oldChangedRange.count == diff.newChangedRange.count,
+           updateNonVirtualizedRowsInPlace(
+               existingChildren: existingChildren,
+               oldRows: Array(renderedRows[diff.oldChangedRange]),
+               newRows: Array(newRows[diff.newChangedRange]),
+               startingAt: diff.oldChangedRange.lowerBound,
+           )
+        {
+            return
+        }
+
         for index in diff.oldChangedRange.reversed() {
             let child = existingChildren[index]
             child.visible = false
@@ -611,6 +622,45 @@ final class MarkdownPreview {
             let widget = makeWidget(for: row)
             container.insertChildAfter(widget, sibling: sibling)
             sibling = widget
+        }
+    }
+
+    private func updateNonVirtualizedRowsInPlace(
+        existingChildren: [Widget],
+        oldRows: [PreviewRow],
+        newRows: [PreviewRow],
+        startingAt startIndex: Int,
+    ) -> Bool {
+        guard oldRows.count == newRows.count else { return false }
+        for offset in oldRows.indices {
+            guard updateWidgetInPlace(
+                existingChildren[startIndex + offset],
+                from: oldRows[offset],
+                to: newRows[offset],
+            ) else {
+                return false
+            }
+        }
+        return true
+    }
+
+    private func updateWidgetInPlace(_ widget: Widget, from oldRow: PreviewRow, to newRow: PreviewRow) -> Bool {
+        switch (oldRow, newRow) {
+        case let (.heading(_, _), .heading(level, text)):
+            guard let label = widget.tryCast(Label.self) else { return false }
+            configureHeadingLabel(label, level: level, text: text)
+            return true
+        case let (.paragraphRun(_), .paragraphRun(texts)):
+            guard let label = widget.tryCast(Label.self) else { return false }
+            configureParagraphLabel(label, texts: texts)
+            return true
+        case let (.blockquoteRun(_), .blockquoteRun(texts)):
+            guard let row = widget.tryCast(Box.self) else { return false }
+            return configureBlockquoteRow(row, texts: texts)
+        case (.thematicBreak, .thematicBreak):
+            return true
+        default:
+            return false
         }
     }
 
@@ -722,16 +772,7 @@ final class MarkdownPreview {
 
     private func makeHeading(level: Int, text: RenderedText) -> Label {
         let label = makeMarkupLabel(text.markup)
-        switch level {
-        case 1:
-            label.addCSSClass(.title1)
-            label.marginBottom = 2
-        case 2:
-            label.addCSSClass(.title2)
-        default:
-            label.addCSSClass(.title3)
-        }
-        label.setMargins(0)
+        configureHeadingLabel(label, level: level, text: text)
         return label
     }
 
@@ -741,8 +782,7 @@ final class MarkdownPreview {
 
     private func makeParagraphRun(_ texts: [RenderedText]) -> Label {
         let label = makeMarkupLabel(joinedMarkup(for: texts))
-        label.addCSSClass("preview-paragraph-label")
-        label.selectable = true
+        configureParagraphLabel(label, texts: texts)
         return label
     }
 
@@ -893,15 +933,55 @@ final class MarkdownPreview {
         accent.marginBottom = 2
 
         let label = makeMarkupLabel(joinedMarkup(for: texts))
-        label.addCSSClass("preview-blockquote-label")
-        label.addCSSClass(.dimLabel)
-        label.selectable = true
-        label.hexpand = true
-        label.halign = .fill
+        configureBlockquoteLabel(label, texts: texts)
 
         row.append(accent)
         row.append(label)
         return row
+    }
+
+    private func configureHeadingLabel(_ label: Label, level: Int, text: RenderedText) {
+        label.markup = text.markup
+        label.removeCSSClass(.title1)
+        label.removeCSSClass(.title2)
+        label.removeCSSClass(.title3)
+        label.setMargins(0)
+        switch level {
+        case 1:
+            label.addCSSClass(.title1)
+            label.marginBottom = 2
+        case 2:
+            label.addCSSClass(.title2)
+        default:
+            label.addCSSClass(.title3)
+        }
+    }
+
+    private func configureParagraphLabel(_ label: Label, texts: [RenderedText]) {
+        label.markup = joinedMarkup(for: texts)
+        if !label.hasCSSClass("preview-paragraph-label") {
+            label.addCSSClass("preview-paragraph-label")
+        }
+        label.selectable = true
+    }
+
+    private func configureBlockquoteLabel(_ label: Label, texts: [RenderedText]) {
+        label.markup = joinedMarkup(for: texts)
+        if !label.hasCSSClass("preview-blockquote-label") {
+            label.addCSSClass("preview-blockquote-label")
+        }
+        if !label.hasCSSClass(.dimLabel) {
+            label.addCSSClass(.dimLabel)
+        }
+        label.selectable = true
+        label.hexpand = true
+        label.halign = .fill
+    }
+
+    private func configureBlockquoteRow(_ row: Box, texts: [RenderedText]) -> Bool {
+        guard let label = row.children().last?.tryCast(Label.self) else { return false }
+        configureBlockquoteLabel(label, texts: texts)
+        return true
     }
 
     private func customTextMarkup(for rows: [PreviewRow]) -> String {
