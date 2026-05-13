@@ -495,7 +495,7 @@ final class MainWindowActionsXCTests: XCTestCase {
         XCTAssertTrue(window.debugHasAboutDialog)
         XCTAssertTrue(window.debugAboutDialogSnapshot == .init(
             applicationName: "Swifty Notes",
-            version: "1.1.5",
+            version: "1.1.6",
             developerName: "Sergey Armodin",
             copyright: "© 2026 Sergey Armodin",
             website: "https://github.com/makoni/swifty-notes-gtk",
