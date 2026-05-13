@@ -112,6 +112,11 @@ let package = Package(
         .testTarget(
             name: "SwiftyNotesTests",
             dependencies: ["SwiftyNotes"]
+        ),
+        .testTarget(
+            name: "SwiftyNotesWidgetTests",
+            dependencies: ["SwiftyNotes"],
+            path: "Tests/SwiftyNotesWidgetTests"
         )
     ]
 )

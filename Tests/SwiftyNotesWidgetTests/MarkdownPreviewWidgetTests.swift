@@ -4,8 +4,8 @@ import Foundation
 @testable import SwiftyNotes
 import Testing
 
-/// Widget-backed MarkdownPreview tests live in their own suite so the CI step
-/// that runs them gets a dedicated process. When they share a process with
+/// Widget-backed MarkdownPreview tests live in their own test target so SwiftPM
+/// runs them in a dedicated process. When they share a process with
 /// MainWindow*Tests the teardown of those suites leaves GLib idle callbacks
 /// referencing freed GObjects, which crash the next widget test that pumps
 /// the main context.
