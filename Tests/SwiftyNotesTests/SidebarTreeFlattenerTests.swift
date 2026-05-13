@@ -28,9 +28,15 @@ struct SidebarTreeFlattenerTests {
             searchQuery: "",
             sortMode: .newestFirst,
         )
-        #expect(items.count == 2)
+        #expect(items.count == 3)
         if case let .note(first) = items[0] { #expect(first.note.id == alpha.id) }
         if case let .note(second) = items[1] { #expect(second.note.id == beta.id) }
+        guard case let .trashHeader(header) = items[2] else {
+            Issue.record("Expected a trailing Trash header")
+            return
+        }
+        #expect(header.count == 0)
+        #expect(header.isExpanded == false)
     }
 
     @Test
@@ -43,7 +49,7 @@ struct SidebarTreeFlattenerTests {
             searchQuery: "",
             sortMode: .newestFirst,
         )
-        #expect(items.count == 1)
+        #expect(items.count == 2)
         guard case let .folder(folder) = items[0] else {
             Issue.record("Expected a folder row")
             return
@@ -52,6 +58,12 @@ struct SidebarTreeFlattenerTests {
         #expect(folder.isExpanded == false)
         #expect(folder.hasChildren)
         #expect(folder.noteCount == 1)
+        guard case let .trashHeader(header) = items[1] else {
+            Issue.record("Expected a trailing Trash header")
+            return
+        }
+        #expect(header.count == 0)
+        #expect(header.isExpanded == false)
     }
 
     @Test
@@ -68,9 +80,10 @@ struct SidebarTreeFlattenerTests {
             sortMode: .newestFirst,
         )
 
-        #expect(items.count == 5)
+        #expect(items.count == 6)
         // Order: Work folder (depth 0), Work/Projects folder (depth 1),
-        // Project Note (depth 1), Work Note (depth 0), Root note (depth 0).
+        // Project Note (depth 1), Work Note (depth 0), Root note (depth 0),
+        // then the always-visible Trash header.
         guard case let .folder(workFolder) = items[0] else {
             Issue.record("Expected Work folder first")
             return
@@ -100,6 +113,12 @@ struct SidebarTreeFlattenerTests {
             return
         }
         #expect(rootNote.depth == 0)
+        guard case let .trashHeader(header) = items[5] else {
+            Issue.record("Expected Trash header after visible notes")
+            return
+        }
+        #expect(header.count == 0)
+        #expect(header.isExpanded == false)
     }
 
     @Test
@@ -169,11 +188,17 @@ struct SidebarTreeFlattenerTests {
             searchQuery: "",
             sortMode: .newestFirst,
         )
-        #expect(items.count == 1)
+        #expect(items.count == 2)
         if case let .folder(folder) = items[0] {
             #expect(folder.path == "Work")
             #expect(folder.hasChildren == false)
             #expect(folder.noteCount == 0)
         }
+        guard case let .trashHeader(header) = items[1] else {
+            Issue.record("Expected a trailing Trash header")
+            return
+        }
+        #expect(header.count == 0)
+        #expect(header.isExpanded == false)
     }
 }
