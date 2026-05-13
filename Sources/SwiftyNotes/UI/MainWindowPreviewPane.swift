@@ -99,6 +99,104 @@ extension MainWindow {
         }
     }
 
+    func scheduleDebugScrollSweepIfRequested() {
+        guard !hasScheduledDebugScrollSweep, debugEnvironmentFlag(named: "SWIFTY_NOTES_DEBUG_SCROLL_SWEEP_ON_LAUNCH") else { return }
+
+        hasScheduledDebugScrollSweep = true
+        let delayMilliseconds = debugEnvironmentInt(named: "SWIFTY_NOTES_DEBUG_SCROLL_DELAY_MS") ?? 900
+        scheduleDebugScrollSweep(after: max(delayMilliseconds, 0), remainingAttempts: 40)
+    }
+
+    private func scheduleDebugScrollSweep(after delayMilliseconds: Int, remainingAttempts: Int) {
+        MainContext.delay(for: .milliseconds(delayMilliseconds)) { [weak self] in
+            guard let self else { return }
+
+            setViewMode(.split, animated: false)
+            refreshPreview()
+            flushPendingPreviewRefresh()
+
+            let adjustment = editorScroll.verticalAdjustment
+            let maxScroll = max(adjustment.upper - adjustment.pageSize - adjustment.lower, 0)
+            guard state.selectedNote != nil, isPreviewPaneAttached, maxScroll > 0 else {
+                guard remainingAttempts > 0 else {
+                    FileHandle.standardError.write(Data("SwiftyNotes debug scroll sweep failed to start\n".utf8))
+                    quitAfterDebugScrollSweepIfRequested()
+                    return
+                }
+                scheduleDebugScrollSweep(after: 200, remainingAttempts: remainingAttempts - 1)
+                return
+            }
+
+            let durationMilliseconds = max(debugEnvironmentInt(named: "SWIFTY_NOTES_DEBUG_SCROLL_DURATION_MS") ?? 10_000, 100)
+            let stepMilliseconds = max(debugEnvironmentInt(named: "SWIFTY_NOTES_DEBUG_SCROLL_STEP_MS") ?? 50, 1)
+            let oneWayStepCount = max(durationMilliseconds / stepMilliseconds, 1)
+            let totalStepCount = max(oneWayStepCount * 2, 2)
+
+            FileHandle.standardError.write(
+                Data(
+                    "SwiftyNotes debug scroll sweep starting: maxScroll=\(Int(maxScroll.rounded())) durationMs=\(durationMilliseconds) stepMs=\(stepMilliseconds)\n".utf8,
+                ),
+            )
+            runDebugScrollSweep(
+                adjustment: adjustment,
+                maxScroll: maxScroll,
+                stepIndex: 0,
+                totalStepCount: totalStepCount,
+                stepMilliseconds: stepMilliseconds,
+            )
+        }
+    }
+
+    private func runDebugScrollSweep(
+        adjustment: Adjustment,
+        maxScroll: Double,
+        stepIndex: Int,
+        totalStepCount: Int,
+        stepMilliseconds: Int,
+    ) {
+        let denominator = Double(max(totalStepCount - 1, 1))
+        let progress = Double(stepIndex) / denominator
+        let triangleProgress = progress <= 0.5 ? progress * 2 : (1 - progress) * 2
+        adjustment.value = adjustment.lower + (maxScroll * triangleProgress)
+        syncPreviewScroll()
+
+        guard stepIndex + 1 < totalStepCount else {
+            FileHandle.standardError.write(
+                Data(
+                    "SwiftyNotes debug scroll sweep completed: steps=\(totalStepCount) maxScroll=\(Int(maxScroll.rounded()))\n".utf8,
+                ),
+            )
+            quitAfterDebugScrollSweepIfRequested()
+            return
+        }
+
+        MainContext.delay(for: .milliseconds(stepMilliseconds)) { [weak self] in
+            self?.runDebugScrollSweep(
+                adjustment: adjustment,
+                maxScroll: maxScroll,
+                stepIndex: stepIndex + 1,
+                totalStepCount: totalStepCount,
+                stepMilliseconds: stepMilliseconds,
+            )
+        }
+    }
+
+    private func quitAfterDebugScrollSweepIfRequested() {
+        guard debugEnvironmentFlag(named: "SWIFTY_NOTES_DEBUG_QUIT_AFTER_SCROLL") else { return }
+        MainContext.idle {
+            Application.current?.quit()
+        }
+    }
+
+    private func debugEnvironmentFlag(named name: String) -> Bool {
+        ProcessInfo.processInfo.environment[name]
+            .map { ["1", "true", "yes"].contains($0.lowercased()) } ?? false
+    }
+
+    private func debugEnvironmentInt(named name: String) -> Int? {
+        ProcessInfo.processInfo.environment[name].flatMap(Int.init)
+    }
+
     func schedulePreviewRefresh(blocks: [RenderedBlock], baseDirectory: URL) {
         previewRefreshScheduler.schedule(blocks: blocks, baseDirectory: baseDirectory)
     }

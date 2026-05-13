@@ -710,7 +710,7 @@ extension MainWindow {
             let notes = try repository.loadNotes()
             state.setNotes(notes)
             refreshFolderList()
-            directorySnapshot = try repository.directorySnapshot()
+            directorySnapshot = try repository.directoryMonitorSnapshot()
             deferredExternalSnapshot = nil
             externalReloadDeferred = false
             applyRuntimeSettings(targetSettings, shouldRefreshPreview: false)
@@ -750,7 +750,7 @@ extension MainWindow {
             let notes = try repository.loadNotes()
             state.setNotes(notes)
             refreshFolderList()
-            directorySnapshot = try repository.directorySnapshot()
+            directorySnapshot = try repository.directoryMonitorSnapshot()
             deferredExternalSnapshot = nil
             externalReloadDeferred = false
             renderSelection()
@@ -785,7 +785,7 @@ extension MainWindow {
 
     func pollForExternalChanges() {
         do {
-            let latestSnapshot = try repository.directorySnapshot()
+            let latestSnapshot = try repository.directoryMonitorSnapshot()
             guard latestSnapshot != directorySnapshot else {
                 applyDeferredExternalReloadIfPossible()
                 return
@@ -818,7 +818,7 @@ extension MainWindow {
 
     func refreshDirectorySnapshot() {
         do {
-            directorySnapshot = try repository.directorySnapshot()
+            directorySnapshot = try repository.directoryMonitorSnapshot()
             deferredExternalSnapshot = nil
             externalReloadDeferred = false
         } catch {

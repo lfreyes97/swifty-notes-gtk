@@ -4,7 +4,6 @@ import Foundation
 private struct ExternalDocumentFileSnapshot: Equatable {
     let modifiedAt: TimeInterval
     let fileSize: UInt64
-    let contentFingerprint: UInt64
 }
 
 private struct ExternalMarkdownDocument {
@@ -14,8 +13,6 @@ private struct ExternalMarkdownDocument {
 }
 
 private enum ExternalMarkdownDocumentStore {
-    private static let hashSeed: UInt64 = 14_695_981_039_346_656_037
-
     static func load(from fileURL: URL, fileManager: FileManager = .default) throws -> ExternalMarkdownDocument {
         let standardizedURL = fileURL.standardizedFileURL
         let content = try String(contentsOf: standardizedURL, encoding: .utf8)
@@ -37,21 +34,10 @@ private enum ExternalMarkdownDocumentStore {
     static func snapshot(of fileURL: URL, fileManager: FileManager = .default) throws -> ExternalDocumentFileSnapshot {
         let standardizedURL = fileURL.standardizedFileURL
         let attributes = try fileManager.attributesOfItem(atPath: standardizedURL.path())
-        let data = try Data(contentsOf: standardizedURL)
         return .init(
             modifiedAt: (attributes[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0,
             fileSize: (attributes[.size] as? NSNumber)?.uint64Value ?? 0,
-            contentFingerprint: hashing(data, into: hashSeed),
         )
-    }
-
-    private static func hashing(_ bytes: some Sequence<UInt8>, into seed: UInt64) -> UInt64 {
-        var hash = seed
-        for byte in bytes {
-            hash ^= UInt64(byte)
-            hash &*= 1_099_511_628_211
-        }
-        return hash
     }
 }
 
@@ -128,6 +114,11 @@ final class ExternalDocumentWindow {
             self?.shouldDeferPreviewRender() ?? false
         },
         onRendered: { [weak self] in
+            self?.syncPreviewScroll()
+        },
+    )
+    private lazy var previewScrollSyncScheduler = PreviewScrollSyncScheduler(
+        sync: { [weak self] in
             self?.syncPreviewScroll()
         },
     )
@@ -307,12 +298,13 @@ private extension ExternalDocumentWindow {
         }
 
         editorScroll.verticalAdjustment.onValueChanged { [weak self] in
-            self?.syncPreviewScroll()
+            self?.previewScrollSyncScheduler.requestSync()
         }
 
         window.onCloseRequest { [weak self] in
             self?.saveCurrentDocument(announceSuccess: false)
             self?.stopExternalChangeMonitor()
+            self?.previewScrollSyncScheduler.cancel()
             self?.autosave.cancel()
             return false
         }

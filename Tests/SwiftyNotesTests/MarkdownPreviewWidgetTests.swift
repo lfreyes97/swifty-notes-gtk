@@ -409,6 +409,44 @@ struct MarkdownPreviewWidgetTests {
     }
 
     @Test @MainActor
+    func `preview coalesces long paragraph runs into a single label subtree`() throws {
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.paragraph-run-coalescing")
+        try app.register()
+
+        let preview = MarkdownPreview(remoteImageLoader: { _, _ in })
+        let blocks = (1 ... 32).map { RenderedBlock.paragraph(.plain("Paragraph \($0)")) }
+        preview.render(blocks: blocks)
+
+        #expect(preview.debugTopLevelWidgetCount == 1)
+        #expect(preview.debugWidgetTreeCount == 2)
+        let mergedText = labelTexts(in: preview.container).joined(separator: "\n")
+        #expect(mergedText.contains("Paragraph 1"))
+        #expect(mergedText.contains("Paragraph 32"))
+    }
+
+    @Test @MainActor
+    func `preview coalesces consecutive blockquotes but still breaks runs around non-text blocks`() throws {
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.blockquote-run-coalescing")
+        try app.register()
+
+        let preview = MarkdownPreview(remoteImageLoader: { _, _ in })
+        preview.render(blocks: [
+            .blockquote(.plain("Quote line 1")),
+            .blockquote(.plain("Quote line 2")),
+            .codeBlock(code: "let answer = 42\n", language: "swift"),
+            .blockquote(.plain("Quote line 3")),
+            .blockquote(.plain("Quote line 4")),
+        ])
+
+        #expect(preview.debugTopLevelWidgetCount == 3)
+        #expect(preview.debugWidgetTreeCount == 22)
+        let mergedText = labelTexts(in: preview.container).joined(separator: "\n")
+        #expect(mergedText.contains("Quote line 1"))
+        #expect(mergedText.contains("Quote line 4"))
+        #expect(firstSourceView(in: preview.container)?.buffer.text == "let answer = 42\n")
+    }
+
+    @Test @MainActor
     func `preview code block renders through a read-only SourceView with matching language`() throws {
         let app = Application(id: "me.spaceinbox.swiftynotes.tests.code-block-source-view-swift")
         try app.register()
@@ -424,6 +462,7 @@ struct MarkdownPreviewWidgetTests {
         }
         #expect(sourceView.editable == false)
         #expect(sourceView.cursorVisible == false)
+        #expect(preview.debugWidgetTreeCount == 16)
         #expect(sourceView.buffer.text == "let answer = 42\n")
         #expect(sourceView.buffer.language?.id == "swift")
         #expect(sourceView.buffer.highlightSyntax == true)
@@ -579,7 +618,10 @@ struct MarkdownPreviewWidgetTests {
         }
 
         #expect(child.hasCSSClass("card"))
+        #expect(child.hasCSSClass("preview-image-card"))
         #expect(labelTexts(in: child).contains("Hero artwork"))
+        #expect(narrowPreview.debugWidgetTreeCount == 6)
+        #expect(child.measure(orientation: .horizontal).natural >= narrowSize.width + 28)
         #expect(abs(Double(narrowSize.height) - (Double(narrowSize.width) * 90.0 / 160.0)) <= 4)
 
         #expect(firstClamp(in: narrowPreview.container) != nil)

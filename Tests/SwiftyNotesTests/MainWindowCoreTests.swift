@@ -1187,5 +1187,44 @@ struct MainWindowCoreTests {
         #expect(window.debugPreviewText.contains("Updated"))
         #expect(window.debugPreviewText.contains("Fresh text"))
     }
+
+    @Test @MainActor
+    func `main window reloads external same size update after poll`() throws {
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let repository = NotesRepository(notesDirectory: temp)
+        let original = try repository.createNote(initialContent: "# Original\n\nabcde")
+        let externalRepository = NotesRepository(notesDirectory: temp)
+
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.externalsamesizeupdate")
+        try app.register()
+
+        let window = MainWindow(
+            application: app,
+            state: AppState(),
+            stateStore: WorkspaceStateStore(
+                stateFileURL: temp.appendingPathComponent("workspace.json", isDirectory: false),
+            ),
+            repository: repository,
+            renderer: MarkdownRenderer(),
+            autosave: AutosaveCoordinator(),
+        )
+
+        window.debugLoadInitialNotes()
+        #expect(window.debugNotesCount == 1)
+        #expect(window.debugSelectedNoteContent == original.content)
+
+        var externallyUpdated = try externalRepository.loadNotes().first
+        #expect(externallyUpdated != nil)
+        externallyUpdated?.content = "# Original\n\nvwxyz"
+        _ = try externalRepository.save(note: #require(externallyUpdated))
+
+        window.debugPollForExternalChanges()
+
+        #expect(window.debugSelectedNoteContent == "# Original\n\nvwxyz")
+        #expect(window.debugPreviewText.contains("Original"))
+        #expect(window.debugPreviewText.contains("vwxyz"))
+    }
 }
 #endif

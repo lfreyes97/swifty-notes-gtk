@@ -1153,5 +1153,43 @@ final class MainWindowCoreXCTests: XCTestCase {
         XCTAssertTrue(window.debugPreviewText.contains("Updated"))
         XCTAssertTrue(window.debugPreviewText.contains("Fresh text"))
     }
+
+    @MainActor func test_main_window_reloads_external_same_size_update_after_poll() throws {
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let repository = NotesRepository(notesDirectory: temp)
+        let original = try repository.createNote(initialContent: "# Original\n\nabcde")
+        let externalRepository = NotesRepository(notesDirectory: temp)
+
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.externalsamesizeupdate")
+        try app.register()
+
+        let window = MainWindow(
+            application: app,
+            state: AppState(),
+            stateStore: WorkspaceStateStore(
+                stateFileURL: temp.appendingPathComponent("workspace.json", isDirectory: false),
+            ),
+            repository: repository,
+            renderer: MarkdownRenderer(),
+            autosave: AutosaveCoordinator(),
+        )
+
+        window.debugLoadInitialNotes()
+        XCTAssertTrue(window.debugNotesCount == 1)
+        XCTAssertTrue(window.debugSelectedNoteContent == original.content)
+
+        var externallyUpdated = try externalRepository.loadNotes().first
+        XCTAssertNotNil(externallyUpdated)
+        externallyUpdated?.content = "# Original\n\nvwxyz"
+        _ = try externalRepository.save(note: XCTUnwrap(externallyUpdated))
+
+        window.debugPollForExternalChanges()
+
+        XCTAssertTrue(window.debugSelectedNoteContent == "# Original\n\nvwxyz")
+        XCTAssertTrue(window.debugPreviewText.contains("Original"))
+        XCTAssertTrue(window.debugPreviewText.contains("vwxyz"))
+    }
 }
 #endif

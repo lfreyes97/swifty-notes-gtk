@@ -18,7 +18,10 @@ struct UISmokeTests {
         require_named(frame, "About Swifty Notes")
         require_named(frame, "Using Swifty Notes CLI")
         require_named(frame, "Notes (3)")
-        require_named(frame, "A screenshot-ready note that shows off the native preview, spacing, and typography.")
+        assert any(
+            "A screenshot-ready note that shows off the native preview, spacing, and typography." in name
+            for name in visible_names(frame)
+        ), visible_names(frame)
 
         wait_until(lambda: os.path.isdir(NOTES_DIR), "notes dir created")
         # Default seed places explanatory guides under a "Guides"
@@ -216,6 +219,62 @@ struct UISmokeTests {
             },
             environment: [
                 "SWIFTY_NOTES_DEBUG_SELECT_NOTE_INDEX_ON_LAUNCH": "1",
+            ],
+            requiresAccessibility: false,
+        )
+        expectUIScriptSucceeded(result)
+    }
+
+    @Test
+    func `app can run launch scroll sweep and quit under headless wayland`() throws {
+        let result = try runWaylandUIScript(
+            """
+            app_stderr_log = os.environ["APP_STDERR_LOG"]
+
+            start_log = wait_until(
+                lambda: next(
+                    (
+                        line.strip()
+                        for line in open(app_stderr_log, "r", encoding="utf-8").read().splitlines()
+                        if line.startswith("SwiftyNotes debug scroll sweep starting:")
+                    ),
+                    None
+                ),
+                "scroll sweep starts",
+                timeout=15
+            )
+            complete_log = wait_until(
+                lambda: next(
+                    (
+                        line.strip()
+                        for line in open(app_stderr_log, "r", encoding="utf-8").read().splitlines()
+                        if line.startswith("SwiftyNotes debug scroll sweep completed:")
+                    ),
+                    None
+                ),
+                "scroll sweep completes",
+                timeout=20
+            )
+            assert "maxScroll=" in start_log, start_log
+            assert "steps=" in complete_log, complete_log
+
+            def app_has_exited():
+                try:
+                    os.kill(TARGET_PID, 0)
+                    return None
+                except OSError:
+                    return True
+
+            wait_until(app_has_exited, "app exits after scroll sweep", timeout=10)
+            stderr = open(app_stderr_log, "r", encoding="utf-8").read()
+            assert "Trying to snapshot" not in stderr, stderr
+            """,
+            environment: [
+                "SWIFTY_NOTES_DEBUG_SCROLL_SWEEP_ON_LAUNCH": "1",
+                "SWIFTY_NOTES_DEBUG_SCROLL_DELAY_MS": "300",
+                "SWIFTY_NOTES_DEBUG_SCROLL_DURATION_MS": "1500",
+                "SWIFTY_NOTES_DEBUG_SCROLL_STEP_MS": "20",
+                "SWIFTY_NOTES_DEBUG_QUIT_AFTER_SCROLL": "1",
             ],
             requiresAccessibility: false,
         )

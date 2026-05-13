@@ -847,6 +847,27 @@ public final class NotesRepository: @unchecked Sendable {
         }
     }
 
+    /// Cheaper variant of ``directorySnapshot()`` for change monitoring.
+    ///
+    /// Preserves the same filename / modifiedAt / fileSize comparison shape,
+    /// but skips content hashing so periodic external-change checks do not
+    /// read every note file into memory while the app is idle or scrolling.
+    public func directoryMonitorSnapshot() throws -> NotesDirectorySnapshot {
+        try queue.sync {
+            try ensureNotesDirectoryUnlocked()
+            let entries = try storedNoteEntriesUnlocked()
+                .map {
+                    try makeSnapshotEntryUnlocked(
+                        from: $0.directoryURL,
+                        folderPath: $0.folderPath,
+                        includeContentFingerprint: false,
+                    )
+                }
+                .sorted { $0.filename < $1.filename }
+            return NotesDirectorySnapshot(entries: entries)
+        }
+    }
+
     public func noteURL(for note: Note) -> URL {
         noteDirectoryURL(for: note).appendingPathComponent(Self.noteFilename, isDirectory: false)
     }
@@ -1296,6 +1317,7 @@ public final class NotesRepository: @unchecked Sendable {
     private func makeSnapshotEntryUnlocked(
         from noteDirectoryURL: URL,
         folderPath: String,
+        includeContentFingerprint: Bool = true,
     ) throws -> NotesDirectorySnapshot.Entry {
         let files = try recursiveRegularFilesUnlocked(in: noteDirectoryURL)
             .sorted {
@@ -1310,18 +1332,20 @@ public final class NotesRepository: @unchecked Sendable {
         for fileURL in files {
             let attributes = try fileManager.attributesOfItem(atPath: fileURL.path(percentEncoded: false))
             let relativePath = fileURL.path(percentEncoded: false).replacingOccurrences(of: noteDirectoryURL.path(percentEncoded: false) + "/", with: "")
-            let data = try Data(contentsOf: fileURL)
             modifiedAt = max(modifiedAt, (attributes[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0)
             totalSize += (attributes[.size] as? NSNumber)?.uint64Value ?? 0
-            fingerprint = Self.hashing(relativePath.utf8, into: fingerprint)
-            fingerprint = Self.hashing(data, into: fingerprint)
+            if includeContentFingerprint {
+                let data = try Data(contentsOf: fileURL)
+                fingerprint = Self.hashing(relativePath.utf8, into: fingerprint)
+                fingerprint = Self.hashing(data, into: fingerprint)
+            }
         }
 
         return .init(
             filename: Self.joinedFolderPath(parent: folderPath, child: noteDirectoryURL.lastPathComponent),
             modifiedAt: modifiedAt,
             fileSize: totalSize,
-            contentFingerprint: fingerprint,
+            contentFingerprint: includeContentFingerprint ? fingerprint : 0,
         )
     }
 

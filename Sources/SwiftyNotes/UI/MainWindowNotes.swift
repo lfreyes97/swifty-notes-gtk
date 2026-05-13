@@ -46,7 +46,7 @@ extension MainWindow {
                 // a hidden surprise.
                 state.setFolderExpanded(NotesRepository.defaultSeedGuidesFolder, expanded: true)
             }
-            directorySnapshot = try repository.directorySnapshot()
+            directorySnapshot = try repository.directoryMonitorSnapshot()
             renderSelection()
             flushPendingPreviewRefresh()
             updateHeaderSubtitle()

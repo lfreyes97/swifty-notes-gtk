@@ -78,5 +78,34 @@ struct ExternalDocumentWindowTests {
         #expect(window.debugPreviewText.contains("After"))
         #expect(window.debugPreviewText.contains("Changed on disk"))
     }
+
+    @Test @MainActor
+    func `external document window reloads same size file change after poll`() throws {
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: temp) }
+        try FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
+
+        let fileURL = temp.appendingPathComponent("ReloadedSameSize.md", isDirectory: false)
+        try "# Before\n\nabcde".write(to: fileURL, atomically: true, encoding: .utf8)
+
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.externaldocumentsamesizereload")
+        try app.register()
+
+        let window = try ExternalDocumentWindow(
+            application: app,
+            fileURL: fileURL,
+            renderer: MarkdownRenderer(),
+            autosave: AutosaveCoordinator(),
+        )
+
+        window.present()
+
+        try "# Before\n\nvwxyz".write(to: fileURL, atomically: true, encoding: .utf8)
+        window.debugPollForExternalChanges()
+
+        #expect(window.debugEditorText == "# Before\n\nvwxyz")
+        #expect(window.debugPreviewText.contains("Before"))
+        #expect(window.debugPreviewText.contains("vwxyz"))
+    }
 }
 #endif

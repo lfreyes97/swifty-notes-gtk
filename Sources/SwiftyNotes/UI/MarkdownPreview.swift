@@ -112,6 +112,10 @@ final class MarkdownPreview {
         background: transparent;
     }
 
+    .preview-image-card {
+        padding: 14px;
+    }
+
     /* Let the card (`.preview-code-block`) own the background so the
        SWIFT-style language badge and the syntax-highlighted code share
        one visual surface. SourceBuffer's style-scheme would otherwise
@@ -190,6 +194,20 @@ final class MarkdownPreview {
         animatedImagePlayers.count
     }
 
+    /// Perf-focused debug metric for tests and investigations: how many
+    /// immediate block widgets the preview is currently asking GTK to
+    /// lay out/snapshot.
+    var debugTopLevelWidgetCount: Int {
+        container.children().count
+    }
+
+    /// Recursive widget count of the preview subtree. Useful as a
+    /// headless proxy for scenegraph growth while iterating on scroll
+    /// performance work.
+    var debugWidgetTreeCount: Int {
+        Self.widgetTreeCount(in: container)
+    }
+
     private static func extractPlainText(from widget: Widget) -> String? {
         if let label = widget.tryCast(Label.self) {
             return label.text
@@ -206,6 +224,12 @@ final class MarkdownPreview {
             .filter { !$0.isEmpty }
             .joined(separator: "\n")
         return nestedText.isEmpty ? nil : nestedText
+    }
+
+    private static func widgetTreeCount(in widget: Widget) -> Int {
+        1 + widget.children().reduce(0) { partialResult, child in
+            partialResult + widgetTreeCount(in: child)
+        }
     }
 
     func attach(to window: ApplicationWindow) {
@@ -234,8 +258,38 @@ final class MarkdownPreview {
                 continue
             }
 
+            if let textRun = makeTextRunWidget(from: blocks, startingAt: &index) {
+                container.append(textRun)
+                continue
+            }
+
             container.append(makeWidget(for: block))
             index += 1
+        }
+    }
+
+    private func makeTextRunWidget(from blocks: [RenderedBlock], startingAt index: inout Int) -> Widget? {
+        switch blocks[index] {
+        case let .paragraph(text):
+            var texts = [text]
+            index += 1
+            while index < blocks.count {
+                guard case let .paragraph(nextText) = blocks[index] else { break }
+                texts.append(nextText)
+                index += 1
+            }
+            return makeParagraphRun(texts)
+        case let .blockquote(text):
+            var texts = [text]
+            index += 1
+            while index < blocks.count {
+                guard case let .blockquote(nextText) = blocks[index] else { break }
+                texts.append(nextText)
+                index += 1
+            }
+            return makeBlockquoteRun(texts)
+        default:
+            return nil
         }
     }
 
@@ -289,20 +343,17 @@ final class MarkdownPreview {
     }
 
     private func makeParagraph(text: RenderedText) -> Label {
-        let label = makeMarkupLabel(text.markup)
+        makeParagraphRun([text])
+    }
+
+    private func makeParagraphRun(_ texts: [RenderedText]) -> Label {
+        let label = makeMarkupLabel(joinedMarkup(for: texts))
         label.addCSSClass("preview-paragraph-label")
         label.selectable = true
         return label
     }
 
     private func makeCodeBlock(code: String, language: String?) -> Widget {
-        let outer = Box(orientation: .vertical, spacing: 0)
-        outer.addCSSClass("card")
-        outer.addCSSClass("preview-code-block")
-        outer.hexpand = true
-        outer.halign = .fill
-        outer.overflow = .hidden
-
         let inner = Box(orientation: .vertical, spacing: 10)
         inner.setMargins(14)
         inner.hexpand = true
@@ -339,11 +390,14 @@ final class MarkdownPreview {
         inner.append(scroll)
 
         let overlay = Overlay()
+        overlay.addCSSClass("card")
+        overlay.addCSSClass("preview-code-block")
+        overlay.hexpand = true
+        overlay.halign = .fill
+        overlay.overflow = .hidden
         overlay.child = inner
         overlay.addOverlay(makeCodeBlockCopyButton(for: code))
-
-        outer.append(overlay)
-        return outer
+        return overlay
     }
 
     /// Builds a ``SourceBuffer`` primed with the code block's text and the
@@ -433,6 +487,10 @@ final class MarkdownPreview {
     }
 
     private func makeBlockquote(text: RenderedText) -> Widget {
+        makeBlockquoteRun([text])
+    }
+
+    private func makeBlockquoteRun(_ texts: [RenderedText]) -> Widget {
         let row = Box(orientation: .horizontal, spacing: 12)
         row.marginStart = 4
         row.marginEnd = 4
@@ -441,16 +499,20 @@ final class MarkdownPreview {
         accent.marginTop = 2
         accent.marginBottom = 2
 
-        let content = Box(orientation: .vertical, spacing: 6)
-        let label = makeMarkupLabel(text.markup)
+        let label = makeMarkupLabel(joinedMarkup(for: texts))
         label.addCSSClass("preview-blockquote-label")
         label.addCSSClass(.dimLabel)
         label.selectable = true
-        content.append(label)
+        label.hexpand = true
+        label.halign = .fill
 
         row.append(accent)
-        row.append(content)
+        row.append(label)
         return row
+    }
+
+    private func joinedMarkup(for texts: [RenderedText]) -> String {
+        texts.map(\.markup).joined(separator: "\n\n")
     }
 
     private func makeList(_ items: [(text: RenderedText, depth: Int, marker: String, loose: Bool, taskIndex: Int?)]) -> Widget {
@@ -624,24 +686,20 @@ final class MarkdownPreview {
     /// its own paragraph (blank lines around it). Wraps the picture in a
     /// libadwaita `.card` with a caption underneath.
     private func makeCardImageBlock(alt: String, source: String?, title: String?) -> Widget {
-        let wrapper = Box(orientation: .vertical, spacing: 0)
+        let wrapper = Box(orientation: .vertical, spacing: 10)
         wrapper.addCSSClass("card")
-
-        let inner = Box(orientation: .vertical, spacing: 10)
-        inner.setMargins(14)
-        inner.hexpand = true
+        wrapper.addCSSClass("preview-image-card")
+        wrapper.hexpand = true
 
         if let image = makeBlockImageWidget(alt: alt, source: source, title: title) {
-            inner.append(image)
+            wrapper.append(image)
         }
 
         let label = Label(imageDescription(alt: alt, source: source, title: title))
         label.wrap = true
         label.xalign = 0
         label.addCSSClass(.dimLabel)
-        inner.append(label)
-
-        wrapper.append(inner)
+        wrapper.append(label)
         return wrapper
     }
 
@@ -650,12 +708,7 @@ final class MarkdownPreview {
     /// the picture sits in the same column as the surrounding prose so the
     /// transition between text and image stays visually contiguous.
     private func makePlainImageBlock(alt: String, source: String?, title: String?) -> Widget {
-        let wrapper = Box(orientation: .vertical, spacing: 0)
-        wrapper.hexpand = true
-        if let image = makeBlockImageWidget(alt: alt, source: source, title: title) {
-            wrapper.append(image)
-        }
-        return wrapper
+        makeBlockImageWidget(alt: alt, source: source, title: title) ?? Box()
     }
 
     private func makeImageGroup(_ items: [RenderedImageItem], style _: ImageBlockStyle) -> Widget {

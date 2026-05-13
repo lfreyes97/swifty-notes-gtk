@@ -752,6 +752,28 @@ struct RepositoryStateTests {
     }
 
     @Test
+    func `directory monitor snapshot changes when content changes without size change`() throws {
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let repository = NotesRepository(notesDirectory: temp)
+        let original = try repository.createNote(initialContent: "abcde")
+        let before = try repository.directoryMonitorSnapshot()
+
+        var updated = original
+        updated.content = "vwxyz"
+        _ = try repository.save(note: updated)
+
+        let after = try repository.directoryMonitorSnapshot()
+        #expect(before != after)
+        #expect(before.entries.count == 1)
+        #expect(after.entries.count == 1)
+        #expect(before.entries[0].fileSize == after.entries[0].fileSize)
+        #expect(before.entries[0].contentFingerprint == 0)
+        #expect(after.entries[0].contentFingerprint == 0)
+    }
+
+    @Test
     func `workspace state store round trips state`() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         let store = WorkspaceStateStore(

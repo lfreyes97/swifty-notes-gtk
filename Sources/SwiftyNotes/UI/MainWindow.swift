@@ -117,6 +117,12 @@ final class MainWindow {
             self?.syncPreviewScroll()
         },
     )
+    lazy var previewScrollSyncScheduler = PreviewScrollSyncScheduler(
+        schedule: deferredUIActionScheduler,
+        sync: { [weak self] in
+            self?.syncPreviewScroll()
+        },
+    )
     var isRestoringPreviewPaneLayout = false
     var previewAnimationID: SourceID?
     var isPreviewPaneAttached = false
@@ -148,6 +154,7 @@ final class MainWindow {
     var hasScheduledDebugLaunchEdit = false
     var hasScheduledDebugSettingsOpen = false
     var hasScheduledDebugCreateNote = false
+    var hasScheduledDebugScrollSweep = false
 
     init(
         application: Application,
@@ -207,6 +214,7 @@ final class MainWindow {
         scheduleDebugSettingsOpenIfRequested()
         scheduleDebugCreateNoteIfRequested()
         scheduleDebugSelectionSwitchIfRequested()
+        scheduleDebugScrollSweepIfRequested()
         MainContext.idle { [weak self] in
             self?.refreshPreview()
             self?.applyViewMode(animated: false)
@@ -392,13 +400,14 @@ final class MainWindow {
 
         editorScroll.verticalAdjustment.onValueChanged { [weak self] in
             guard let self else { return }
-            syncPreviewScroll()
+            previewScrollSyncScheduler.requestSync()
         }
 
         window.onCloseRequest { [weak self] in
             self?.saveCurrentEditedNote(announceSuccess: false)
             self?.persistWorkspaceState()
             self?.stopExternalChangeMonitor()
+            self?.previewScrollSyncScheduler.cancel()
             self?.autosave.cancel()
             return false
         }

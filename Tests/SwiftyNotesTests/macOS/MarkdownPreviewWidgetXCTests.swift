@@ -424,6 +424,42 @@ final class MarkdownPreviewWidgetXCTests: XCTestCase {
         XCTAssertTrue(measurement.minimum <= 320)
     }
 
+    @MainActor func test_preview_coalesces_long_paragraph_runs_into_a_single_label_subtree() throws {
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.paragraph-run-coalescing")
+        try app.register()
+
+        let preview = MarkdownPreview(remoteImageLoader: { _, _ in })
+        let blocks = (1 ... 32).map { RenderedBlock.paragraph(.plain("Paragraph \($0)")) }
+        preview.render(blocks: blocks)
+
+        XCTAssertTrue(preview.debugTopLevelWidgetCount == 1)
+        XCTAssertTrue(preview.debugWidgetTreeCount == 2)
+        let mergedText = labelTexts(in: preview.container).joined(separator: "\n")
+        XCTAssertTrue(mergedText.contains("Paragraph 1"))
+        XCTAssertTrue(mergedText.contains("Paragraph 32"))
+    }
+
+    @MainActor func test_preview_coalesces_consecutive_blockquotes_but_still_breaks_runs_around_non_text_blocks() throws {
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.blockquote-run-coalescing")
+        try app.register()
+
+        let preview = MarkdownPreview(remoteImageLoader: { _, _ in })
+        preview.render(blocks: [
+            .blockquote(.plain("Quote line 1")),
+            .blockquote(.plain("Quote line 2")),
+            .codeBlock(code: "let answer = 42\n", language: "swift"),
+            .blockquote(.plain("Quote line 3")),
+            .blockquote(.plain("Quote line 4")),
+        ])
+
+        XCTAssertTrue(preview.debugTopLevelWidgetCount == 3)
+        XCTAssertTrue(preview.debugWidgetTreeCount == 22)
+        let mergedText = labelTexts(in: preview.container).joined(separator: "\n")
+        XCTAssertTrue(mergedText.contains("Quote line 1"))
+        XCTAssertTrue(mergedText.contains("Quote line 4"))
+        XCTAssertTrue(firstSourceView(in: preview.container)?.buffer.text == "let answer = 42\n")
+    }
+
     @MainActor func test_preview_code_block_renders_through_a_read_only_SourceView_with_matching_language() throws {
         let app = Application(id: "me.spaceinbox.swiftynotes.tests.code-block-source-view-swift")
         try app.register()
@@ -439,6 +475,7 @@ final class MarkdownPreviewWidgetXCTests: XCTestCase {
         }
         XCTAssertTrue(sourceView.editable == false)
         XCTAssertTrue(sourceView.cursorVisible == false)
+        XCTAssertTrue(preview.debugWidgetTreeCount == 16)
         XCTAssertTrue(sourceView.buffer.text == "let answer = 42\n")
         XCTAssertTrue(sourceView.buffer.language?.id == "swift")
         XCTAssertTrue(sourceView.buffer.highlightSyntax == true)
@@ -588,7 +625,10 @@ final class MarkdownPreviewWidgetXCTests: XCTestCase {
         }
 
         XCTAssertTrue(child.hasCSSClass("card"))
+        XCTAssertTrue(child.hasCSSClass("preview-image-card"))
         XCTAssertTrue(labelTexts(in: child).contains("Hero artwork"))
+        XCTAssertTrue(narrowPreview.debugWidgetTreeCount == 6)
+        XCTAssertTrue(child.measure(orientation: .horizontal).natural >= narrowSize.width + 28)
         XCTAssertTrue(abs(Double(narrowSize.height) - (Double(narrowSize.width) * 90.0 / 160.0)) <= 4)
 
         XCTAssertNotNil(firstClamp(in: narrowPreview.container))

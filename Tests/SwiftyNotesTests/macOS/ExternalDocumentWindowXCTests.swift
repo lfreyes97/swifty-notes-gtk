@@ -76,5 +76,33 @@ final class ExternalDocumentWindowXCTests: XCTestCase {
         XCTAssertTrue(window.debugPreviewText.contains("After"))
         XCTAssertTrue(window.debugPreviewText.contains("Changed on disk"))
     }
+
+    @MainActor func test_external_document_window_reloads_same_size_file_change_after_poll() throws {
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: temp) }
+        try FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
+
+        let fileURL = temp.appendingPathComponent("ReloadedSameSize.md", isDirectory: false)
+        try "# Before\n\nabcde".write(to: fileURL, atomically: true, encoding: .utf8)
+
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.externaldocumentsamesizereload")
+        try app.register()
+
+        let window = try ExternalDocumentWindow(
+            application: app,
+            fileURL: fileURL,
+            renderer: MarkdownRenderer(),
+            autosave: AutosaveCoordinator(),
+        )
+
+        window.present()
+
+        try "# Before\n\nvwxyz".write(to: fileURL, atomically: true, encoding: .utf8)
+        window.debugPollForExternalChanges()
+
+        XCTAssertTrue(window.debugEditorText == "# Before\n\nvwxyz")
+        XCTAssertTrue(window.debugPreviewText.contains("Before"))
+        XCTAssertTrue(window.debugPreviewText.contains("vwxyz"))
+    }
 }
 #endif

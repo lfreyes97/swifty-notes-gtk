@@ -8,6 +8,8 @@ import Foundation
 /// actual progress-mapping math here.
 @MainActor
 enum PreviewScrollSync {
+    private static let minimumPreviewAdjustmentDelta = 0.5
+
     /// Maps the editor's vertical scroll progress onto the preview's
     /// vertical adjustment so a scroll in the editor moves the preview
     /// proportionally.
@@ -22,6 +24,8 @@ enum PreviewScrollSync {
         let sourceMax = max(source.upper - source.pageSize - source.lower, 0)
         let destinationMax = max(destination.upper - destination.pageSize - destination.lower, 0)
         let progress = sourceMax > 0 ? (source.value - source.lower) / sourceMax : 0
-        destination.value = destination.lower + (destinationMax * progress)
+        let targetValue = destination.lower + (destinationMax * progress)
+        guard abs(destination.value - targetValue) >= minimumPreviewAdjustmentDelta else { return }
+        destination.value = targetValue
     }
 }
