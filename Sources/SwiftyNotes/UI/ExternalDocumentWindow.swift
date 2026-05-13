@@ -142,6 +142,9 @@ final class ExternalDocumentWindow {
     private var tableSizePicker: TableSizePicker?
     private(set) var overflowMenuSectionTitles: [String] = []
     private(set) var overflowMenuItemsBySection: [String: [String]] = [:]
+#if DEBUG
+    private var previewBlockBuildCount = 0
+#endif
 
     init(
         application: Application,
@@ -273,7 +276,7 @@ private extension ExternalDocumentWindow {
 
         editor.view.onChanged { [weak self] in
             guard let self, !self.suppressEditorChange else { return }
-            refreshPreview()
+            scheduleTypingPreviewRefresh()
             updateHeaderSubtitle()
             autosave.scheduleSave(after: autosaveDelay) { [weak self] in
                 self?.saveCurrentDocument(announceSuccess: false)
@@ -413,7 +416,7 @@ private extension ExternalDocumentWindow {
 @MainActor
 private extension ExternalDocumentWindow {
     func refreshPreview() {
-        let blocks = renderer.blocks(for: editor.buffer.text)
+        let blocks = buildPreviewBlocks(for: editor.buffer.text)
         let baseDirectory = fileURL.deletingLastPathComponent()
         guard preview.rootScroll.root != nil else {
             previewRefreshScheduler.cancel()
@@ -421,6 +424,26 @@ private extension ExternalDocumentWindow {
             return
         }
         schedulePreviewRefresh(blocks: blocks, baseDirectory: baseDirectory)
+    }
+
+    func scheduleTypingPreviewRefresh() {
+        let text = editor.buffer.text
+        let baseDirectory = fileURL.deletingLastPathComponent()
+        guard preview.rootScroll.root != nil else {
+            previewRefreshScheduler.cancel()
+            preview.render(blocks: buildPreviewBlocks(for: text), baseDirectory: baseDirectory)
+            return
+        }
+        previewRefreshScheduler.scheduleDeferred(baseDirectory: baseDirectory) { [weak self] in
+            self?.buildPreviewBlocks(for: text) ?? []
+        }
+    }
+
+    func buildPreviewBlocks(for markdown: String) -> [RenderedBlock] {
+#if DEBUG
+        previewBlockBuildCount += 1
+#endif
+        return renderer.blocks(for: markdown)
     }
 
     func schedulePreviewRefresh(blocks: [RenderedBlock], baseDirectory: URL) {
@@ -959,10 +982,14 @@ private extension ExternalDocumentWindow {
             previewRefreshScheduler.flush()
             previewRefreshScheduler.cancel()
             if preview.debugTopLevelWidgetCount == 0 {
-                let blocks = renderer.blocks(for: editor.buffer.text)
+                let blocks = buildPreviewBlocks(for: editor.buffer.text)
                 preview.render(blocks: blocks, baseDirectory: fileURL.deletingLastPathComponent())
             }
             return preview.plainText
+        }
+
+        var debugPreviewBlockBuildCount: Int {
+            previewBlockBuildCount
         }
 
         func debugSetEditorText(_ text: String) {

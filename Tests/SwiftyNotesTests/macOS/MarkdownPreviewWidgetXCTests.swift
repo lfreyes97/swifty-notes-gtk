@@ -526,6 +526,36 @@ final class MarkdownPreviewWidgetXCTests: XCTestCase {
         XCTAssertTrue(labelTexts(in: preview.container).joined(separator: "\n").contains("Body 160"))
     }
 
+    @MainActor func test_preview_custom_text_layout_updates_existing_label_instead_of_rebuilding_subtree() throws {
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.custom-text-preview-reuse")
+        try app.register()
+
+        let preview = MarkdownPreview(remoteImageLoader: { _, _ in })
+        preview.debugForceCustomTextLayout = true
+        preview.render(blocks: (1 ... 160).flatMap { index -> [RenderedBlock] in
+            [
+                .heading(level: 2, text: .plain("Section \(index)")),
+                .paragraph(.plain("Body \(index)")),
+            ]
+        })
+        let initialChildren = preview.container.children()
+        let initialAddresses = initialChildren.map(widgetAddress)
+
+        preview.render(blocks: (1 ... 160).flatMap { index -> [RenderedBlock] in
+            [
+                .heading(level: 2, text: .plain("Section \(index)")),
+                .paragraph(.plain(index == 80 ? "Body \(index) updated" : "Body \(index)")),
+            ]
+        })
+        let updatedChildren = preview.container.children()
+        let updatedAddresses = updatedChildren.map(widgetAddress)
+
+        XCTAssertTrue(preview.debugUsesCustomTextLayout)
+        XCTAssertTrue(updatedChildren.count == 1)
+        XCTAssertTrue(initialAddresses == updatedAddresses)
+        XCTAssertTrue(labelTexts(in: preview.container).joined(separator: "\n").contains("Body 80 updated"))
+    }
+
     @MainActor func test_preview_custom_text_layout_refuses_task_lists_so_checkbox_rows_keep_interactivity() throws {
         let app = Application(id: "me.spaceinbox.swiftynotes.tests.custom-text-preview-task-fallback")
         try app.register()

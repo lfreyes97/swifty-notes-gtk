@@ -66,6 +66,10 @@ extension MainWindow {
         return selected
     }
 
+    func shouldRefreshSidebarDuringEditing(previousTitle: String?, updatedNote: Note) -> Bool {
+        !state.searchQuery.isEmpty || previousTitle != updatedNote.title
+    }
+
     func saveCurrentEditedNote(announceSuccess: Bool) {
         guard let noteToSave = currentEditedNoteSnapshot() else { return }
         state.upsert(noteToSave)

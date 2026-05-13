@@ -152,9 +152,13 @@ final class MainWindow {
     var noteContextMenuLabels: [String] = []
     var lastCopiedNoteID: String?
     var hasScheduledDebugLaunchEdit = false
+    var hasScheduledDebugTypingBurst = false
     var hasScheduledDebugSettingsOpen = false
     var hasScheduledDebugCreateNote = false
     var hasScheduledDebugScrollSweep = false
+#if DEBUG
+    var previewBlockBuildCount = 0
+#endif
 
     init(
         application: Application,
@@ -214,6 +218,7 @@ final class MainWindow {
         scheduleDebugSettingsOpenIfRequested()
         scheduleDebugCreateNoteIfRequested()
         scheduleDebugSelectionSwitchIfRequested()
+        scheduleDebugTypingBurstIfRequested()
         scheduleDebugScrollSweepIfRequested()
         MainContext.idle { [weak self] in
             self?.refreshPreview()
@@ -372,9 +377,12 @@ final class MainWindow {
             // silently rewrite the wrong note via this autosave.
             guard self.previewedTrashedNoteID == nil else { return }
             guard let noteToSave = currentEditedNoteSnapshot() else { return }
+            let previousTitle = state.selectedNote?.title
             state.upsert(noteToSave)
-            refreshSidebar()
-            refreshPreview()
+            if shouldRefreshSidebarDuringEditing(previousTitle: previousTitle, updatedNote: noteToSave) {
+                refreshSidebar()
+            }
+            scheduleTypingPreviewRefresh()
             updateHeaderSubtitle()
             autosave.scheduleSave(after: autosaveDelay) { [weak self] in
                 self?.saveCurrentEditedNote(announceSuccess: false)

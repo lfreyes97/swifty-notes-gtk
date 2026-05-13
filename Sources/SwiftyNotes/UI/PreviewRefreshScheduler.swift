@@ -16,10 +16,19 @@ import Foundation
 /// concrete `MarkdownPreview` widget and makes it unit-testable.
 @MainActor
 final class PreviewRefreshScheduler {
-    private var pendingBlocks: [RenderedBlock]?
-    private var pendingBaseDirectory: URL?
+    private struct PendingRefresh {
+        let baseDirectory: URL
+        let resolveBlocks: () -> [RenderedBlock]
+    }
+
+    private var pendingRefresh: PendingRefresh?
     private var refreshID: SourceID?
     private var retryID: SourceID?
+
+#if DEBUG
+    private(set) var debugResolvedRefreshCount = 0
+    private(set) var debugCommittedRefreshCount = 0
+#endif
 
     private let render: ([RenderedBlock], URL) -> Void
     private let fallbackBaseDirectory: () -> URL
@@ -55,16 +64,35 @@ final class PreviewRefreshScheduler {
     }
 
     static let scheduleIntervalMs: UInt32 = 1
+    static let typingScheduleIntervalMs: UInt32 = 75
     static let retryIntervalMs: UInt32 = 16
 
     /// Buffers a new render request and schedules a debounced flush.
     /// Cancels any in-flight scheduled flush so only the latest set of
     /// blocks reaches ``render``.
-    func schedule(blocks: [RenderedBlock], baseDirectory: URL) {
+    func schedule(
+        blocks: [RenderedBlock],
+        baseDirectory: URL,
+        intervalMs: UInt32 = PreviewRefreshScheduler.scheduleIntervalMs,
+    ) {
+        scheduleDeferred(baseDirectory: baseDirectory, intervalMs: intervalMs) { blocks }
+    }
+
+    /// Buffers a render request whose markdown blocks should be resolved
+    /// only when the debounced flush actually fires. This is used for
+    /// bursty typing paths so we do not re-parse markdown on every
+    /// keystroke only to overwrite the work before the preview commits.
+    func scheduleDeferred(
+        baseDirectory: URL,
+        intervalMs: UInt32 = PreviewRefreshScheduler.typingScheduleIntervalMs,
+        resolveBlocks: @escaping () -> [RenderedBlock],
+    ) {
         cancelRefreshTimer()
-        pendingBlocks = blocks
-        pendingBaseDirectory = baseDirectory
-        refreshID = MainContext.timeout(intervalMs: Self.scheduleIntervalMs) { [weak self] in
+        pendingRefresh = PendingRefresh(
+            baseDirectory: baseDirectory,
+            resolveBlocks: resolveBlocks,
+        )
+        refreshID = MainContext.timeout(intervalMs: intervalMs) { [weak self] in
             guard let self else { return false }
             flush()
             return false
@@ -75,7 +103,7 @@ final class PreviewRefreshScheduler {
     /// ``shouldDeferRender`` and parks the work for retry if the
     /// preview surface is not ready.
     func flush() {
-        guard refreshID != nil || pendingBlocks != nil || pendingBaseDirectory != nil else {
+        guard refreshID != nil || pendingRefresh != nil else {
             return
         }
         cancelRefreshTimer()
@@ -84,11 +112,19 @@ final class PreviewRefreshScheduler {
             return
         }
         cancelRetryTimer()
-        let blocks = pendingBlocks ?? []
-        let baseDirectory = pendingBaseDirectory ?? fallbackBaseDirectory()
-        pendingBlocks = nil
-        pendingBaseDirectory = nil
-        render(blocks, baseDirectory)
+        let refresh = pendingRefresh ?? PendingRefresh(
+            baseDirectory: fallbackBaseDirectory(),
+            resolveBlocks: { [] },
+        )
+        pendingRefresh = nil
+        let blocks = refresh.resolveBlocks()
+#if DEBUG
+        debugResolvedRefreshCount += 1
+#endif
+        render(blocks, refresh.baseDirectory)
+#if DEBUG
+        debugCommittedRefreshCount += 1
+#endif
         MainContext.idle { [weak self] in
             self?.onRendered()
         }
@@ -100,8 +136,7 @@ final class PreviewRefreshScheduler {
     func cancel() {
         cancelRefreshTimer()
         cancelRetryTimer()
-        pendingBlocks = nil
-        pendingBaseDirectory = nil
+        pendingRefresh = nil
     }
 
     private func cancelRefreshTimer() {

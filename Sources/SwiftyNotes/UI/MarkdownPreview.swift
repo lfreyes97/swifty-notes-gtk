@@ -261,6 +261,7 @@ final class MarkdownPreview {
     private var virtualizedSelection: NoSelection?
     private var virtualizedFactory: SignalListItemFactory?
     private var virtualizedListView: ListView?
+    private var customTextLabel: Label?
     var debugForceVirtualizedRows = false
     var debugForceCustomTextLayout = false
 
@@ -391,6 +392,13 @@ final class MarkdownPreview {
         }
 
         guard !shouldSkipRender(rows: rows, renderMode: targetRenderMode, baseDirectory: standardizedBaseDirectory) else {
+            return
+        }
+
+        if targetRenderMode == .customText, renderMode == .customText {
+            updateCustomTextDocument(rows: rows)
+            renderedRows = rows
+            renderedBaseDirectory = standardizedBaseDirectory
             return
         }
 
@@ -551,7 +559,17 @@ final class MarkdownPreview {
         label.selectable = true
         label.hexpand = true
         label.halign = .fill
+        customTextLabel = label
         return label
+    }
+
+    private func updateCustomTextDocument(rows: [PreviewRow]) {
+        guard let label = customTextLabel else {
+            clear()
+            container.append(makeCustomTextDocument(rows: rows))
+            return
+        }
+        label.markup = customTextMarkup(for: rows)
     }
 
     private func updateVirtualizedRows(to newRows: [PreviewRow]) {
@@ -692,6 +710,7 @@ final class MarkdownPreview {
         virtualizedSelection = nil
         virtualizedStore = nil
         virtualizedListView = nil
+        customTextLabel = nil
         if rootScroll.child?.widgetPointer != container.widgetPointer {
             rootScroll.child = container
         }

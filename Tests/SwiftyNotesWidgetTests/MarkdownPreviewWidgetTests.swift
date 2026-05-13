@@ -516,6 +516,37 @@ struct MarkdownPreviewWidgetTests {
     }
 
     @Test @MainActor
+    func `preview custom text layout updates existing label instead of rebuilding subtree`() throws {
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.custom-text-preview-reuse")
+        try app.register()
+
+        let preview = MarkdownPreview(remoteImageLoader: { _, _ in })
+        preview.debugForceCustomTextLayout = true
+        preview.render(blocks: (1 ... 160).flatMap { index -> [RenderedBlock] in
+            [
+                .heading(level: 2, text: .plain("Section \(index)")),
+                .paragraph(.plain("Body \(index)")),
+            ]
+        })
+        let initialChildren = preview.container.children()
+        let initialAddresses = initialChildren.map(widgetAddress)
+
+        preview.render(blocks: (1 ... 160).flatMap { index -> [RenderedBlock] in
+            [
+                .heading(level: 2, text: .plain("Section \(index)")),
+                .paragraph(.plain(index == 80 ? "Body \(index) updated" : "Body \(index)")),
+            ]
+        })
+        let updatedChildren = preview.container.children()
+        let updatedAddresses = updatedChildren.map(widgetAddress)
+
+        #expect(preview.debugUsesCustomTextLayout)
+        #expect(updatedChildren.count == 1)
+        #expect(initialAddresses == updatedAddresses)
+        #expect(labelTexts(in: preview.container).joined(separator: "\n").contains("Body 80 updated"))
+    }
+
+    @Test @MainActor
     func `preview custom text layout refuses task lists so checkbox rows keep interactivity`() throws {
         let app = Application(id: "me.spaceinbox.swiftynotes.tests.custom-text-preview-task-fallback")
         try app.register()

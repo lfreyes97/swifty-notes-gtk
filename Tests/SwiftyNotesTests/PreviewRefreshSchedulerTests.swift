@@ -102,4 +102,58 @@ struct PreviewRefreshSchedulerTests {
 
         #expect(recorder.calls.isEmpty)
     }
+
+    @Test
+    func `deferred schedule only resolves markdown once when latest typing burst is flushed`() {
+        let recorder = RenderRecorder()
+        let baseDirectory = URL(fileURLWithPath: "/tmp/notes")
+        var resolveCount = 0
+        let scheduler = PreviewRefreshScheduler(
+            render: recorder.record,
+            fallbackBaseDirectory: { URL(fileURLWithPath: "/tmp/fallback") },
+            shouldDeferRender: { false },
+        )
+
+        scheduler.scheduleDeferred(baseDirectory: baseDirectory) {
+            resolveCount += 1
+            return [.paragraph(.plain("latest"))]
+        }
+
+        #expect(resolveCount == 0)
+
+        scheduler.flush()
+
+        #expect(resolveCount == 1)
+        #expect(recorder.calls.count == 1)
+        #expect(recorder.calls.first?.blocks == [.paragraph(.plain("latest"))])
+    }
+
+    @Test
+    func `latest deferred schedule overwrites earlier typing work before any markdown is resolved`() {
+        let recorder = RenderRecorder()
+        let scheduler = PreviewRefreshScheduler(
+            render: recorder.record,
+            fallbackBaseDirectory: { URL(fileURLWithPath: "/tmp/fallback") },
+            shouldDeferRender: { false },
+        )
+        var firstResolveCount = 0
+        var secondResolveCount = 0
+
+        scheduler.scheduleDeferred(baseDirectory: URL(fileURLWithPath: "/tmp/first")) {
+            firstResolveCount += 1
+            return [.paragraph(.plain("first"))]
+        }
+        scheduler.scheduleDeferred(baseDirectory: URL(fileURLWithPath: "/tmp/second")) {
+            secondResolveCount += 1
+            return [.paragraph(.plain("second"))]
+        }
+
+        scheduler.flush()
+
+        #expect(firstResolveCount == 0)
+        #expect(secondResolveCount == 1)
+        #expect(recorder.calls.count == 1)
+        #expect(recorder.calls.first?.baseDirectory == URL(fileURLWithPath: "/tmp/second"))
+        #expect(recorder.calls.first?.blocks == [.paragraph(.plain("second"))])
+    }
 }

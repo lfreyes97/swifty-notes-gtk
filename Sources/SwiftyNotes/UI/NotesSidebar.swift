@@ -23,6 +23,9 @@ struct NotesSidebar {
 
     private final class RenderState {
         var items: [SidebarItem] = []
+#if DEBUG
+        var renderCount = 0
+#endif
     }
 
     init() {
@@ -104,6 +107,10 @@ struct NotesSidebar {
     /// can map a ListBox row index back to the underlying folder or note.
     var renderedItems: [SidebarItem] { renderState.items }
 
+#if DEBUG
+    var debugRenderCount: Int { renderState.renderCount }
+#endif
+
     func render(
         items: [SidebarItem],
         selectedNoteID: UUID?,
@@ -111,6 +118,9 @@ struct NotesSidebar {
         searchQuery: String,
         sortMode: NotesSortMode,
     ) {
+#if DEBUG
+        renderState.renderCount += 1
+#endif
         setSortMode(sortMode)
         list.removeAll()
         renderState.items = items

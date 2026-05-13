@@ -37,6 +37,62 @@ final class MainWindowCoreXCTests: XCTestCase {
         XCTAssertTrue(window.debugPreviewText.contains("Body"))
     }
 
+    @MainActor func test_main_window_typing_burst_defers_markdown_rebuild_until_pending_preview_flush() throws {
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.typingpreview")
+        try app.register()
+
+        let window = MainWindow(
+            application: app,
+            state: AppState(),
+            stateStore: WorkspaceStateStore(
+                stateFileURL: temp.appendingPathComponent("workspace.json", isDirectory: false),
+            ),
+            repository: NotesRepository(notesDirectory: temp),
+            renderer: MarkdownRenderer(),
+            autosave: AutosaveCoordinator(),
+        )
+
+        window.debugLoadInitialNotes()
+        let baselineBuildCount = window.debugPreviewBlockBuildCount
+
+        window.debugSetEditorText("# First draft\n\nA")
+        window.debugSetEditorText("# Final draft\n\nB")
+
+        XCTAssertTrue(window.debugPreviewBlockBuildCount == baselineBuildCount)
+        XCTAssertTrue(window.debugPreviewText.contains("Final draft"))
+        XCTAssertTrue(window.debugPreviewText.contains("B"))
+        XCTAssertTrue(window.debugPreviewBlockBuildCount == baselineBuildCount + 1)
+    }
+
+    @MainActor func test_main_window_body_edits_skip_sidebar_redraw_when_title_and_search_state_are_unchanged() throws {
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.typingsidebar")
+        try app.register()
+
+        let window = MainWindow(
+            application: app,
+            state: AppState(),
+            stateStore: WorkspaceStateStore(
+                stateFileURL: temp.appendingPathComponent("workspace.json", isDirectory: false),
+            ),
+            repository: NotesRepository(notesDirectory: temp),
+            renderer: MarkdownRenderer(),
+            autosave: AutosaveCoordinator(),
+        )
+
+        window.debugLoadInitialNotes()
+        let baselineRenderCount = window.debugSidebarRenderCount
+
+        window.debugAppendEditorText("\n\nUpdated body only")
+
+        XCTAssertTrue(window.debugSidebarRenderCount == baselineRenderCount)
+    }
+
     @MainActor func test_main_window_selecting_CLI_seeded_note_updates_preview() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }

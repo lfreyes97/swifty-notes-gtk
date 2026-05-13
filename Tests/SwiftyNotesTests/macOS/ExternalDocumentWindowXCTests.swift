@@ -49,6 +49,36 @@ final class ExternalDocumentWindowXCTests: XCTestCase {
         XCTAssertTrue(window.debugPreviewText.contains("Saved from external window"))
     }
 
+    @MainActor func test_external_document_window_typing_burst_defers_markdown_rebuild_until_preview_flush() throws {
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: temp) }
+        try FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
+
+        let fileURL = temp.appendingPathComponent("Typing.md", isDirectory: false)
+        try "# Start\n\nBody".write(to: fileURL, atomically: true, encoding: .utf8)
+
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.externaldocumenttyping")
+        try app.register()
+
+        let window = try ExternalDocumentWindow(
+            application: app,
+            fileURL: fileURL,
+            renderer: MarkdownRenderer(),
+            autosave: AutosaveCoordinator(),
+        )
+
+        window.present()
+        let baselineBuildCount = window.debugPreviewBlockBuildCount
+
+        window.debugSetEditorText("# First draft\n\nA")
+        window.debugSetEditorText("# Final draft\n\nB")
+
+        XCTAssertTrue(window.debugPreviewBlockBuildCount == baselineBuildCount)
+        XCTAssertTrue(window.debugPreviewText.contains("Final draft"))
+        XCTAssertTrue(window.debugPreviewText.contains("B"))
+        XCTAssertTrue(window.debugPreviewBlockBuildCount == baselineBuildCount + 1)
+    }
+
     @MainActor func test_external_document_window_reloads_changed_file_after_poll() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }

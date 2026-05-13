@@ -8,8 +8,27 @@ extension MainWindow {
             schedulePreviewRefresh(blocks: [], baseDirectory: repository.notesDirectoryURL)
             return
         }
-        let blocks = renderer.blocks(for: selected.content)
+        let blocks = buildPreviewBlocks(for: selected.content)
         schedulePreviewRefresh(blocks: blocks, baseDirectory: repository.noteContentBaseDirectoryURL(for: selected))
+    }
+
+    func scheduleTypingPreviewRefresh() {
+        guard let selected = state.selectedNote else {
+            schedulePreviewRefresh(blocks: [], baseDirectory: repository.notesDirectoryURL)
+            return
+        }
+        let content = selected.content
+        let baseDirectory = repository.noteContentBaseDirectoryURL(for: selected)
+        previewRefreshScheduler.scheduleDeferred(baseDirectory: baseDirectory) { [weak self] in
+            self?.buildPreviewBlocks(for: content) ?? []
+        }
+    }
+
+    private func buildPreviewBlocks(for markdown: String) -> [RenderedBlock] {
+#if DEBUG
+        previewBlockBuildCount += 1
+#endif
+        return renderer.blocks(for: markdown)
     }
 
     func scheduleDebugLaunchEditIfRequested() {
@@ -38,6 +57,78 @@ extension MainWindow {
             }
             FileHandle.standardError.write(Data("SwiftyNotes debug launch edit: \(suffix)\n".utf8))
             editor.buffer.text += "\n\n\(suffix)"
+        }
+    }
+
+    func scheduleDebugTypingBurstIfRequested() {
+        guard !hasScheduledDebugTypingBurst else { return }
+        let text = ProcessInfo.processInfo.environment["SWIFTY_NOTES_DEBUG_TYPE_TEXT_ON_LAUNCH"]?
+            .trimmingCharacters(in: .newlines)
+        guard let text, !text.isEmpty else { return }
+
+        hasScheduledDebugTypingBurst = true
+        let delayMilliseconds = debugEnvironmentInt(named: "SWIFTY_NOTES_DEBUG_TYPE_DELAY_MS") ?? 800
+        let intervalMilliseconds = max(debugEnvironmentInt(named: "SWIFTY_NOTES_DEBUG_TYPE_INTERVAL_MS") ?? 16, 1)
+        scheduleDebugTypingBurst(
+            characters: Array(text),
+            after: max(delayMilliseconds, 0),
+            intervalMilliseconds: intervalMilliseconds,
+            remainingAttempts: 25,
+        )
+    }
+
+    private func scheduleDebugTypingBurst(
+        characters: [Character],
+        after delayMilliseconds: Int,
+        intervalMilliseconds: Int,
+        remainingAttempts: Int,
+    ) {
+        MainContext.delay(for: .milliseconds(delayMilliseconds)) { [weak self] in
+            guard let self else { return }
+            guard state.selectedNote != nil else {
+                guard remainingAttempts > 0 else { return }
+                scheduleDebugTypingBurst(
+                    characters: characters,
+                    after: 200,
+                    intervalMilliseconds: intervalMilliseconds,
+                    remainingAttempts: remainingAttempts - 1,
+                )
+                return
+            }
+            editor.buffer.placeCursor(at: editor.buffer.text.count)
+            FileHandle.standardError.write(
+                Data(
+                    "SwiftyNotes debug typing burst starting: characters=\(characters.count) intervalMs=\(intervalMilliseconds)\n".utf8,
+                ),
+            )
+            runDebugTypingBurst(
+                characters: characters,
+                index: 0,
+                intervalMilliseconds: intervalMilliseconds,
+            )
+        }
+    }
+
+    private func runDebugTypingBurst(
+        characters: [Character],
+        index: Int,
+        intervalMilliseconds: Int,
+    ) {
+        guard index < characters.count else {
+            FileHandle.standardError.write(
+                Data("SwiftyNotes debug typing burst completed: characters=\(characters.count)\n".utf8),
+            )
+            quitAfterDebugTypingIfRequested()
+            return
+        }
+
+        editor.buffer.insertAtCursor(String(characters[index]))
+        MainContext.delay(for: .milliseconds(intervalMilliseconds)) { [weak self] in
+            self?.runDebugTypingBurst(
+                characters: characters,
+                index: index + 1,
+                intervalMilliseconds: intervalMilliseconds,
+            )
         }
     }
 
@@ -183,6 +274,13 @@ extension MainWindow {
 
     private func quitAfterDebugScrollSweepIfRequested() {
         guard debugEnvironmentFlag(named: "SWIFTY_NOTES_DEBUG_QUIT_AFTER_SCROLL") else { return }
+        MainContext.idle {
+            Application.current?.quit()
+        }
+    }
+
+    private func quitAfterDebugTypingIfRequested() {
+        guard debugEnvironmentFlag(named: "SWIFTY_NOTES_DEBUG_QUIT_AFTER_TYPING") else { return }
         MainContext.idle {
             Application.current?.quit()
         }

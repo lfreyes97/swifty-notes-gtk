@@ -47,6 +47,11 @@ import Foundation
             editor.buffer.text = text
         }
 
+        func debugAppendEditorText(_ text: String) {
+            editor.buffer.placeCursor(at: editor.buffer.text.count)
+            editor.buffer.insertAtCursor(text)
+        }
+
         func debugSelectEditorRange(_ range: Range<Int>) {
             editor.select(range: range)
         }
@@ -133,8 +138,16 @@ import Foundation
             return preview.plainText
         }
 
+        var debugPreviewBlockBuildCount: Int {
+            previewBlockBuildCount
+        }
+
         var debugDisplayedNotesCount: Int {
             displayedNotes.count
+        }
+
+        var debugSidebarRenderCount: Int {
+            sidebar.debugRenderCount
         }
 
         var debugDisplayedNoteTitles: [String] {

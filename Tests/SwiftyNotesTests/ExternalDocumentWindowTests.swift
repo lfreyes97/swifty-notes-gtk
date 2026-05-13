@@ -51,6 +51,37 @@ struct ExternalDocumentWindowTests {
     }
 
     @Test @MainActor
+    func `external document window typing burst defers markdown rebuild until preview flush`() throws {
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: temp) }
+        try FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
+
+        let fileURL = temp.appendingPathComponent("Typing.md", isDirectory: false)
+        try "# Start\n\nBody".write(to: fileURL, atomically: true, encoding: .utf8)
+
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.externaldocumenttyping")
+        try app.register()
+
+        let window = try ExternalDocumentWindow(
+            application: app,
+            fileURL: fileURL,
+            renderer: MarkdownRenderer(),
+            autosave: AutosaveCoordinator(),
+        )
+
+        window.present()
+        let baselineBuildCount = window.debugPreviewBlockBuildCount
+
+        window.debugSetEditorText("# First draft\n\nA")
+        window.debugSetEditorText("# Final draft\n\nB")
+
+        #expect(window.debugPreviewBlockBuildCount == baselineBuildCount)
+        #expect(window.debugPreviewText.contains("Final draft"))
+        #expect(window.debugPreviewText.contains("B"))
+        #expect(window.debugPreviewBlockBuildCount == baselineBuildCount + 1)
+    }
+
+    @Test @MainActor
     func `external document window reloads changed file after poll`() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: temp) }
