@@ -29,22 +29,33 @@
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 	<!--
-	libadwaita aborts at startup with `No GSettings schemas are installed`
-	unless GLib finds the Homebrew-compiled schemas. Launch Services injects
-	these env vars when the bundle is double-clicked, run via `open .app`,
-	or launched by Xcode through Launch Services. They are NOT applied when
-	the binary is exec'd directly from a terminal — see CONTRIBUTING for
-	the manual XDG_DATA_DIRS export developers need for that path.
+	The macOS Xcode-build flow looks for runtime resources in two different
+	places depending on whether the bundle has been processed by
+	`scripts/bundle-macos-app.sh` (the vendoring step that copies brew
+	dylibs + GSettings schemas + icons + GdkPixbuf loaders into the bundle
+	and makes the .app portable):
 
-	For a self-contained distribution bundle (vendored dylibs, signed,
-	notarized), point XDG_DATA_DIRS at `@executable_path/../Resources` and
-	copy `glib-2.0/schemas/gschemas.compiled` into Resources via a Build
-	Phase. See packaging/macos/README.md for the recipe.
+	  * Unbundled Debug/Release builds (Xcode developer loop): resources
+	    live in /opt/homebrew/share — set by the scheme's
+	    EnvironmentVariables, or by main.swift's
+	    `ensureRuntimeResourcePathsForBundleIfNeeded()` as a fallback if
+	    LSEnvironment got applied first.
+	  * Bundled (post-vendoring) builds: resources live inside
+	    Contents/Resources/. main.swift detects this at startup by
+	    probing for `glib-2.0/schemas/gschemas.compiled` and only when
+	    found prepends the bundle's Resources dir to XDG_DATA_DIRS,
+	    points GDK_PIXBUF_MODULE_FILE at the in-bundle cache, etc.
+
+	Doing the env-var dance in main.swift instead of LSEnvironment
+	(a) lets us paths off `Bundle.main.resourcePath` so the .app is
+	relocatable, and (b) sidesteps the Xcode 26 quirk where Instruments
+	(Cmd+I) and `swift run` don't apply LSEnvironment at all.
+
+	LSEnvironment is therefore deliberately empty — main.swift does
+	all the env-var setup.
 	-->
 	<key>LSEnvironment</key>
 	<dict>
-		<key>XDG_DATA_DIRS</key>
-		<string>/opt/homebrew/share</string>
 	</dict>
 </dict>
 </plist>

@@ -88,59 +88,108 @@ open ~/Library/Developer/Xcode/DerivedData/swiftynotes-*/Build/Products/Debug/sw
 
 ## Distributing the bundle
 
-The bundle as built is **not portable** — it links against
-`/opt/homebrew/lib/lib*.dylib` by absolute path. For a `.app` you can
-hand to someone who does not have Homebrew installed, you need to:
+The Xcode-built bundle is **not portable** as it links against
+`/opt/homebrew/lib/lib*.dylib` by absolute path. Turning it into
+something you can hand to a Mac without Homebrew installed is a
+three-step pipeline; the first step is automated.
 
-1. **Vendor the dylibs.** Copy every `lib*.dylib` the executable links
-   against (and its transitive deps) into `swiftynotes.app/Contents/Frameworks/`,
-   then rewrite the install names with `install_name_tool` so they
-   resolve via `@rpath`. The `dylibbundler` Homebrew formula automates
-   it:
+### 1. Vendor brew dylibs + GTK runtime resources
 
-   ```bash
-   brew install dylibbundler
-   dylibbundler -od -b -x swiftynotes.app/Contents/MacOS/swiftynotes \
-     -d swiftynotes.app/Contents/Frameworks/ \
-     -p @rpath/
-   ```
+```bash
+brew install dylibbundler                  # one-time, ~200 KB
+./scripts/bundle-macos-app.sh \
+    /path/to/Build/Products/Release/swiftynotes.app
+```
 
-   Add this as a Run Script build phase on Release builds.
+`scripts/bundle-macos-app.sh` does, in order:
 
-2. **Bundle the GSettings schemas.** Copy
-   `/opt/homebrew/share/glib-2.0/schemas/gschemas.compiled` (and any
-   `.gschema.xml` Swifty Notes ships) into
-   `swiftynotes.app/Contents/Resources/glib-2.0/schemas/` and update the
-   `LSEnvironment` `XDG_DATA_DIRS` to
-   `@executable_path/../Resources` (which Launch Services expands).
+* runs `dylibbundler` on the executable to copy every transitively
+  linked brew dylib (~49 files, 66 MB) into `Contents/Frameworks/`
+  and rewrite their install names to
+  `@executable_path/../Frameworks/`;
+* copies `gschemas.compiled` into `Contents/Resources/glib-2.0/schemas/`
+  so libadwaita's `gtk_init` finds its settings schemas;
+* copies the `Adwaita` and `hicolor` icon themes into
+  `Contents/Resources/icons/` so every `Image(iconName: …)` lookup
+  resolves;
+* copies the 13 `gdk-pixbuf-2.0` module loaders into
+  `Contents/Resources/lib/gdk-pixbuf-2.0/2.10.0/loaders/`, rewrites
+  each loader's `/opt/homebrew/...` LC_LOAD_DYLIB entries to
+  `@executable_path/../Frameworks/...`, and emits a relocatable
+  `loaders.cache` whose entries are bare filenames (the loader
+  resolves them against the cache file's own directory);
+* re-signs the bundle ad-hoc so macOS Gatekeeper actually lets it
+  exec — `install_name_tool` and `dylibbundler` invalidate the
+  signature Xcode applied, and on macOS 15+ Gatekeeper silently
+  refuses to launch an unsigned/invalid binary (no error message,
+  just exit 0 from `open .app`).
 
-3. **Bundle GdkPixbuf loaders, Pango modules, GTK media backends** —
-   any `*.dylib` that `gdk-pixbuf` / `pango` / `gtk-4.0` looks up at
-   runtime via `*.cache` files. Set `GDK_PIXBUF_MODULE_FILE`, `GTK_PATH`,
-   etc. via `LSEnvironment` at bundle-relative paths.
+After this step the bundle has zero `/opt/homebrew/...` references in
+any Mach-O it ships, and it launches with `env -i` (= a totally clean
+environment, no PATH, no XDG\_\*, no GDK\_\*) on a Mac that doesn't have
+Homebrew installed. `packaging/macos/swiftynotes/main.swift` sets the
+runtime env vars (`XDG_DATA_DIRS`, `GDK_PIXBUF_MODULE_FILE`) off
+`Bundle.main.resourcePath` at startup, so the `.app` is also
+relocatable — drag it to `/Applications` (or anywhere) and it still
+works.
 
-4. **Re-enable Hardened Runtime, then code-sign and notarize.**
-   ```bash
-   codesign --deep --options runtime \
-     --sign "Developer ID Application: <you>" \
-     swiftynotes.app
-   ditto -c -k --keepParent swiftynotes.app SwiftyNotes.zip
-   xcrun notarytool submit SwiftyNotes.zip \
-     --apple-id <you> --team-id <id> --wait
-   xcrun stapler staple swiftynotes.app
-   ```
+The script is **not idempotent**: a second run on the same `.app`
+errors out before doing damage (`dylibbundler` cannot trace
+already-bundled install names back to the brew sources). To re-bundle,
+do a clean rebuild first:
 
-5. **Wrap into a DMG**:
-   ```bash
-   hdiutil create -volname "Swifty Notes" \
-     -srcfolder swiftynotes.app -ov -format UDZO SwiftyNotes.dmg
-   ```
+```bash
+xcodebuild -project packaging/macos/swiftynotes.xcodeproj \
+           -scheme swiftynotes -configuration Release clean build
+./scripts/bundle-macos-app.sh /path/to/.../Release/swiftynotes.app
+```
 
-6. **(Optional) Publish via Homebrew Cask.** Once the DMG is signed +
-   notarized + hosted somewhere, write a Cask formula in your tap and
-   submit it to homebrew-cask. End users then `brew install --cask
-   swifty-notes`.
+For Xcode integration, add a Run Script build phase on the `swiftynotes`
+target gated on `${CONFIGURATION} == Release` that runs:
+```sh
+"${SRCROOT}/../../scripts/bundle-macos-app.sh" "${TARGET_BUILD_DIR}/${WRAPPER_NAME}"
+```
+This keeps the Debug developer loop fast (Debug builds skip vendoring
+and continue linking against /opt/homebrew, which is what
+`main.swift` falls back to when it detects no in-bundle schemas).
 
-This list is the rough recipe — every GTK app on macOS does some
-variation of these steps. A fully-vendored bundle is ≈80–120 MB
-(GTK 4 alone is 78 MB).
+### 2. Code-sign with Developer ID and notarize
+
+This is your responsibility — needs the certificate from your Apple
+Developer account. Replace the ad-hoc signature from step 1 with a
+real one and submit to Apple's notary service:
+
+```bash
+codesign --force --deep --options runtime \
+  --sign "Developer ID Application: <Your Name> (<TeamID>)" \
+  swiftynotes.app
+ditto -c -k --keepParent swiftynotes.app SwiftyNotes.zip
+xcrun notarytool submit SwiftyNotes.zip \
+  --apple-id <email> --team-id <TeamID> --wait
+xcrun stapler staple swiftynotes.app
+```
+
+Hardened Runtime (`--options runtime`) is required for notarization.
+Sandboxing remains off (see `Project.xcconfig`) — libadwaita
+dlopen's plugins from arbitrary paths and the sandbox would block
+them. For App Store submission you'd additionally need the
+`com.apple.security.cs.disable-library-validation` entitlement and
+sandbox-compatible workarounds; out of scope here.
+
+### 3. Wrap into a DMG
+
+```bash
+hdiutil create -volname "Swifty Notes" \
+  -srcfolder swiftynotes.app -ov -format UDZO SwiftyNotes.dmg
+```
+
+### 4. (Optional) Publish via Homebrew Cask
+
+Once the DMG is signed, notarized, and hosted somewhere, write a
+Cask formula in your tap and submit it to `homebrew/homebrew-cask`.
+End users then `brew install --cask swifty-notes`.
+
+**Bundle size:** ~75 MB total (66 MB Frameworks/, 2.6 MB Resources/,
+6 MB executable). GTK 4's 78 MB raw install shrinks because
+`dylibbundler` only copies what's actually linked — pango-otf,
+mediafile backends, etc. don't ride along.
