@@ -6,14 +6,14 @@
 	<string>en</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
-	<key>CFBundleIconFile</key>
-	<string></string>
+	<key>CFBundleIconName</key>
+	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>$(PRODUCT_NAME)</string>
+	<string>Swifty Notes</string>
 	<key>CFBundleDisplayName</key>
 	<string>Swifty Notes</string>
 	<key>CFBundlePackageType</key>
@@ -28,32 +28,6 @@
 	<string></string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
-	<!--
-	The macOS Xcode-build flow looks for runtime resources in two different
-	places depending on whether the bundle has been processed by
-	`scripts/bundle-macos-app.sh` (the vendoring step that copies brew
-	dylibs + GSettings schemas + icons + GdkPixbuf loaders into the bundle
-	and makes the .app portable):
-
-	  * Unbundled Debug/Release builds (Xcode developer loop): resources
-	    live in /opt/homebrew/share — set by the scheme's
-	    EnvironmentVariables, or by main.swift's
-	    `ensureRuntimeResourcePathsForBundleIfNeeded()` as a fallback if
-	    LSEnvironment got applied first.
-	  * Bundled (post-vendoring) builds: resources live inside
-	    Contents/Resources/. main.swift detects this at startup by
-	    probing for `glib-2.0/schemas/gschemas.compiled` and only when
-	    found prepends the bundle's Resources dir to XDG_DATA_DIRS,
-	    points GDK_PIXBUF_MODULE_FILE at the in-bundle cache, etc.
-
-	Doing the env-var dance in main.swift instead of LSEnvironment
-	(a) lets us paths off `Bundle.main.resourcePath` so the .app is
-	relocatable, and (b) sidesteps the Xcode 26 quirk where Instruments
-	(Cmd+I) and `swift run` don't apply LSEnvironment at all.
-
-	LSEnvironment is therefore deliberately empty — main.swift does
-	all the env-var setup.
-	-->
 	<key>LSEnvironment</key>
 	<dict>
 	</dict>
