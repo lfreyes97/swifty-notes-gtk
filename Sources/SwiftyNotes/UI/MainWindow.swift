@@ -17,7 +17,7 @@ final class MainWindow {
     var editor = MarkdownEditor()
     let preview = MarkdownPreview()
     let headerTitle = WindowTitle(title: "Swifty Notes", subtitle: "Markdown notes")
-    let sidebarToggle = Button(iconName: "sidebar-show-symbolic")
+    let sidebarToggle = MainWindow.iconButton(named: "sidebar-show-symbolic")
     let editorModeToggle = ToggleButton(label: "Editor")
     let splitModeToggle = ToggleButton(label: "Split")
     let previewModeToggle = ToggleButton(label: "Preview")
@@ -487,6 +487,34 @@ final class MainWindow {
             return nil
         }
         return fileURL.path
+    }
+
+    /// Builds a `Button` whose icon comes from a bundled SVG when one is
+    /// shipped under the resource bundle's `Icons/` directory, falling
+    /// back to the GTK icon-theme lookup (`Button(iconName:)`) when not.
+    ///
+    /// Why bother: on macOS Quartz the GTK4 4.22 `GtkSymbolicPaintable`
+    /// parser drops `<g>` group elements from symbolic SVGs ("Ignoring
+    /// element in symbolic icon: <g>" debug messages), and several
+    /// Adwaita-icon-theme 50.0 SVGs wrap their entire path content in
+    /// such a `<g>` — `sidebar-show-symbolic` is the canonical
+    /// example. The result is a button that renders as the
+    /// "missing image" libadwaita placeholder despite the SVG file
+    /// being present on disk and reachable by the theme. Routing
+    /// these icons through `Image(filename:)` uses librsvg's full SVG
+    /// renderer instead of `GtkSymbolicPaintable`, and librsvg handles
+    /// `<g>` correctly.
+    @MainActor
+    static func iconButton(named iconName: String) -> Button {
+        let button = Button()
+        if let bundledPath = bundledIconFilePath(for: iconName) {
+            let image = Image(filename: bundledPath)
+            image.pixelSize = 16
+            button.child = image
+        } else {
+            button.iconName = iconName
+        }
+        return button
     }
 
     struct DirectoryOpenFailure: LocalizedError {
