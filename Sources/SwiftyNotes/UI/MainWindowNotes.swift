@@ -518,6 +518,57 @@ extension MainWindow {
                     self?.presentTrashedNoteContextMenu(forNoteID: noteID, x: Int(x), y: Int(y))
                 }
             }
+
+            #if os(macOS)
+            // On macOS Quartz `GtkListBox.activate-on-single-click` is
+            // unreliable: GTK's pointer pipeline treats *any* sub-pixel
+            // motion during a press as a possible drag, claims the
+            // press for drag-disambiguation, and never resolves it
+            // back to a click — `row-activated` is never emitted. The
+            // row highlights (selection still fires) but no signal
+            // reaches our `onRowActivated` handler, so the note
+            // doesn't open.
+            //
+            // Disabling DragSource on the row and pan-gestures on the
+            // OverlaySplitView only narrows the problem — the drag
+            // detector built into ListBox itself is still there. The
+            // reliable workaround is to bypass `row-activated`
+            // entirely: install an explicit `GestureClick(button=1)`
+            // on each row.
+            //
+            // To make the click feel natural (activate on release, not
+            // on press) without losing it to a competing claimant
+            // mid-sequence, we copy the trick from the context-menu
+            // buttons:
+            //   1. Put the gesture on the CAPTURE phase — capture-phase
+            //      controllers fire before any bubble-phase ones on
+            //      the same widget, so we beat ListBox's internal
+            //      activation gesture (and any drag claim) to the
+            //      press.
+            //   2. Call `gtk_gesture_set_state(..., CLAIMED)` from
+            //      `onPressed` — that promotes our gesture to sole
+            //      owner of the sequence, denying every other interested
+            //      controller. With the sequence claimed, our
+            //      `onReleased` actually fires on button-up; without
+            //      the claim it would be cancelled when the drag
+            //      detector grabbed the sequence on the first motion
+            //      delta.
+            //
+            // `selectionMode = .single` stays on ListBox so the visual
+            // selection highlight still happens through ListBox's own
+            // machinery — we only override the activation half.
+            let primaryClick = GestureClick()
+            primaryClick.button = 1
+            gtk_event_controller_set_propagation_phase(primaryClick.opaquePointer, GTK_PHASE_CAPTURE)
+            row.addController(primaryClick)
+            primaryClick.onPressed { [weak primaryClick] _, _, _ in
+                guard let primaryClick else { return }
+                gtk_gesture_set_state(primaryClick.opaquePointer, GTK_EVENT_SEQUENCE_CLAIMED)
+            }
+            primaryClick.onReleased { [weak self] _, _, _ in
+                self?.requestActivateSidebarRow(at: index)
+            }
+            #endif
         }
         attachSidebarDnD()
     }

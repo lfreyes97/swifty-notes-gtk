@@ -210,7 +210,50 @@ extension MainWindow {
         if destructive {
             button.addCSSClass(.destructiveAction)
         }
+        #if os(macOS)
+        // Same Quartz drag-detection issue that broke ListBox row
+        // activation also breaks `Button.clicked` here: any sub-pixel
+        // pointer motion between press and release lets a competing
+        // gesture claim the press, and `clicked` never emits. Replace
+        // the normal click path with an explicit GestureClick.
+        //
+        // We want a normal "click on release" feel in a menu (firing
+        // on press is too eager for densely-stacked items), but
+        // naively listening to `onReleased` doesn't work either:
+        // GtkButton's own internal GestureClick is attached during
+        // button construction — i.e. before our addController call —
+        // and on the default BUBBLE propagation phase, controllers
+        // fire in the order they were added. Button's gesture claims
+        // the sequence first and leaves ours denied, so `released`
+        // never fires on our side.
+        //
+        // Two things together fix it:
+        //   1. Place our gesture on the CAPTURE phase. Capture-phase
+        //      controllers fire before any bubble-phase controllers
+        //      on the target widget, so we beat Button's internal
+        //      gesture to the press.
+        //   2. Claim the sequence the moment we observe that press,
+        //      via `gtk_gesture_set_state(..., CLAIMED)`. This denies
+        //      every other interested gesture — Button's internal
+        //      click handler and any drag detector that wakes up
+        //      later — so our `released` signal is the one that
+        //      eventually fires.
+        //
+        // Button's own `clicked` signal won't fire on this macOS
+        // path, but we never read it; the only consumer is our
+        // GestureClick-on-released handler.
+        let click = GestureClick()
+        click.button = 1
+        gtk_event_controller_set_propagation_phase(click.opaquePointer, GTK_PHASE_CAPTURE)
+        button.addController(click)
+        click.onPressed { [weak click] _, _, _ in
+            guard let click else { return }
+            gtk_gesture_set_state(click.opaquePointer, GTK_EVENT_SEQUENCE_CLAIMED)
+        }
+        click.onReleased { _, _, _ in handler() }
+        #else
         button.onClicked(handler)
+        #endif
         return button
     }
 

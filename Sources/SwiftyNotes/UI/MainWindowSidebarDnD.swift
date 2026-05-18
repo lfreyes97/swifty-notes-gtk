@@ -56,7 +56,27 @@ extension MainWindow {
             case .trashHeader, .trashedNote:
                 continue
             }
+            #if !os(macOS)
+            // macOS-only diagnostic gate: GtkDragSource on the Quartz
+            // backend intercepts the very first pointer-press on the
+            // row, holding it for drag-vs-click disambiguation. The
+            // disambiguation never resolves to "click" on the first
+            // attempt — the row highlights but `row-activated` never
+            // fires, so the note doesn't open. Clicking a second time
+            // (after the previous press is released) lets ListBox's
+            // own click handler win. Same broken interaction shows
+            // up for right-click → Delete and is the root cause of
+            // the "sidebar locks up while the toast is animating"
+            // symptom too.
+            //
+            // Drag-to-reorder is unfortunately the price on macOS
+            // until we find a way to teach DragSource to keep its
+            // hands off the first press until actual motion crosses
+            // a threshold. The right-click context menu still
+            // exposes Move-to-folder, so workflow-wise the gap is
+            // limited to drag-and-drop reordering.
             attachDragSource(to: row, payload: payload)
+            #endif
 
             if case let .folder(folder) = item {
                 attachDropTarget(to: row, destinationFolder: folder.path)

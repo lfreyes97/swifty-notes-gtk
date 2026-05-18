@@ -310,8 +310,25 @@ final class MainWindow {
 
         splitView.pinSidebar = true
         splitView.showSidebar = state.isSidebarVisible
+        #if os(macOS)
+        // GTK4 on Quartz routes the swipe-to-show / swipe-to-hide pan
+        // gestures through the same pointer pipeline that drives row
+        // activation, and any sub-pixel horizontal motion during a
+        // click on a sidebar row is enough to make the pan detector
+        // grab the press for drag-disambiguation. The row highlights
+        // (the press IS observed) but never activates, until a
+        // perfectly stationary second click slips past the gesture.
+        // The sidebar is pinned anyway (`pinSidebar = true`), so the
+        // gestures have no functional purpose here — disabling them
+        // restores predictable single-click activation. Linux keeps
+        // them enabled because the touchpad-swipe UX they enable on
+        // GNOME is still useful when the sidebar collapses.
+        splitView.enableShowGesture = false
+        splitView.enableHideGesture = false
+        #else
         splitView.enableShowGesture = true
         splitView.enableHideGesture = true
+        #endif
         splitView.sidebarWidthFraction = 0.26
         splitView.minSidebarWidth = 240
         splitView.maxSidebarWidth = 380
