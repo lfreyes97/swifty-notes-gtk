@@ -871,9 +871,18 @@ final class MarkdownPreview {
         case "js", "jsx", "ts", "tsx": "typescript"
         case "py": "python"
         case "rb": "ruby"
-        case "sh", "shell", "zsh": "sh"
+        // `sh` is GtkSourceView's shell-script grammar — it covers bash,
+        // dash, zsh, and POSIX sh. There is no separate `bash.lang` in
+        // upstream GtkSourceView, so `bash` (an extremely common fence
+        // info-string) has to alias here or it falls through to a raw
+        // `bash` lookup that returns nil and we lose highlighting.
+        case "bash", "sh", "shell", "zsh": "sh"
         case "cpp", "cxx", "c++", "hpp", "hxx": "cpp"
-        case "cs": "csharp"
+        // GtkSourceView ships the C# grammar under the id `c-sharp`
+        // (hyphenated) — `csharp` is NOT a valid id and produces a nil
+        // language lookup. Both `cs` and `csharp` need to alias to the
+        // hyphenated form.
+        case "cs", "csharp": "c-sharp"
         case "yml": "yaml"
         case "md": "markdown"
         case "rs": "rust"
