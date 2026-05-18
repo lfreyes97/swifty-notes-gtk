@@ -144,6 +144,21 @@ struct NotesSidebar {
 
         sortOptionButtons = sortButtons
         setSortMode(.newestFirst)
+
+        #if os(macOS)
+        // Live theme refresh for the sort SplitButton. The icon depends
+        // on the active sort mode (descending / ascending / by-title),
+        // so we re-derive that name from `sortState.currentMode` rather
+        // than capturing a fixed iconName — the icon must match
+        // whatever mode is selected at the moment the user flips Dark
+        // Mode, not whatever mode was selected when the button was
+        // first constructed.
+        BundledIconRefreshRegistry.shared.register { [weak sortButton, sortState] in
+            guard let sortButton else { return false }
+            Self.applyIcon(named: Self.iconName(for: sortState.currentMode), to: sortButton)
+            return true
+        }
+        #endif
     }
 
     /// Cached layout of the most recent ``render(items:...)`` call so callers

@@ -40,6 +40,20 @@ final class EditorFormattingToolbar {
 
     init() {
         configure()
+        #if os(macOS)
+        // Live theme refresh: the formatting buttons render through
+        // bundled SVGs (see `MainWindow.bundledIconFilePath` for why),
+        // and bundled SVGs are not auto-recoloured by GTK when the
+        // system flips between Light Mode and Dark Mode at runtime.
+        // `refreshButtons` rebuilds each button's content using the
+        // current bundled-icon path, picking up the post-flip
+        // variant from `bundledIconFilePath`.
+        BundledIconRefreshRegistry.shared.register { [weak self] in
+            guard let self else { return false }
+            self.refreshButtons()
+            return true
+        }
+        #endif
     }
 
     /// Reflows the toolbar based on the host's available editor width.

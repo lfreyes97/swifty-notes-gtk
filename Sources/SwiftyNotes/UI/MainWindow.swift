@@ -236,6 +236,16 @@ final class MainWindow {
         menuButton.addCSSClass(.flat)
         menuButton.hasFrame = false
         configureViewModeToggleContent()
+        #if os(macOS)
+        // Live theme refresh for the Editor/Split/Preview toggles. They
+        // render their icons through bundled SVGs the same way the
+        // formatting toolbar does, so they need the same refresh hook.
+        BundledIconRefreshRegistry.shared.register { [weak self] in
+            guard let self else { return false }
+            self.configureViewModeToggleContent()
+            return true
+        }
+        #endif
         splitModeToggle.setGroup(editorModeToggle)
         previewModeToggle.setGroup(editorModeToggle)
         viewModeSwitcher.addCSSClass("linked")
@@ -478,15 +488,105 @@ final class MainWindow {
     /// shipped under the resource bundle's `Icons/` directory. Used for
     /// custom icons that don't ship in the system Adwaita theme. Returns
     /// `nil` when the file isn't present.
+    ///
+    /// **Theme-aware variant:** Adwaita's symbolic SVGs encode the
+    /// foreground as a hardcoded dark grey (`#2e3436`). GTK's normal
+    /// icon-theme pipeline (`GtkSymbolicPaintable`) re-tints that
+    /// foreground at render time using the active theme's `@theme_fg_color`,
+    /// so the same SVG looks dark on light and light on dark.
+    ///
+    /// We load these SVGs via `Image(filename:)` to bypass a brew
+    /// libadwaita 1.9 / gtk4 4.22 bug in `GtkSymbolicPaintable` that
+    /// drops `<g>` elements from some Adwaita 50 SVGs — but that path
+    /// is `gtk_image_new_from_file`, which renders the file via
+    /// librsvg with NO symbolic recolouring. The icons stay
+    /// `#2e3436` forever, which is invisible against a dark-theme
+    /// background.
+    ///
+    /// Workaround: when the app is currently in dark mode, materialise
+    /// a per-icon recoloured copy under the user temp dir (fill swapped
+    /// to a light grey) and hand back that path instead. Light mode
+    /// uses the original SVG as-is.
     static func bundledIconFilePath(for iconName: String) -> String? {
         guard let iconsURL = Bundle.module.resourceURL?
             .appendingPathComponent("Icons", isDirectory: true)
         else { return nil }
-        let fileURL = iconsURL.appendingPathComponent("\(iconName).svg")
-        guard FileManager.default.fileExists(atPath: fileURL.path) else {
+        let originalURL = iconsURL.appendingPathComponent("\(iconName).svg")
+        guard FileManager.default.fileExists(atPath: originalURL.path) else {
             return nil
         }
-        return fileURL.path
+        #if !os(macOS)
+        // On Linux the bundled-icon workaround is only needed for the
+        // icons that don't ship in the system Adwaita theme — at the
+        // time of writing that's just `table-symbolic`. For every
+        // other icon we ship a copy of, the Linux Adwaita theme has
+        // the same SVG, and `Image(iconName:)` resolves it through
+        // `GtkSymbolicPaintable` which handles dark/light recolouring
+        // for free. Returning nil here lets the caller fall through
+        // to that theme-aware path on Linux.
+        let linuxOnlyBundled: Set<String> = ["table-symbolic"]
+        guard linuxOnlyBundled.contains(iconName) else { return nil }
+        return originalURL.path
+        #else
+        // Light mode: original SVG already encodes the foreground in a
+        // dark shade that contrasts well against the light theme — use
+        // it directly with no allocation.
+        if !StyleManager.default.dark {
+            return originalURL.path
+        }
+        // Dark mode: lazily produce a temp-dir copy with the foreground
+        // recoloured. Cache by icon name + theme variant so repeated
+        // lookups during one app run hit a single file write.
+        return cachedDarkVariantPath(forBundledIcon: iconName, source: originalURL)
+        #endif
+    }
+
+    /// Materialises a dark-theme-tinted copy of an Adwaita symbolic SVG
+    /// at `<temp>/me.spaceinbox.swiftynotes-icons/<name>-dark.svg`. The
+    /// recolouring is a single string substitution — Adwaita's hand-
+    /// authored SVGs use exactly `fill="#2e3436"` on the foreground
+    /// path, with no other occurrences of that hex in the file, so a
+    /// blunt replace is safe across the whole icon set.
+    ///
+    /// Cache lifetime is "one process": the temp dir is recreated per
+    /// app launch (good — picks up updated bundled icons after a
+    /// version upgrade) and torn down by macOS housekeeping. We do
+    /// NOT live-update widgets when the system colour scheme flips
+    /// mid-session; that would require tracking every Image we've
+    /// handed out and is a separate follow-up. Today the dark/light
+    /// choice is taken at widget creation time.
+    private static func cachedDarkVariantPath(forBundledIcon iconName: String, source: URL) -> String? {
+        let cacheDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("me.spaceinbox.swiftynotes-icons", isDirectory: true)
+        let targetURL = cacheDir.appendingPathComponent("\(iconName)-dark.svg")
+        let targetPath = targetURL.path
+
+        // Fast path: the recoloured copy already exists in this
+        // process's temp dir (we generated it earlier for another
+        // widget that asked for the same icon name).
+        if FileManager.default.fileExists(atPath: targetPath) {
+            return targetPath
+        }
+
+        do {
+            try FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
+            let original = try String(contentsOf: source, encoding: .utf8)
+            // libadwaita's dark `@theme_fg_color` is approximately
+            // `rgb(255, 255, 255)` at 90%-ish opacity. `#ffffff` here
+            // gives high contrast against the dark background without
+            // needing to thread an alpha through the SVG, matching
+            // what `GtkSymbolicPaintable` would otherwise paint.
+            let recoloured = original.replacingOccurrences(of: "#2e3436", with: "#ffffff")
+            try recoloured.write(to: targetURL, atomically: true, encoding: .utf8)
+            return targetPath
+        } catch {
+            // Generation failed (filesystem error, permission, etc.).
+            // Fall back to the un-tinted source SVG — the icon will
+            // render too dark in dark mode but at least it's visible,
+            // and a missing return value here would degrade the
+            // button to the "image-missing" placeholder.
+            return source.path
+        }
     }
 
     /// Builds a `Button` whose icon comes from a bundled SVG when one is
@@ -507,14 +607,41 @@ final class MainWindow {
     @MainActor
     static func iconButton(named iconName: String) -> Button {
         let button = Button()
+        applyBundledIcon(named: iconName, to: button)
+        #if os(macOS)
+        // Live theme refresh: when the user toggles macOS Dark Mode
+        // while the app is open, rebuild the Image-child with the
+        // appropriate (light or dark) bundled variant. Without this
+        // the bundled icons stay frozen on whichever theme was active
+        // when the button was first created, while everything else
+        // (text, backgrounds, theme-resolved icons) tracks the
+        // change — visually broken.
+        BundledIconRefreshRegistry.shared.register { [weak button] in
+            guard let button else { return false }
+            applyBundledIcon(named: iconName, to: button)
+            return true
+        }
+        #endif
+        return button
+    }
+
+    /// Sets `button.child` to a freshly-built `Image` loaded from the
+    /// currently-resolved bundled-icon path. If no bundled SVG is
+    /// available, falls back to `button.iconName = iconName` so the
+    /// GTK icon theme can take over.
+    @MainActor
+    private static func applyBundledIcon(named iconName: String, to button: Button) {
         if let bundledPath = bundledIconFilePath(for: iconName) {
             let image = Image(filename: bundledPath)
             image.pixelSize = 16
             button.child = image
         } else {
+            // Clear any stale custom child first — Button keeps the
+            // previously set `.child` around and would render that
+            // instead of the iconName we set below otherwise.
+            button.child = nil
             button.iconName = iconName
         }
-        return button
     }
 
     struct DirectoryOpenFailure: LocalizedError {

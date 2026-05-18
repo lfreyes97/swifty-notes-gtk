@@ -202,6 +202,15 @@ private extension ExternalDocumentWindow {
         menuButton.addCSSClass(.flat)
         menuButton.hasFrame = false
         configureViewModeToggleContent()
+        #if os(macOS)
+        // Same live-theme-refresh hook as MainWindow — see
+        // BundledIconRefreshRegistry for rationale.
+        BundledIconRefreshRegistry.shared.register { [weak self] in
+            guard let self else { return false }
+            self.configureViewModeToggleContent()
+            return true
+        }
+        #endif
         splitModeToggle.setGroup(editorModeToggle)
         previewModeToggle.setGroup(editorModeToggle)
         viewModeSwitcher.addCSSClass("linked")
