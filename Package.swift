@@ -45,7 +45,17 @@ func sourceDependency(
 let package = Package(
     name: "swifty-notes-gtk",
     platforms: [
-        .macOS(.v13)
+        // Honest deployment target. The macOS .app links Homebrew GTK4 /
+        // glib / libadwaita / gtksourceview / pango / harfbuzz / gdk-pixbuf /
+        // graphene / intl bottles compiled with LC_BUILD_VERSION = macOS 26.0
+        // (cairo at 15.0). Declaring anything lower than 26.0 here makes the
+        // linker emit a per-dylib warning on every `swift build` ("building
+        // for macOS-13.0, but linking with dylib ... which was built for
+        // newer version 26.0") and ships a binary whose declared min-os
+        // lies about portability — the dylib chain still requires macOS 26.0
+        // at load time. Bump in lockstep with brew bottles if those get
+        // rebuilt for a different floor. Linux ignores this clause.
+        .macOS("26.0")
     ],
     products: [
         .library(
