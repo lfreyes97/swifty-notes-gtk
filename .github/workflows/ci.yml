@@ -87,6 +87,26 @@ jobs:
         # Swift type errors without trying to execute the suite headlessly.
         run: swift build --build-tests
 
+      - name: Build Xcode .app target
+        # Catches drift between SwiftPM and the packaging/macos Xcode
+        # project (xcconfig changes, target memberships, asset catalog
+        # references, etc.) that `swift build` alone wouldn't notice.
+        # We only build Debug here — Release additionally exercises
+        # codesign + bundling which belong to the release workflow,
+        # not CI. Sign as the ad-hoc identity (`CODE_SIGN_IDENTITY=-`)
+        # so the build doesn't try to find a Developer ID certificate
+        # that doesn't exist on the runner.
+        run: |
+          xcodebuild \
+            -project packaging/macos/swiftynotes.xcodeproj \
+            -scheme swiftynotes \
+            -configuration Debug \
+            -destination 'platform=macOS' \
+            CODE_SIGN_IDENTITY=- \
+            CODE_SIGN_STYLE=Manual \
+            DEVELOPMENT_TEAM= \
+            build
+
   ui-smoke-tests:
     name: UI smoke tests
     runs-on: ubuntu-24.04
