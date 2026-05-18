@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 77;
+	objectVersion = 100;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -26,11 +26,9 @@
 /* Begin PBXFrameworksBuildPhase section */
 		249AAA6B2FA78D3A00780A02 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
 			files = (
 				EEEE0000000000000000B003 /* SwiftyNotes in Frameworks */,
 			);
-			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
@@ -64,8 +62,6 @@
 				249AAA6C2FA78D3A00780A02 /* Resources */,
 			);
 			buildRules = (
-			);
-			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
 				249AAA702FA78D3A00780A02 /* swiftynotes */,
@@ -105,7 +101,7 @@
 			packageReferences = (
 				EEEE0000000000000000B001 /* XCLocalSwiftPackageReference "../.." */,
 			);
-			preferredProjectObjectVersion = 77;
+			preferredProjectObjectVersion = 100;
 			productRefGroup = 249AAA6F2FA78D3A00780A02 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -118,25 +114,21 @@
 /* Begin PBXResourcesBuildPhase section */
 		249AAA6C2FA78D3A00780A02 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
 			files = (
 			);
-			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		249AAA6A2FA78D3A00780A02 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
 			files = (
 			);
-			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
-		249AAA7A2FA78D3C00780A02 /* Debug */ = {
+		249AAA7A2FA78D3C00780A02 /* Debug configuration for PBXProject "swiftynotes" */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = EEEE0000000000000000B004 /* Project.xcconfig */;
 			buildSettings = {
@@ -202,7 +194,7 @@
 			};
 			name = Debug;
 		};
-		249AAA7B2FA78D3C00780A02 /* Release */ = {
+		249AAA7B2FA78D3C00780A02 /* Release configuration for PBXProject "swiftynotes" */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = EEEE0000000000000000B004 /* Project.xcconfig */;
 			buildSettings = {
@@ -260,7 +252,7 @@
 			};
 			name = Release;
 		};
-		249AAA7D2FA78D3C00780A02 /* Debug */ = {
+		249AAA7D2FA78D3C00780A02 /* Debug configuration for PBXNativeTarget "swiftynotes" */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = EEEE0000000000000000B004 /* Project.xcconfig */;
 			buildSettings = {
@@ -272,6 +264,8 @@
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = 345VKAJA5N;
 				ENABLE_USER_SELECTED_FILES = readonly;
+				INFOPLIST_KEY_CFBundleDisplayName = "Swifty Notes";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -290,7 +284,7 @@
 			};
 			name = Debug;
 		};
-		249AAA7E2FA78D3C00780A02 /* Release */ = {
+		249AAA7E2FA78D3C00780A02 /* Release configuration for PBXNativeTarget "swiftynotes" */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = EEEE0000000000000000B004 /* Project.xcconfig */;
 			buildSettings = {
@@ -302,6 +296,8 @@
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = 345VKAJA5N;
 				ENABLE_USER_SELECTED_FILES = readonly;
+				INFOPLIST_KEY_CFBundleDisplayName = "Swifty Notes";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -326,19 +322,17 @@
 		249AAA692FA78D3A00780A02 /* Build configuration list for PBXProject "swiftynotes" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				249AAA7A2FA78D3C00780A02 /* Debug */,
-				249AAA7B2FA78D3C00780A02 /* Release */,
+				249AAA7A2FA78D3C00780A02 /* Debug configuration for PBXProject "swiftynotes" */,
+				249AAA7B2FA78D3C00780A02 /* Release configuration for PBXProject "swiftynotes" */,
 			);
-			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
 		249AAA7C2FA78D3C00780A02 /* Build configuration list for PBXNativeTarget "swiftynotes" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				249AAA7D2FA78D3C00780A02 /* Debug */,
-				249AAA7E2FA78D3C00780A02 /* Release */,
+				249AAA7D2FA78D3C00780A02 /* Debug configuration for PBXNativeTarget "swiftynotes" */,
+				249AAA7E2FA78D3C00780A02 /* Release configuration for PBXNativeTarget "swiftynotes" */,
 			);
-			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
