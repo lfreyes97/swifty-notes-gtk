@@ -196,10 +196,19 @@ jobs:
       # mandatory for notarization.
       - name: Re-sign with Developer ID + Hardened Runtime
         run: |
-          set -euo pipefail
+          set -euxo pipefail
           APP="$APP_PATH"
           IDENTITY="$MACOS_DEVELOPER_ID_APPLICATION"
-          ENTITLEMENTS="packaging/macos/swiftynotes.entitlements"
+          ENTITLEMENTS="$PWD/packaging/macos/swiftynotes.entitlements"
+
+          # Diagnostics: the "swiftynotes.app: No such file or directory"
+          # error we kept hitting was ambiguous about *which* command
+          # emitted it (the codesign sign or the codesign verify that
+          # ran milliseconds later); print the basic state up front so
+          # the next failure mode is unambiguous.
+          ls -la "$APP" | head -10
+          ls -la "$ENTITLEMENTS"
+          file "$APP/Contents/MacOS/swiftynotes"
 
           # Sign every dylib / .so first (deepest first so containing
           # bundles end up consistent). `find -depth` walks the tree
