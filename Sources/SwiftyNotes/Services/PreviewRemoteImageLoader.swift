@@ -57,7 +57,12 @@ final class PreviewRemoteImageLoader: @unchecked Sendable {
     }
 }
 
-private extension PreviewRemoteImageLoader {
+// `internal` (not `private`) so tests can drive `persistDownloadedImage`
+// directly with a temp file URL and a spaced cache directory. The
+// regression we want to guard against (`path(percentEncoded: false)`
+// dropping) lives inside that helper, and reaching it through the
+// public `loadImage` path would require a live URLSession download.
+extension PreviewRemoteImageLoader {
     func startDownload(for remoteURL: URL) {
         session.downloadTask(with: remoteURL) { [weak self] temporaryURL, response, _ in
             guard let self else { return }

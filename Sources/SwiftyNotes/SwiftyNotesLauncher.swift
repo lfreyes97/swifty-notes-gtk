@@ -322,7 +322,7 @@ public enum SwiftyNotesLauncher {
         var debugExternalDocumentFileURLs: [URL] {
             externalDocumentWindows.values
                 .map(\.fileURL)
-                .sorted { $0.path < $1.path }
+                .sorted { $0.path(percentEncoded: false) < $1.path(percentEncoded: false) }
         }
 
         func debugExternalWindowIdentifier(for fileURL: URL) -> ObjectIdentifier? {

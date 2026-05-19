@@ -560,7 +560,11 @@ final class MainWindow {
             .appendingPathComponent("Icons", isDirectory: true)
         else { return nil }
         let originalURL = iconsURL.appendingPathComponent("\(iconName).svg")
-        guard FileManager.default.fileExists(atPath: originalURL.path) else {
+        // Use `path(percentEncoded: false)` everywhere a path string
+        // crosses the FileManager / GTK boundary — same regression
+        // class as issue #24 (`URL.path()` is percent-encoded on
+        // Swift 6, and consumers expect a decoded native path).
+        guard FileManager.default.fileExists(atPath: originalURL.path(percentEncoded: false)) else {
             return nil
         }
         #if !os(macOS)
@@ -574,13 +578,13 @@ final class MainWindow {
         // to that theme-aware path on Linux.
         let linuxOnlyBundled: Set<String> = ["table-symbolic"]
         guard linuxOnlyBundled.contains(iconName) else { return nil }
-        return originalURL.path
+        return originalURL.path(percentEncoded: false)
         #else
         // Light mode: original SVG already encodes the foreground in a
         // dark shade that contrasts well against the light theme — use
         // it directly with no allocation.
         if !StyleManager.default.dark {
-            return originalURL.path
+            return originalURL.path(percentEncoded: false)
         }
         // Dark mode: lazily produce a temp-dir copy with the foreground
         // recoloured. Cache by icon name + theme variant so repeated
@@ -607,7 +611,7 @@ final class MainWindow {
         let cacheDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("me.spaceinbox.swiftynotes-icons", isDirectory: true)
         let targetURL = cacheDir.appendingPathComponent("\(iconName)-dark.svg")
-        let targetPath = targetURL.path
+        let targetPath = targetURL.path(percentEncoded: false)
 
         // Fast path: the recoloured copy already exists in this
         // process's temp dir (we generated it earlier for another
@@ -713,10 +717,10 @@ final class MainWindow {
         guard !Self.bundledIconSearchPathRegistered,
               let iconsURL = Bundle.module.resourceURL?
                 .appendingPathComponent("AppIcons", isDirectory: true),
-              FileManager.default.fileExists(atPath: iconsURL.path),
+              FileManager.default.fileExists(atPath: iconsURL.path(percentEncoded: false)),
               let display = Display.default
         else { return }
-        display.iconTheme.addSearchPath(iconsURL.path)
+        display.iconTheme.addSearchPath(iconsURL.path(percentEncoded: false))
         Self.bundledIconSearchPathRegistered = true
     }
 

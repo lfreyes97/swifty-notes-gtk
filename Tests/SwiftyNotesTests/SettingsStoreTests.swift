@@ -302,4 +302,96 @@ struct SettingsStoreTests {
         let restoredSourceContents = try FileManager.default.contentsOfDirectory(at: source, includingPropertiesForKeys: nil).map(\.lastPathComponent).sorted()
         #expect(restoredSourceContents == ["a.md", "b.md"])
     }
+
+    // MARK: - Spaces-in-path regressions
+    //
+    // These tests pin the spaces-in-path behaviour of the three
+    // FileManager-touching surfaces that weren't already covered by
+    // `RepositoryStateTests`. Each one exercises a real save / load /
+    // relocate cycle against a temp directory whose name contains a
+    // space — if any `URL.path(percentEncoded: false)` call regresses
+    // back to the bare `URL.path()` form the assertions fail loudly.
+
+    @Test
+    func `app settings store round trips through a settings file URL whose path contains spaces`() throws {
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let spacedConfigDir = temp.appendingPathComponent("My Config Folder", isDirectory: true)
+        let settingsFileURL = spacedConfigDir.appendingPathComponent("settings.json", isDirectory: false)
+        let customNotesDirectory = temp.appendingPathComponent("Notes With Spaces", isDirectory: true)
+        let store = AppSettingsStore(settingsFileURL: settingsFileURL)
+
+        try store.save(AppSettings(
+            customNotesDirectoryPath: customNotesDirectory.path(percentEncoded: false),
+            wrapsEditorLines: true,
+            editorFontSize: 14,
+            editorTabWidth: 4,
+            editorIndentStyle: .spaces,
+            autosaveDelaySeconds: 3,
+            appearanceMode: .system,
+        ))
+
+        // The file actually landed at the spaced path (FileManager
+        // resolves it correctly) AND `load` finds it again.
+        #expect(FileManager.default.fileExists(atPath: settingsFileURL.path(percentEncoded: false)))
+        let loaded = try store.load()
+        #expect(loaded.customNotesDirectoryURL?.standardizedFileURL == customNotesDirectory.standardizedFileURL)
+        #expect(loaded.editorFontSize == 14)
+    }
+
+    @Test
+    func `workspace state store round trips through a state file URL whose path contains spaces`() throws {
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let spacedStateDir = temp.appendingPathComponent("State With Spaces", isDirectory: true)
+        let stateFileURL = spacedStateDir.appendingPathComponent("workspace.json", isDirectory: false)
+        let store = WorkspaceStateStore(stateFileURL: stateFileURL)
+
+        let stableID = UUID()
+        let original = WorkspaceState(
+            selectedNoteID: stableID,
+            isSidebarVisible: false,
+            isPreviewVisible: true,
+            sortMode: .title,
+            windowWidth: 1234,
+            windowHeight: 567,
+        )
+        try store.save(original)
+
+        #expect(FileManager.default.fileExists(atPath: stateFileURL.path(percentEncoded: false)))
+        let loaded = try store.load()
+        #expect(loaded.selectedNoteID == stableID)
+        #expect(loaded.sortMode == .title)
+        #expect(loaded.windowWidth == 1234)
+    }
+
+    @Test
+    func `notes directory relocator moves contents when both source and destination paths contain spaces`() throws {
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let source = temp.appendingPathComponent("Source Notes", isDirectory: true)
+        let destination = temp.appendingPathComponent("Destination Notes", isDirectory: true)
+        try FileManager.default.createDirectory(at: source, withIntermediateDirectories: true)
+        try "# Note one".write(
+            to: source.appendingPathComponent("first note.md", isDirectory: false),
+            atomically: true,
+            encoding: .utf8,
+        )
+        try "# Note two".write(
+            to: source.appendingPathComponent("second note.md", isDirectory: false),
+            atomically: true,
+            encoding: .utf8,
+        )
+
+        try NotesDirectoryRelocator.relocate(from: source, to: destination)
+
+        #expect(!FileManager.default.fileExists(atPath: source.path(percentEncoded: false)))
+        let moved = try FileManager.default.contentsOfDirectory(at: destination, includingPropertiesForKeys: nil)
+            .map(\.lastPathComponent)
+            .sorted()
+        #expect(moved == ["first note.md", "second note.md"])
+    }
 }
