@@ -4,11 +4,28 @@ name: Release macOS DMG
 # the Swifty Notes `.app` bundle (Apple Silicon only — Homebrew's GTK4
 # stack on Apple Silicon is arm64-only, see Project.xcconfig).
 #
-# Manually triggered from the Actions tab; the `version` input mirrors
-# release-packages.yml so the macOS artifact name lines up with the
-# Linux ones in the eventual GitHub Release.
+# Two trigger paths:
+#
+# * `workflow_dispatch` — manual trigger from the Actions tab when you
+#   just want a one-off DMG (e.g. a hotfix build before pushing the
+#   matching Linux artifacts), without going through the full
+#   release-packages orchestration.
+#
+# * `workflow_call` — invoked as a reusable workflow from
+#   release-packages.yml so the orchestrator produces both the Linux
+#   artifacts and the macOS DMG under a single Run, sharing the same
+#   resolved version string. Secrets (signing cert, notarization Apple
+#   ID, etc.) are passed through via `secrets: inherit` at the call
+#   site, so no per-secret declaration is needed here.
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: Optional release version override. Defaults to the VERSION file in the repository.
+        required: false
+        default: ""
+        type: string
+  workflow_call:
     inputs:
       version:
         description: Optional release version override. Defaults to the VERSION file in the repository.

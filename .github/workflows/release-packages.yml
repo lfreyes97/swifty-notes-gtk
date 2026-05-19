@@ -384,6 +384,25 @@ jobs:
           name: ${{ steps.snap-artifact.outputs.name }}
           path: ${{ steps.snap-artifact.outputs.path }}
 
+  build-macos:
+    name: Build macOS DMG
+    # Reuses release-macos.yml so the orchestrated release produces
+    # the signed/notarized/stapled DMG alongside the Linux artifacts
+    # under the same Run. release-macos.yml stays
+    # `workflow_dispatch`-triggerable for one-off / hotfix DMG builds
+    # outside the full orchestration.
+    needs: resolve-version
+    uses: ./.github/workflows/release-macos.yml
+    with:
+      version: ${{ needs.resolve-version.outputs.version }}
+    # Signing / notarization secrets live at the repo level; `inherit`
+    # passes all of them to the reusable workflow so we don't have to
+    # list each one (MACOS_CERTIFICATE_P12_BASE64,
+    # MACOS_CERTIFICATE_P12_PASSWORD, MACOS_DEVELOPER_ID_APPLICATION,
+    # MACOS_NOTARIZATION_APPLE_ID, MACOS_NOTARIZATION_TEAM_ID,
+    # MACOS_NOTARIZATION_APP_PASSWORD) twice.
+    secrets: inherit
+
   draft-release:
     name: Draft GitHub release
     runs-on: ubuntu-24.04
@@ -394,6 +413,7 @@ jobs:
       - build-rpm
       - build-flatpak
       - build-snap
+      - build-macos
 
     steps:
       - name: Download release artifacts
