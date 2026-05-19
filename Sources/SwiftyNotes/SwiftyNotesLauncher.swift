@@ -23,6 +23,7 @@ final class AppController {
     private let stateStore: WorkspaceStateStore
     private let appSettingsStore: AppSettingsStore
     private let allowsWindowPresentation: Bool
+    private let launchOptions: AppLaunchOptions
     private var mainWindow: MainWindow?
     private var externalDocumentWindows: [ObjectIdentifier: ExternalDocumentWindow] = [:]
 
@@ -30,10 +31,12 @@ final class AppController {
         stateStore: WorkspaceStateStore = WorkspaceStateStore(),
         appSettingsStore: AppSettingsStore = AppSettingsStore(),
         allowsWindowPresentation: Bool = true,
+        launchOptions: AppLaunchOptions = AppLaunchOptions(forceUpdateAvailable: false, passthroughArguments: []),
     ) {
         self.stateStore = stateStore
         self.appSettingsStore = appSettingsStore
         self.allowsWindowPresentation = allowsWindowPresentation
+        self.launchOptions = launchOptions
     }
 
     func activate(app: Application) {
@@ -57,6 +60,7 @@ final class AppController {
             autosave: AutosaveCoordinator(),
             appSettingsStore: appSettingsStore,
             appSettings: appSettings,
+            forceUpdateAvailable: launchOptions.forceUpdateAvailable,
             openExternalDocumentHandler: { [weak self, weak app] fileURL in
                 guard let self, let app else { return }
                 try openExternalDocument(at: fileURL, application: app)
@@ -186,6 +190,7 @@ public enum SwiftyNotesLauncher {
             exit(cliResult.exitCode)
         }
 
+        let launchOptions = AppLaunchOptions.parse(arguments: arguments)
         let environment = ProcessInfo.processInfo.environment
         let app = Application(
             id: resolveApplicationID(
@@ -194,7 +199,7 @@ public enum SwiftyNotesLauncher {
             ),
             flags: resolveApplicationFlags(env: environment),
         )
-        let appController = AppController()
+        let appController = AppController(launchOptions: launchOptions)
 
         app.onActivate {
             appController.activate(app: app)
@@ -203,7 +208,7 @@ public enum SwiftyNotesLauncher {
             appController.openDocuments(at: fileURLs, application: app)
         }
 
-        let processArguments = [CommandLine.arguments.first ?? "swiftynotes"] + arguments
+        let processArguments = [CommandLine.arguments.first ?? "swiftynotes"] + launchOptions.passthroughArguments
         app.run(arguments: processArguments)
         exit(0)
     }

@@ -347,6 +347,7 @@ extension MainWindow {
         window.addAction(reloadAction)
         window.addAction(settingsAction)
         window.addAction(aboutAction)
+        window.addAction(checkForUpdatesAction)
 
         let librarySection = GMenuRef()
         librarySection.append("Settings", action: "win.settings")
@@ -356,6 +357,7 @@ extension MainWindow {
         librarySection.append("Open notes folder", action: "win.open-notes-folder")
 
         let helpSection = GMenuRef()
+        helpSection.append("Check for Updates…", action: "win.check-for-updates")
         helpSection.append("About Swifty Notes", action: "win.about")
 
         let menu = GMenuRef()
@@ -371,6 +373,7 @@ extension MainWindow {
                 "Open notes folder",
             ],
             "Help": [
+                "Check for Updates…",
                 "About Swifty Notes",
             ],
         ]

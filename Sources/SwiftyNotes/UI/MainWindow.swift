@@ -39,6 +39,22 @@ final class MainWindow {
     /// edits to a "previewed" trashed note silently saved into the
     /// previously-active regular note instead.
     let trashedNoteBanner = Banner(title: "This note is in the Trash")
+    /// Banner shown above the editor when the launch-time update check
+    /// finds a newer GitHub release than the running build. Carries an
+    /// "Update" button that opens the release page, plus a dismiss
+    /// button — the user explicitly wants the banner to stay visible
+    /// until they act on it.
+    let updateBanner = UpdateBanner()
+    /// `html_url` from the latest GitHub release payload — remembered
+    /// here so the banner's Update button can hand it to the OS URL
+    /// opener. Set by ``checkForUpdates(manual:)``.
+    var pendingUpdateReleaseURL: URL?
+    /// `--force-update-available` launch flag. When set, the update
+    /// checker reports `updateAvailable` even if the running build is
+    /// already at or ahead of the latest release — purely a manual-QA
+    /// affordance so we can verify the banner without shipping a new
+    /// release first.
+    let forceUpdateAvailable: Bool
     let autosaveDelayOverride: Duration?
     var autosaveDelay: Duration
     let openExternalDocumentHandler: (URL) throws -> Void
@@ -87,6 +103,10 @@ final class MainWindow {
 
     lazy var aboutAction = SimpleAction(name: "about") { [weak self] in
         self?.presentAboutDialog()
+    }
+
+    lazy var checkForUpdatesAction = SimpleAction(name: "check-for-updates") { [weak self] in
+        self?.checkForUpdates(manual: true)
     }
 
     var displayedNotes: [Note] = []
@@ -171,6 +191,7 @@ final class MainWindow {
         appSettingsStore: AppSettingsStore = AppSettingsStore(),
         appSettings: AppSettings = .default,
         autosaveDelay: Duration? = nil,
+        forceUpdateAvailable: Bool = false,
         openExternalDocumentHandler: @escaping (URL) throws -> Void = { _ in },
         directoryOpener: @escaping (URL) throws -> Void = MainWindow.openDirectoryInSystemFileManager,
         deferredUIActionScheduler: @escaping (@escaping @MainActor () -> Void) -> Void = { action in
@@ -186,6 +207,7 @@ final class MainWindow {
         self.autosave = autosave
         autosaveDelayOverride = autosaveDelay
         self.autosaveDelay = autosaveDelay ?? .seconds(appSettings.autosaveDelaySeconds)
+        self.forceUpdateAvailable = forceUpdateAvailable
         self.openExternalDocumentHandler = openExternalDocumentHandler
         self.directoryOpener = directoryOpener
         self.deferredUIActionScheduler = deferredUIActionScheduler
@@ -225,6 +247,7 @@ final class MainWindow {
             self?.refreshPreview()
             self?.applyViewMode(animated: false)
             self?.focusPrimaryContentIfNeeded()
+            self?.checkForUpdates(manual: false)
         }
     }
 
@@ -297,7 +320,12 @@ final class MainWindow {
             restoreFromTrash(noteID: id)
         }
 
+        updateBanner.onUpdate { [weak self] in
+            self?.openPendingUpdateReleasePage()
+        }
+
         editorContent.append(trashedNoteBanner)
+        updateBanner.attach(to: editorContent)
         editorContent.append(editorFormattingToolbar.scrolled)
         editorContent.append(Separator())
         editorContent.append(editorScroll)
