@@ -216,11 +216,18 @@ jobs:
               done
 
           # Then sign the .app itself (with entitlements applied to
-          # the main executable). `--deep` would re-cover the dylibs
-          # we just signed but with no per-binary entitlement file,
-          # which is correct (entitlements live on the main binary;
-          # dylibs inherit by being inside a signed bundle).
-          codesign --force --deep \
+          # the main executable). NO `--deep` flag: every nested
+          # dylib / .so / loader has already been signed individually
+          # in the loop above, and Apple's docs explicitly deprecate
+          # `--deep` ("increasingly unable to do what's needed for
+          # valid signatures"). Empirically `--deep` also chokes on
+          # the gdk-pixbuf loaders dir where some `*.dylib` paths are
+          # symlinks to sibling `*.so` files — codesign walks into
+          # them and bails with "No such file or directory" mid-sign.
+          # Without --deep, codesign signs only the .app's outer
+          # signature + the main MacOS/<exe> binary, which is exactly
+          # what we want at this step.
+          codesign --force \
             --sign "$IDENTITY" \
             --options runtime \
             --timestamp \
@@ -228,8 +235,12 @@ jobs:
             "$APP"
 
           # Verify the result locally before paying the round-trip
-          # cost of submitting to notarytool.
-          codesign --verify --verbose=4 --strict "$APP"
+          # cost of submitting to notarytool. `--deep` here (on verify,
+          # not on sign) makes codesign walk the bundle and check
+          # every nested signature too — what notarytool will do on
+          # the server, just done locally first so a misconfiguration
+          # surfaces in seconds instead of after a slow round trip.
+          codesign --verify --verbose=4 --strict --deep "$APP"
           codesign --display --verbose=4 "$APP"
 
       # Apple's notarization service. `notarytool submit --wait`
