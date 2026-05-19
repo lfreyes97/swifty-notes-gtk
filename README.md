@@ -2,9 +2,11 @@
 
 <img alt="Swifty Notes" src="https://arm1.ru/img/uploaded/swift-notes-1.0.0.webp">
 
-Native GTK markdown notes for Linux, written in Swift with `swift-adwaita`.
+Native GTK markdown notes for Linux and macOS, written in Swift with `swift-adwaita`.
 
-<a href="https://flathub.org/en/apps/me.spaceinbox.swiftynotes"><img height="56" alt="Get it on Flathub" src="https://flathub.org/api/badge?locale=en"/></a> <a href="https://snapcraft.io/swifty-notes"><img alt="Get it from the Snap Store" src=https://snapcraft.io/en/dark/install.svg /></a> 
+<a href="https://flathub.org/en/apps/me.spaceinbox.swiftynotes"><img height="56" alt="Get it on Flathub" src="https://flathub.org/api/badge?locale=en"/></a> <a href="https://snapcraft.io/swifty-notes"><img alt="Get it from the Snap Store" src=https://snapcraft.io/en/dark/install.svg /></a>
+
+On macOS the release workflow produces a Developer-ID-signed, notarized, stapled `.dmg` for Apple Silicon — see [Releases](https://github.com/makoni/swifty-notes-gtk/releases) for the latest build.
 
 <img alt="Swift Adwaita" src="https://spaceinbox.me/images/swifty-notes-demo.gif">
 
@@ -20,6 +22,7 @@ Native GTK markdown notes for Linux, written in Swift with `swift-adwaita`.
 - configurable note storage location that can live in a cloud-synced folder for cross-device sync
 - CLI for listing, reading, creating, and replacing notes by stable ID
 - workspace persistence for selection, search, sort mode, sidebar/preview visibility, and window layout
+- in-app update checker against GitHub Releases, with a banner above the editor and a "Check for Updates…" menu item
 - native Wayland UI smoke coverage with headless Weston + AT-SPI
 
 ## Project layout
@@ -32,8 +35,30 @@ Native GTK markdown notes for Linux, written in Swift with `swift-adwaita`.
 
 ## Requirements
 
-- Swift 6 toolchain
-- Linux desktop environment with GTK 4, libadwaita, and GtkSourceView 5 available
+- Swift 6.2+ toolchain
+- Linux (GTK 4, libadwaita, GtkSourceView 5, libspelling) **or** macOS 13+ on Apple Silicon
+
+### Linux
+
+```bash
+sudo apt install libadwaita-1-dev libgtk-4-dev libgtksourceview-5-dev libspelling-1-dev
+```
+
+(or the Fedora / Arch equivalents — see `packaging/release/install-user.sh` for the full list.)
+
+### macOS (Homebrew, Apple Silicon)
+
+```bash
+brew install libadwaita gtksourceview5 libspelling adwaita-icon-theme pkgconf
+```
+
+GLib needs Homebrew's compiled schemas on the search path — the
+launcher merges `/opt/homebrew/share` into `XDG_DATA_DIRS` at startup,
+so `swift run swiftynotes` works without exporting anything. The
+launcher also installs `XDG_DATA_DIRS` if the shell didn't (Ghostty /
+iTerm sessions that export their own value still get brew's path
+prepended). Intel Macs are best-effort and need `/usr/local` instead of
+`/opt/homebrew`.
 
 If you want to test local `swift-adwaita` changes instead of the pinned git revision, set `SWIFTY_NOTES_LOCAL_SWIFT_ADWAITA_PATH=/absolute/path/to/swift-adwaita` before building.
 
@@ -46,11 +71,24 @@ swift build
 swift run swiftynotes
 ```
 
+To force the update banner without shipping a new release first (useful
+for QA after touching the GitHub check flow):
+
+```bash
+swift run swiftynotes -- --force-update-available
+```
+
+### Linux: user-profile install
+
 To install the app, desktop entry, and icon into your user profile for launcher integration:
 
 ```bash
 packaging/release/install-user.sh
 ```
+
+### macOS: Xcode bundle
+
+For a regular `.app` (Cmd+R, breakpoints, Archive), open `packaging/macos/swiftynotes.xcodeproj`. The CI release path additionally vendors Homebrew dylibs via `scripts/bundle-macos-app.sh` and re-signs with a Developer ID identity before producing the DMG — see [Release packaging](#release-packaging).
 
 ## Tests
 
@@ -82,8 +120,9 @@ Release packaging assets live under `packaging/`, `snap/`, and `data/`.
 - Build a `.deb` from that root: `packaging/release/build-deb.sh --install-root packaging/out/install-root-usr --output packaging/out/deb`
 - Build a source-built `.flatpak` bundle: `packaging/release/build-flatpak.sh --output packaging/out/flatpak`
 - Build `.rpm` artifacts in CI with `packaging/release/build-rpm.sh`
+- Build the macOS `.app` and DMG layout locally with the Xcode project at `packaging/macos/swiftynotes.xcodeproj` plus `scripts/bundle-macos-app.sh` (vendors Homebrew dylibs into the bundle); the CI workflow re-signs with Developer ID, runs `xcrun notarytool submit --wait`, and staples both the `.app` and the resulting DMG before uploading.
 
-The Flatpak manifest template lives in `flatpak/me.spaceinbox.swiftynotes.yml.in` and pins the SwiftPM dependency sources used in CI. GitHub Actions release automation lives in `.github/workflows/release-packages.yml`, resolves its version from the repository `VERSION` file by default (with an optional `workflow_dispatch` override), and finishes by drafting a GitHub release that bundles every uploaded artifact from the run.
+The Flatpak manifest template lives in `flatpak/me.spaceinbox.swiftynotes.yml.in` and pins the SwiftPM dependency sources used in CI. GitHub Actions release automation lives in `.github/workflows/release-packages.yml`: it resolves its version from the repository `VERSION` file by default (with an optional `workflow_dispatch` override), fans out into the per-platform builders (deb / rpm / flatpak / snap on Linux × {x86_64, arm64}, plus a Developer-ID-signed and notarized DMG for Apple Silicon via the reusable `.github/workflows/release-macos.yml`), and finishes by drafting a GitHub release that bundles every uploaded artifact from the run.
 
 ## CLI
 
