@@ -142,16 +142,14 @@ enum MacOSClickWorkaround {
         #endif
     }
 
-#if os(macOS)
-    private enum ClickPathOrigin {
-        case clickedSignal
-        case captureRelease
-    }
-
     /// Process-wide debug flag. Set `SWIFTY_NOTES_DEBUG_CLICKS=1` in
     /// the app's environment to enable per-click trace lines on
     /// stderr. Off by default; reading the env var once at first
     /// access keeps the hot click path branch-predictor-friendly.
+    /// Available on both platforms because the call sites are
+    /// cross-platform (e.g. `onToggle` connects `onToggled` on
+    /// Linux too) and the env-var gate keeps it a no-op when not
+    /// explicitly opted in.
     nonisolated static let debugLoggingEnabled: Bool = {
         let env = ProcessInfo.processInfo.environment["SWIFTY_NOTES_DEBUG_CLICKS"]?
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -167,6 +165,12 @@ enum MacOSClickWorkaround {
         let ts = String(format: "%.4f", Date().timeIntervalSinceReferenceDate)
         let line = "[click] ts=\(ts) label=\"\(label)\" widget=\(widgetID) event=\(event)\n"
         FileHandle.standardError.write(Data(line.utf8))
+    }
+
+#if os(macOS)
+    private enum ClickPathOrigin {
+        case clickedSignal
+        case captureRelease
     }
 
     /// Installs a CAPTURE-phase `GestureClick` and fires the handler
