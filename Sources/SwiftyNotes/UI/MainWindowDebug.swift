@@ -16,16 +16,25 @@ import Foundation
             requestCreateNote()
         }
 
+        // These helpers used to call `button.emitClicked()`, which fires
+        // GtkButton's `clicked` signal. That worked on Linux (where
+        // we register handlers via `Button.onClicked`) and on the
+        // pre-workaround macOS path. After the macOS click workaround
+        // routes handlers through a CAPTURE-phase GestureClick.released
+        // instead, `emitClicked()` no longer reaches the handler — so
+        // these helpers now invoke the underlying action methods
+        // directly. Same end behaviour the production click path
+        // produces, with no signal-emit indirection.
         func debugEmitNewNoteClicked() {
-            newNoteButton.emitClicked()
+            requestCreateNote()
         }
 
         func debugEmitSaveClicked() {
-            saveNoteButton.emitClicked()
+            saveSelectedNoteNow()
         }
 
         func debugEmitSidebarToggleClicked() {
-            sidebarToggle.emitClicked()
+            toggleSidebarVisibility()
         }
 
         func debugSelectViewMode(_ mode: EditorViewMode) {
@@ -57,8 +66,11 @@ import Foundation
         }
 
         func debugEmitEditorFormattingButtonClicked(_ action: MarkdownFormattingAction) {
-            guard let button = editorFormattingButtons[action] else { return }
-            button.emitClicked()
+            // Same reasoning as the toolbar helpers above: drive the
+            // formatting toolbar's action dispatcher directly instead
+            // of round-tripping through the button's `clicked` signal,
+            // which the macOS workaround no longer listens for.
+            editorFormattingToolbar.onAction?(action)
         }
 
         var debugTableSizePicker: TableSizePicker? {
