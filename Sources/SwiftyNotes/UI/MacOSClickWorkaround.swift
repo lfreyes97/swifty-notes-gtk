@@ -31,20 +31,40 @@ enum MacOSClickWorkaround {
     /// click on `button`, even when Quartz's drag detector would
     /// otherwise eat the click.
     ///
-    /// Registers on exactly one path per platform, by design:
+    /// On macOS we listen on BOTH the button's regular `clicked`
+    /// signal AND a CAPTURE-phase GestureClick — each covers a
+    /// failure mode the other misses:
     ///
-    /// * macOS — only the CAPTURE-phase release. Registering BOTH
-    ///   `onClicked` and the gesture caused real macOS clicks
-    ///   (without pointer drift) to fire the handler TWICE: the
-    ///   button's internal gesture wasn't fully suppressed in that
-    ///   no-motion case, so `clicked` still emitted and our
-    ///   `released` ran on top of it. Tests bypass the `clicked`
-    ///   path entirely (see `debugEmit…` helpers in MainWindowDebug)
-    ///   so we don't need it here.
-    /// * Linux — the normal `clicked` signal. No Quartz drag bug.
+    /// * The CAPTURE-phase `released` catches the original
+    ///   drag-detection regression: when the cursor drifts even a
+    ///   sub-pixel between press and release, GTK4-Quartz's pan
+    ///   detector wakes up and denies the button's own gesture, so
+    ///   `clicked` never emits. Our gesture wins the sequence
+    ///   (CAPTURE fires before BUBBLE, claim runs on press) and
+    ///   fires `released` regardless of motion.
+    ///
+    /// * The `clicked` signal catches the "fast click" failure mode
+    ///   that the gesture path alone misses: short press+release
+    ///   events delivered tightly together on Quartz sometimes don't
+    ///   reach our gesture's `released` handler (it appears the
+    ///   sequence state-machine is still processing the press when
+    ///   release arrives and either coalesces or drops it). The
+    ///   button's own signal pipeline doesn't suffer that race, so
+    ///   `onClicked` fires reliably on those clicks.
+    ///
+    /// In practice the two paths are mutually exclusive — a real
+    /// motion-during-click click goes through CAPTURE-release, a
+    /// fast still click goes through `clicked`. But to defend
+    /// against an unlikely overlap (no-motion click where both paths
+    /// resolve), the handler is wrapped in a per-button 200 ms
+    /// dedup. Programmatic activation paths (Enter key, focus +
+    /// space, accessibility activation) also go through `clicked`,
+    /// so they keep working without test-only debug helpers.
     static func onClick(_ button: Button, handler: @escaping @MainActor () -> Void) {
         #if os(macOS)
-        attachReleaseHandler(to: button) { handler() }
+        let deduped = makeDedupedHandler(for: button, handler: handler)
+        button.onClicked(deduped)
+        attachReleaseHandler(to: button, onRelease: deduped)
         #else
         button.onClicked(handler)
         #endif
@@ -52,11 +72,13 @@ enum MacOSClickWorkaround {
 
     /// For ToggleButton: registers `onToggled` for the actual behaviour
     /// and additionally installs a capture-phase release that forces
-    /// `active = true` on click. Mirrors GTK's "linked group" feel —
-    /// clicking an already-active toggle is a no-op, since the GObject
-    /// `notify::active` short-circuits when the value doesn't change.
-    /// Pass `togglesActive: false` (default `true`) for stand-alone
-    /// toggles where clicking should flip the state both ways.
+    /// `active = true` (or `.toggle()` for stand-alone toggles) on
+    /// click. ToggleButton doesn't expose a `clicked` signal in
+    /// swift-adwaita, so we can't add the same dual-path fallback
+    /// used by ``onClick(_:handler:)``. If a fast click drops the
+    /// gesture release on Quartz, the user can simply click again
+    /// — toggles are visually obvious about their state, unlike
+    /// fire-and-forget action buttons.
     static func onToggle(
         _ toggle: ToggleButton,
         togglesActive: Bool = true,
@@ -76,8 +98,13 @@ enum MacOSClickWorkaround {
     }
 
     /// Forces the menu to popup on release. `MenuButton`'s normal
-    /// auto-popup hangs off its internal clicked signal, which is also
-    /// eaten by the drag detector on Quartz.
+    /// auto-popup hangs off its internal click handling, which is
+    /// eaten by the drag detector on Quartz. Unlike `Button` we
+    /// can't listen on a public `clicked` signal here (MenuButton
+    /// doesn't expose one in swift-adwaita), so we rely on the
+    /// CAPTURE-release path alone. `gtk_menu_button_popup` is
+    /// idempotent, so any rare double-fire collapses to a single
+    /// popup anyway.
     static func onMenuButtonPress(_ menuButton: MenuButton) {
         #if os(macOS)
         attachReleaseHandler(to: menuButton) { [weak menuButton] in
@@ -105,6 +132,34 @@ enum MacOSClickWorkaround {
             gtk_gesture_set_state(click.opaquePointer, GTK_EVENT_SEQUENCE_CLAIMED)
         }
         click.onReleased { _, _, _ in onRelease() }
+    }
+
+    /// Per-button last-fire timestamp keyed by `ObjectIdentifier`. The
+    /// entry persists for the lifetime of the button (which is the
+    /// lifetime of the app for toolbar / banner / menu buttons), so
+    /// the map stays bounded by the widget count. Read/written only
+    /// from the main thread under `@MainActor` isolation, so no
+    /// locking is needed.
+    private static var lastClickFire: [ObjectIdentifier: ContinuousClock.Instant] = [:]
+    private static let clickDedupWindow: Duration = .milliseconds(200)
+
+    /// Wraps `handler` so it runs at most once per 200 ms per widget.
+    /// Both the `clicked` signal path and the CAPTURE-release path
+    /// invoke the same returned closure; whichever fires first wins
+    /// and the other path's invocation is swallowed.
+    private static func makeDedupedHandler(
+        for widget: AnyObject,
+        handler: @escaping @MainActor () -> Void,
+    ) -> @MainActor () -> Void {
+        let key = ObjectIdentifier(widget)
+        return {
+            let now = ContinuousClock.now
+            if let last = lastClickFire[key], now - last < clickDedupWindow {
+                return
+            }
+            lastClickFire[key] = now
+            handler()
+        }
     }
     #endif
 }
