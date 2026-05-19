@@ -38,7 +38,7 @@ final class UpdateBanner {
         updateButton.addCSSClass(.suggestedAction)
         updateButton.marginTop = 6
         updateButton.marginBottom = 6
-        Self.installClickHandler(on: updateButton) { [weak self] in
+        MacOSClickWorkaround.onClick(updateButton) { [weak self] in
             self?.onUpdateHandler?()
         }
 
@@ -49,7 +49,7 @@ final class UpdateBanner {
         closeButton.marginTop = 6
         closeButton.marginBottom = 6
         closeButton.marginEnd = 6
-        Self.installClickHandler(on: closeButton) { [weak self] in
+        MacOSClickWorkaround.onClick(closeButton) { [weak self] in
             self?.dismiss()
         }
 
@@ -85,27 +85,4 @@ final class UpdateBanner {
         onDismissHandler = handler
     }
 
-    /// On macOS GTK4-Quartz, a `Button.onClicked` handler silently drops
-    /// the click whenever the cursor moves sub-pixel between press and
-    /// release: a competing drag-detection gesture wakes up, claims the
-    /// pointer sequence, and `clicked` never emits. The same workaround
-    /// used for the sidebar rows and the note context-menu items fixes
-    /// it here — install our own `GestureClick` on the CAPTURE phase
-    /// (fires before Button's internal BUBBLE-phase gesture) and claim
-    /// the sequence on the press so no later drag detector can steal it.
-    private static func installClickHandler(on button: Button, handler: @escaping () -> Void) {
-        #if os(macOS)
-        let click = GestureClick()
-        click.button = 1
-        gtk_event_controller_set_propagation_phase(click.opaquePointer, GTK_PHASE_CAPTURE)
-        button.addController(click)
-        click.onPressed { [weak click] _, _, _ in
-            guard let click else { return }
-            gtk_gesture_set_state(click.opaquePointer, GTK_EVENT_SEQUENCE_CLAIMED)
-        }
-        click.onReleased { _, _, _ in handler() }
-        #else
-        button.onClicked(handler)
-        #endif
-    }
 }

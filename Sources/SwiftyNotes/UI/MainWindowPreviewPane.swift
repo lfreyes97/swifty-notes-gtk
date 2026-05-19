@@ -349,36 +349,72 @@ extension MainWindow {
         window.addAction(aboutAction)
         window.addAction(checkForUpdatesAction)
 
-        let librarySection = GMenuRef()
-        librarySection.append("Settings", action: "win.settings")
-        librarySection.append("Open Markdown File…", action: "win.open-markdown-file")
-        librarySection.append("Import into Library…", action: "win.import-note")
-        librarySection.append("Reload from disk", action: "win.reload-notes")
-        librarySection.append("Open notes folder", action: "win.open-notes-folder")
+        // Hand-built popover (not GMenu/setMenuModel) so the items
+        // themselves are explicit `Button`s and can route their clicks
+        // through `MacOSClickWorkaround.onClick`. The auto-built
+        // PopoverMenu that `setMenuModel` produces internally is
+        // composed of widgets we don't have references to, so its
+        // items suffer the same Quartz drag-detection regression the
+        // workaround exists for — sub-pixel motion between press and
+        // release silently eats the click.
+        let library: [(label: String, handler: @MainActor () -> Void)] = [
+            ("Settings", { [weak self] in self?.presentSettingsWindow() }),
+            ("Open Markdown File…", { [weak self] in self?.openMarkdownFile() }),
+            ("Import into Library…", { [weak self] in self?.importNote() }),
+            ("Reload from disk", { [weak self] in self?.reloadFromDisk(announce: true) }),
+            ("Open notes folder", { [weak self] in self?.openNotesFolder() }),
+        ]
+        let help: [(label: String, handler: @MainActor () -> Void)] = [
+            ("Check for Updates…", { [weak self] in self?.checkForUpdates(manual: true) }),
+            ("About Swifty Notes", { [weak self] in self?.presentAboutDialog() }),
+        ]
 
-        let helpSection = GMenuRef()
-        helpSection.append("Check for Updates…", action: "win.check-for-updates")
-        helpSection.append("About Swifty Notes", action: "win.about")
+        let popover = Popover()
+        popover.hasArrow = true
+        popover.position = .bottom
+        popover.autohide = true
+        let content = Box(orientation: .vertical, spacing: 2)
+        content.setMargins(4)
+        for (label, handler) in library {
+            content.append(makeMenuItemButton(label: label, popover: popover, handler: handler))
+        }
+        content.append(Separator(orientation: .horizontal))
+        for (label, handler) in help {
+            content.append(makeMenuItemButton(label: label, popover: popover, handler: handler))
+        }
+        popover.child = content
+        menuButton.setPopover(popover)
 
-        let menu = GMenuRef()
-        menu.appendSection("Library", section: librarySection)
-        menu.appendSection("Help", section: helpSection)
         overflowMenuSectionTitles = ["Library", "Help"]
         overflowMenuItemsBySection = [
-            "Library": [
-                "Settings",
-                "Open Markdown File…",
-                "Import into Library…",
-                "Reload from disk",
-                "Open notes folder",
-            ],
-            "Help": [
-                "Check for Updates…",
-                "About Swifty Notes",
-            ],
+            "Library": library.map(\.label),
+            "Help": help.map(\.label),
         ]
-        menuButton.setMenuModel(menu)
         updateActionAvailability()
+    }
+
+    private func makeMenuItemButton(
+        label: String,
+        popover: Popover,
+        handler: @escaping @MainActor () -> Void,
+    ) -> Button {
+        let button = Button()
+        button.addCSSClass(.flat)
+        button.hexpand = true
+        button.halign = .fill
+        let title = Label(label)
+        title.xalign = 0
+        title.hexpand = true
+        let row = Box(orientation: .horizontal, spacing: 8)
+        row.hexpand = true
+        row.halign = .fill
+        row.append(title)
+        button.child = row
+        MacOSClickWorkaround.onClick(button) { [weak popover] in
+            popover?.popdown()
+            handler()
+        }
+        return button
     }
 
     func configureToolbarAccessibility() {

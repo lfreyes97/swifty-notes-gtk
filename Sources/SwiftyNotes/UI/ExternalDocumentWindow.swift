@@ -277,24 +277,20 @@ private extension ExternalDocumentWindow {
     }
 
     func wireSignals() {
-        editorModeToggle.onToggled { [weak self] in
+        MacOSClickWorkaround.onToggle(editorModeToggle, togglesActive: false) { [weak self] in
             guard let self, !self.suppressViewModeToggleChange, editorModeToggle.active else { return }
             setViewMode(.editor, animated: false)
         }
-
-        splitModeToggle.onToggled { [weak self] in
+        MacOSClickWorkaround.onToggle(splitModeToggle, togglesActive: false) { [weak self] in
             guard let self, !self.suppressViewModeToggleChange, splitModeToggle.active else { return }
             setViewMode(.split, animated: false)
         }
-
-        previewModeToggle.onToggled { [weak self] in
+        MacOSClickWorkaround.onToggle(previewModeToggle, togglesActive: false) { [weak self] in
             guard let self, !self.suppressViewModeToggleChange, previewModeToggle.active else { return }
             setViewMode(.preview, animated: false)
         }
 
-
-
-        saveButton.onClicked { [weak self] in
+        MacOSClickWorkaround.onClick(saveButton) { [weak self] in
             self?.saveDocumentNow()
         }
 

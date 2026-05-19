@@ -192,7 +192,7 @@ final class EditorFormattingToolbar {
         )
         configurations[action] = configuration
         button.child = ToolbarButtonContent.make(configuration: configuration, isCompact: isCompact)
-        button.onClicked { [weak self] in
+        MacOSClickWorkaround.onClick(button) { [weak self] in
             self?.onAction?(action)
         }
         return button

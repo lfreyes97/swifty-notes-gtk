@@ -391,39 +391,41 @@ final class MainWindow {
             setSortMode(sortMode)
         }
 
-        sidebarToggle.onClicked { [weak self] in
+        MacOSClickWorkaround.onClick(sidebarToggle) { [weak self] in
             self?.toggleSidebarVisibility()
         }
 
-        editorModeToggle.onToggled { [weak self] in
+        // The view-mode switcher is a linked group: clicking one button
+        // must end up with exactly that button active. Pass
+        // `togglesActive: false` so the macOS path forces `active = true`
+        // on release rather than flipping it; the `onToggled` handler
+        // below stays the single source of truth for applying the mode.
+        MacOSClickWorkaround.onToggle(editorModeToggle, togglesActive: false) { [weak self] in
             guard let self, !self.suppressViewModeToggleChange, editorModeToggle.active else { return }
             setViewMode(.editor, animated: false)
         }
-
-        splitModeToggle.onToggled { [weak self] in
+        MacOSClickWorkaround.onToggle(splitModeToggle, togglesActive: false) { [weak self] in
             guard let self, !self.suppressViewModeToggleChange, splitModeToggle.active else { return }
             setViewMode(.split, animated: false)
         }
-
-        previewModeToggle.onToggled { [weak self] in
+        MacOSClickWorkaround.onToggle(previewModeToggle, togglesActive: false) { [weak self] in
             guard let self, !self.suppressViewModeToggleChange, previewModeToggle.active else { return }
             setViewMode(.preview, animated: false)
         }
-        newNoteButton.onClicked { [weak self] in
+
+        MacOSClickWorkaround.onClick(newNoteButton) { [weak self] in
             self?.requestCreateNote()
         }
-
-        newFolderButton.onClicked { [weak self] in
+        MacOSClickWorkaround.onClick(newFolderButton) { [weak self] in
             self?.presentNewFolderDialog(parentPath: "")
         }
-
-        saveNoteButton.onClicked { [weak self] in
+        MacOSClickWorkaround.onClick(saveNoteButton) { [weak self] in
             self?.saveSelectedNoteNow()
         }
-
-        deleteNoteButton.onClicked { [weak self] in
+        MacOSClickWorkaround.onClick(deleteNoteButton) { [weak self] in
             self?.presentDeleteConfirmationForSelectedNote()
         }
+        MacOSClickWorkaround.onMenuButtonPress(menuButton)
 
         editor.view.onChanged { [weak self] in
             guard let self, !self.suppressEditorChange else { return }

@@ -89,23 +89,7 @@ extension MainWindow {
         let wrappedHandler: @MainActor () -> Void = { [weak self] in
             self?.runAfterFolderContextMenuClosure(handler)
         }
-        #if os(macOS)
-        // See `makeNoteContextButton` for the full rationale: CAPTURE
-        // phase + claim-on-press is the combination that beats Button's
-        // internal BUBBLE-phase gesture to the press and keeps our
-        // released signal alive.
-        let click = GestureClick()
-        click.button = 1
-        gtk_event_controller_set_propagation_phase(click.opaquePointer, GTK_PHASE_CAPTURE)
-        button.addController(click)
-        click.onPressed { [weak click] _, _, _ in
-            guard let click else { return }
-            gtk_gesture_set_state(click.opaquePointer, GTK_EVENT_SEQUENCE_CLAIMED)
-        }
-        click.onReleased { _, _, _ in wrappedHandler() }
-        #else
-        button.onClicked(wrappedHandler)
-        #endif
+        MacOSClickWorkaround.onClick(button, handler: wrappedHandler)
         return button
     }
 
