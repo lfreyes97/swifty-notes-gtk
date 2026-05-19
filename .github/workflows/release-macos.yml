@@ -1,0 +1,324 @@
+name: Release macOS DMG
+
+# Produces a Developer-ID-signed, notarized, stapled `.dmg` containing
+# the Swifty Notes `.app` bundle (Apple Silicon only — Homebrew's GTK4
+# stack on Apple Silicon is arm64-only, see Project.xcconfig).
+#
+# Manually triggered from the Actions tab; the `version` input mirrors
+# release-packages.yml so the macOS artifact name lines up with the
+# Linux ones in the eventual GitHub Release.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Optional release version override. Defaults to the VERSION file in the repository.
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  resolve-version:
+    name: Resolve release version
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Resolve version
+        id: resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+          source packaging/release/version.sh
+          version="$(resolve_release_version '${{ inputs.version }}')"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  build-macos-dmg:
+    name: Build, sign, notarize macOS DMG
+    runs-on: macos-26
+    needs: resolve-version
+
+    env:
+      # The display name of the Developer ID Application certificate
+      # imported by the "Set up signing keychain" step. Has to match
+      # exactly the certificate's common name, including the team-id
+      # suffix in parens (e.g. "Developer ID Application: First Last
+      # (ABC12DEF34)"). Stored in the repo's Actions secrets.
+      MACOS_DEVELOPER_ID_APPLICATION: ${{ secrets.MACOS_DEVELOPER_ID_APPLICATION }}
+      # App-specific password issued from appleid.apple.com → Sign-in
+      # & Security → App-Specific Passwords. NOT the Apple ID account
+      # password — that one won't work and would expose a more
+      # sensitive credential needlessly.
+      MACOS_NOTARIZATION_APPLE_ID: ${{ secrets.MACOS_NOTARIZATION_APPLE_ID }}
+      MACOS_NOTARIZATION_TEAM_ID: ${{ secrets.MACOS_NOTARIZATION_TEAM_ID }}
+      MACOS_NOTARIZATION_APP_PASSWORD: ${{ secrets.MACOS_NOTARIZATION_APP_PASSWORD }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      # Match what ci.yml + local dev use. Xcode 26.4.1 ships Swift
+      # 6.3, the toolchain Package.swift's swift-tools-version pins.
+      - name: Select Xcode 26.4.1
+        run: sudo xcode-select -s /Applications/Xcode_26.4.1.app
+
+      - name: Install GTK + libspelling stack + dylibbundler via Homebrew
+        run: |
+          brew install \
+            libadwaita \
+            gtksourceview5 \
+            libspelling \
+            pkgconf \
+            dylibbundler \
+            pipx
+
+      # `dmgbuild` (not `create-dmg` or raw `hdiutil`) writes the
+      # `.DS_Store` directly via the `ds_store` Python module, so the
+      # background-image + icon-position customisation reliably ends
+      # up in the produced DMG. The AppleScript-driven approach
+      # `create-dmg` uses goes through Finder, and Finder writes
+      # `.DS_Store` asynchronously on macOS Tahoe — on a fair fraction
+      # of runs the script unmounts before Finder finishes flushing,
+      # which results in a DMG with no background visible to the
+      # user. Avoid the problem entirely with the Python tool.
+      - name: Install dmgbuild
+        run: |
+          pipx install dmgbuild
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      # Imports the Developer ID Application certificate (+ private key
+      # both packed in a .p12) into a fresh, ephemeral keychain that
+      # exists only for this job. The keychain is unlocked with a
+      # random password we generate per-run (so a stolen workflow log
+      # gives an attacker nothing) and added to the search list so
+      # `codesign` finds the identity by name.
+      #
+      # `security set-keychain-settings -lut 3600` makes the keychain
+      # auto-lock after an hour of idle, defense-in-depth against the
+      # rare case of a runner getting reused.
+      - name: Set up signing keychain
+        env:
+          MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          MACOS_CERTIFICATE_P12_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_P12_PASSWORD }}
+        run: |
+          set -euo pipefail
+          KEYCHAIN_PATH="$RUNNER_TEMP/sign.keychain-db"
+          KEYCHAIN_PASSWORD="$(uuidgen)"
+          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+          echo "::add-mask::$KEYCHAIN_PASSWORD"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 3600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          # Decode and import the .p12.
+          P12_PATH="$RUNNER_TEMP/sign.p12"
+          echo -n "$MACOS_CERTIFICATE_P12_BASE64" | base64 --decode -o "$P12_PATH"
+          security import "$P12_PATH" \
+            -k "$KEYCHAIN_PATH" \
+            -P "$MACOS_CERTIFICATE_P12_PASSWORD" \
+            -T /usr/bin/codesign \
+            -T /usr/bin/security \
+            -T /usr/bin/productbuild
+          rm -f "$P12_PATH"
+
+          # Allow `codesign` to use the imported key without an
+          # interactive password prompt — the keychain itself is
+          # already unlocked above.
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PASSWORD" \
+            "$KEYCHAIN_PATH"
+
+          # Prepend our keychain to the default search list so
+          # codesign finds the identity before checking the (empty)
+          # login keychain.
+          security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | tr -d '"')
+
+          # Sanity check — the identity has to be visible by name.
+          security find-identity -p codesigning -v "$KEYCHAIN_PATH"
+
+      # Production Release build. Ad-hoc signed for now; we re-sign
+      # with the Developer ID identity after the bundle step. Letting
+      # Xcode sign with Developer ID directly would require Xcode to
+      # match the identity automatically, and any "search keychain by
+      # team" mismatch with the temp keychain becomes annoying to
+      # diagnose. The script-based two-stage approach is what GIMP /
+      # Inkscape / krita-macos all do for the same reason.
+      - name: Build Release .app
+        run: |
+          xcodebuild \
+            -project packaging/macos/swiftynotes.xcodeproj \
+            -scheme swiftynotes \
+            -configuration Release \
+            -destination 'platform=macOS' \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            CODE_SIGN_IDENTITY=- \
+            CODE_SIGN_STYLE=Manual \
+            DEVELOPMENT_TEAM= \
+            build
+
+      - name: Vendor Homebrew dylibs into the .app
+        run: |
+          APP_PATH="$RUNNER_TEMP/DerivedData/Build/Products/Release/swiftynotes.app"
+          ./scripts/bundle-macos-app.sh "$APP_PATH"
+          echo "APP_PATH=$APP_PATH" >> "$GITHUB_ENV"
+
+      # `bundle-macos-app.sh` ad-hoc-signs the bundle at the end of
+      # its run; that signature is good enough to launch locally but
+      # gets rejected by notarytool. Re-sign every Mach-O in the
+      # bundle (executable + every vendored dylib + every gdk-pixbuf
+      # loader) with the Developer ID identity, Hardened Runtime
+      # enabled, and the disable-library-validation entitlement. Sign
+      # inside-out: dylibs first, then the .app itself.
+      #
+      # `--options runtime` is what makes Hardened Runtime stick;
+      # without it notarytool rejects the bundle with
+      # "The executable does not have the hardened runtime enabled".
+      #
+      # `--timestamp` requests a trusted timestamp from Apple, also
+      # mandatory for notarization.
+      - name: Re-sign with Developer ID + Hardened Runtime
+        run: |
+          set -euo pipefail
+          APP="$APP_PATH"
+          IDENTITY="$MACOS_DEVELOPER_ID_APPLICATION"
+          ENTITLEMENTS="packaging/macos/swiftynotes.entitlements"
+
+          # Sign every dylib / .so first (deepest first so containing
+          # bundles end up consistent). `find -depth` walks the tree
+          # leaf-to-root, which is the right order for re-signing.
+          find "$APP/Contents/Frameworks" "$APP/Contents/Resources/lib" \
+              -type f \( -name '*.dylib' -o -name '*.so' \) \
+              -print0 \
+            | while IFS= read -r -d '' file; do
+                codesign --force \
+                  --sign "$IDENTITY" \
+                  --options runtime \
+                  --timestamp \
+                  "$file"
+              done
+
+          # Then sign the .app itself (with entitlements applied to
+          # the main executable). `--deep` would re-cover the dylibs
+          # we just signed but with no per-binary entitlement file,
+          # which is correct (entitlements live on the main binary;
+          # dylibs inherit by being inside a signed bundle).
+          codesign --force --deep \
+            --sign "$IDENTITY" \
+            --options runtime \
+            --timestamp \
+            --entitlements "$ENTITLEMENTS" \
+            "$APP"
+
+          # Verify the result locally before paying the round-trip
+          # cost of submitting to notarytool.
+          codesign --verify --verbose=4 --strict "$APP"
+          codesign --display --verbose=4 "$APP"
+
+      # Apple's notarization service. `notarytool submit --wait`
+      # blocks until the service returns a verdict, which is what we
+      # want in CI; otherwise we'd have to poll and retry. The
+      # uploaded artifact has to be a zip (notarytool rejects bare
+      # .app directories), so wrap it with `ditto` first.
+      - name: Notarize the .app
+        run: |
+          set -euo pipefail
+          NOTARY_ZIP="$RUNNER_TEMP/swiftynotes-notarize.zip"
+          ditto -c -k --keepParent "$APP_PATH" "$NOTARY_ZIP"
+
+          xcrun notarytool submit "$NOTARY_ZIP" \
+            --apple-id "$MACOS_NOTARIZATION_APPLE_ID" \
+            --team-id "$MACOS_NOTARIZATION_TEAM_ID" \
+            --password "$MACOS_NOTARIZATION_APP_PASSWORD" \
+            --wait
+
+      # Stapling embeds the notary ticket into the bundle so
+      # Gatekeeper can verify it offline. Without this, every
+      # first-launch on a user machine has to contact Apple's notary
+      # service to validate — works online, fails behind a captive
+      # portal or firewall.
+      - name: Staple notarization ticket to the .app
+        run: |
+          xcrun stapler staple "$APP_PATH"
+          xcrun stapler validate "$APP_PATH"
+
+      # Wrap the signed+stapled .app into a compressed DMG with a
+      # drag-to-install layout: app icon on the left, Applications
+      # alias on the right, a dashed arrow on the background image
+      # between them. Settings live in
+      # `packaging/macos/dmgbuild-settings.py`; the 1× background
+      # PNG in `packaging/macos/dmg-background.png` was rendered
+      # locally with `scripts/render-dmg-background.py` and checked
+      # in so CI doesn't need PIL + the system Helvetica font.
+      #
+      # The .app is renamed to "Swifty Notes.app" inside the DMG so
+      # when the user drops it onto /Applications they end up with
+      # the conventionally-named `/Applications/Swifty Notes.app`,
+      # matching the user-facing CFBundleDisplayName. The on-disk
+      # Xcode bundle stays `swiftynotes.app` (PRODUCT_NAME at the
+      # target level) — only the in-DMG copy is renamed.
+      #
+      # We then code-sign the DMG itself so direct downloads (not
+      # via the App Store) also pass Gatekeeper cleanly.
+      - name: Build DMG
+        id: build-dmg
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.resolve-version.outputs.version }}"
+          DMG_NAME="swifty-notes-gtk-${VERSION}-macos-arm64.dmg"
+          DMG_PATH="$RUNNER_TEMP/$DMG_NAME"
+
+          dmgbuild \
+            -s packaging/macos/dmgbuild-settings.py \
+            -D app="$APP_PATH" \
+            -D background=packaging/macos/dmg-background.png \
+            "Swifty Notes" \
+            "$DMG_PATH"
+
+          codesign --force \
+            --sign "$MACOS_DEVELOPER_ID_APPLICATION" \
+            --timestamp \
+            "$DMG_PATH"
+
+          echo "dmg-path=$DMG_PATH" >> "$GITHUB_OUTPUT"
+          echo "dmg-name=$DMG_NAME" >> "$GITHUB_OUTPUT"
+
+      # Apple recommends notarizing both the .app and the DMG. The
+      # .app's stapled ticket would actually be enough for Gatekeeper
+      # on first launch, but a DMG opened from "Downloads" gets its
+      # OWN Gatekeeper check (against the disk image), which a
+      # notarized + stapled DMG passes silently.
+      - name: Notarize the DMG
+        run: |
+          xcrun notarytool submit "${{ steps.build-dmg.outputs.dmg-path }}" \
+            --apple-id "$MACOS_NOTARIZATION_APPLE_ID" \
+            --team-id "$MACOS_NOTARIZATION_TEAM_ID" \
+            --password "$MACOS_NOTARIZATION_APP_PASSWORD" \
+            --wait
+
+      - name: Staple notarization ticket to the DMG
+        run: |
+          xcrun stapler staple "${{ steps.build-dmg.outputs.dmg-path }}"
+          xcrun stapler validate "${{ steps.build-dmg.outputs.dmg-path }}"
+
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.build-dmg.outputs.dmg-name }}
+          path: ${{ steps.build-dmg.outputs.dmg-path }}
+
+      # Always remove the keychain even on failure — the runner may
+      # be reused for other jobs (unlikely on hosted runners but free
+      # safety on self-hosted). `|| true` keeps the cleanup from
+      # masking a prior step's failure.
+      - name: Clean up signing keychain
+        if: always()
+        run: |
+          security delete-keychain "$KEYCHAIN_PATH" || true
