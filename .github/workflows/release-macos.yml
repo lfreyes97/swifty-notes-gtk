@@ -69,10 +69,20 @@ jobs:
         run: sudo xcode-select -s /Applications/Xcode_26.4.1.app
 
       - name: Install GTK + libspelling stack + dylibbundler via Homebrew
+        # `adwaita-icon-theme` is NOT pulled in transitively by
+        # libadwaita on Homebrew, so we have to ask for it explicitly
+        # — `scripts/bundle-macos-app.sh` copies `/opt/homebrew/share/
+        # icons/Adwaita/` into `Contents/Resources/icons/`, and that
+        # directory simply doesn't exist on a runner where the formula
+        # was never installed (rsync fails with exit 23, the "files
+        # could not be transferred" code). The local-dev README also
+        # lists it under macOS prerequisites; CI just needs to mirror
+        # that list.
         run: |
           brew install \
             libadwaita \
             gtksourceview5 \
+            adwaita-icon-theme \
             libspelling \
             pkgconf \
             dylibbundler \
