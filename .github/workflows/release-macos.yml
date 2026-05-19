@@ -162,13 +162,26 @@ jobs:
       # diagnose. The script-based two-stage approach is what GIMP /
       # Inkscape / krita-macos all do for the same reason.
       - name: Build Release .app
+        env:
+          VERSION: ${{ needs.resolve-version.outputs.version }}
         run: |
+          # `MARKETING_VERSION` flows into Info.plist's
+          # `CFBundleShortVersionString` (user-visible version in Finder's
+          # Get Info, the About dialog, and the update checker's
+          # comparison base). The xcodeproj has `MARKETING_VERSION = 1.0`
+          # baked in as a fallback for local builds; every CI build
+          # overrides it with the resolved release version so the produced
+          # DMG matches the tag/input. `CURRENT_PROJECT_VERSION`
+          # (CFBundleVersion) moves with it — both must agree, otherwise
+          # notarytool occasionally flags stale build numbers on re-uploads.
           xcodebuild \
             -project packaging/macos/swiftynotes.xcodeproj \
             -scheme swiftynotes \
             -configuration Release \
             -destination 'platform=macOS' \
             -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            MARKETING_VERSION="$VERSION" \
+            CURRENT_PROJECT_VERSION="$VERSION" \
             CODE_SIGN_IDENTITY=- \
             CODE_SIGN_STYLE=Manual \
             DEVELOPMENT_TEAM= \
