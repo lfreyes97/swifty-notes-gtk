@@ -557,19 +557,117 @@ extension MainWindow {
             // `selectionMode = .single` stays on ListBox so the visual
             // selection highlight still happens through ListBox's own
             // machinery — we only override the activation half.
-            let primaryClick = GestureClick()
-            primaryClick.button = 1
-            gtk_event_controller_set_propagation_phase(primaryClick.opaquePointer, GTK_PHASE_CAPTURE)
-            row.addController(primaryClick)
-            primaryClick.onPressed { [weak primaryClick] _, _, _ in
-                guard let primaryClick else { return }
-                gtk_gesture_set_state(primaryClick.opaquePointer, GTK_EVENT_SEQUENCE_CLAIMED)
-            }
-            primaryClick.onReleased { [weak self] _, _, _ in
-                self?.requestActivateSidebarRow(at: index)
-            }
+            // Row click pipeline: same CAPTURE-phase claim + 250 ms
+            // watchdog the `MacOSClickWorkaround` button helper uses,
+            // plus an `EventControllerMotion` that hands the
+            // sequence back to DragSource when the cursor moves
+            // past the drag threshold. Without that motion check,
+            // the watchdog would fire before a drag could start —
+            // every drag attempt would turn into a row activation,
+            // which is what the original sidebar fix avoided by
+            // gating DragSource off entirely on macOS.
+            let rowLabel = "SidebarRow[\(index)]"
+            attachDragAwareRowClick(
+                to: row,
+                label: rowLabel,
+                onRelease: { [weak self] in
+                    self?.requestActivateSidebarRow(at: index)
+                },
+            )
             #endif
         }
         attachSidebarDnD()
     }
+
+    #if os(macOS)
+    /// Like `MacOSClickWorkaround.attachReleaseHandler` (CAPTURE-phase
+    /// gesture + CLAIM on press + watchdog) but additionally installs
+    /// a parallel `EventControllerMotion` that hands the sequence
+    /// back to DragSource the moment cursor motion exceeds the drag
+    /// threshold. Used only for sidebar rows because they're the
+    /// only widgets in the app that have a DragSource attached;
+    /// regular toolbar / banner buttons keep the simpler
+    /// click-only helper.
+    private func attachDragAwareRowClick(
+        to row: ListBoxRow,
+        label: String,
+        onRelease: @escaping @MainActor () -> Void,
+    ) {
+        let click = GestureClick()
+        click.button = 1
+        let gesturePtr = click.opaquePointer
+        gtk_event_controller_set_propagation_phase(gesturePtr, GTK_PHASE_CAPTURE)
+        row.addController(click)
+
+        let motion = EventControllerMotion()
+        row.addController(motion)
+
+        let state = SidebarRowClickState()
+
+        click.onPressed { [weak row] _, x, y in
+            MacOSClickWorkaround.debugLog(label: label, widget: row, event: "capture-pressed (\(x),\(y))")
+            state.pressed = true
+            state.fired = false
+            state.dragging = false
+            state.startX = x
+            state.startY = y
+            state.workItem?.cancel()
+            let workItem = DispatchWorkItem {
+                MainActor.assumeIsolated {
+                    guard !state.fired, !state.dragging else { return }
+                    state.fired = true
+                    MacOSClickWorkaround.debugLog(label: label, widget: row, event: "WATCHDOG-FIRED")
+                    onRelease()
+                }
+            }
+            state.workItem = workItem
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: workItem)
+        }
+
+        click.onReleased { [weak row] _, _, _ in
+            state.pressed = false
+            state.workItem?.cancel()
+            guard !state.fired, !state.dragging else {
+                MacOSClickWorkaround.debugLog(label: label, widget: row, event: "released ignored (fired=\(state.fired) dragging=\(state.dragging))")
+                return
+            }
+            state.fired = true
+            MacOSClickWorkaround.debugLog(label: label, widget: row, event: "capture-released")
+            onRelease()
+        }
+
+        motion.onMotion { [weak row] x, y in
+            guard state.pressed, !state.fired, !state.dragging else { return }
+            let dx = x - state.startX
+            let dy = y - state.startY
+            // 16 px² = 4 px straight-line drift threshold. Matches
+            // GTK's default `gtk-dnd-drag-threshold` (8 px) closely
+            // enough that humans don't perceive a different feel,
+            // and slightly tighter so we hand off to DragSource a
+            // fraction of a millimetre earlier — giving the
+            // drag-begin animation a touch more lead time.
+            if dx * dx + dy * dy > 16 {
+                state.dragging = true
+                state.workItem?.cancel()
+                // Explicitly DENY our gesture so DragSource picks up
+                // the sequence cleanly. Without the prior CLAIM in
+                // place this is mostly belt-and-suspenders, but it
+                // does the right thing if GTK ever changes how it
+                // resolves competing controllers.
+                gtk_gesture_set_state(gesturePtr, GTK_EVENT_SEQUENCE_DENIED)
+                MacOSClickWorkaround.debugLog(label: label, widget: row, event: "DRAG-DETECTED dx=\(dx) dy=\(dy) → DENIED")
+            }
+        }
+    }
+
+    @MainActor
+    private final class SidebarRowClickState {
+        var pressed = false
+        var fired = false
+        var dragging = false
+        var startX: Double = 0
+        var startY: Double = 0
+        var workItem: DispatchWorkItem?
+    }
+    #endif
 }

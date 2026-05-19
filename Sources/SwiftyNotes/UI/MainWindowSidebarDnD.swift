@@ -56,27 +56,26 @@ extension MainWindow {
             case .trashHeader, .trashedNote:
                 continue
             }
-            #if !os(macOS)
-            // macOS-only diagnostic gate: GtkDragSource on the Quartz
-            // backend intercepts the very first pointer-press on the
-            // row, holding it for drag-vs-click disambiguation. The
-            // disambiguation never resolves to "click" on the first
-            // attempt — the row highlights but `row-activated` never
-            // fires, so the note doesn't open. Clicking a second time
-            // (after the previous press is released) lets ListBox's
-            // own click handler win. Same broken interaction shows
-            // up for right-click → Delete and is the root cause of
-            // the "sidebar locks up while the toast is animating"
-            // symptom too.
+            // The original sidebar fix (7e598e9) gated this with
+            // `#if !os(macOS)` because GtkDragSource on Quartz was
+            // eating the first click on every row (the disambiguator
+            // never resolved press → click on the first try). We've
+            // since rebuilt the row click pipeline to:
             //
-            // Drag-to-reorder is unfortunately the price on macOS
-            // until we find a way to teach DragSource to keep its
-            // hands off the first press until actual motion crosses
-            // a threshold. The right-click context menu still
-            // exposes Move-to-folder, so workflow-wise the gap is
-            // limited to drag-and-drop reordering.
+            //   1. claim the sequence on press in CAPTURE phase, so
+            //      Quartz's drag-disambiguator can't grab it;
+            //   2. fire on release (or via a watchdog timer if the
+            //      release was dropped on a fast click); and
+            //   3. install a parallel `EventControllerMotion` that
+            //      hands the sequence back to DragSource the moment
+            //      cursor motion exceeds the drag threshold (see
+            //      `MainWindowNotes` sidebar-row gesture setup).
+            //
+            // With that coordination in place, attaching a
+            // DragSource is safe on macOS again — click and drag
+            // coexist and the user can drop a note onto another
+            // folder.
             attachDragSource(to: row, payload: payload)
-            #endif
 
             if case let .folder(folder) = item {
                 attachDropTarget(to: row, destinationFolder: folder.path)
@@ -85,11 +84,13 @@ extension MainWindow {
         attachRootDropTarget()
     }
 
-    private func attachDragSource(to row: ListBoxRow, payload: SidebarDragPayload) {
+    @discardableResult
+    func attachDragSource(to row: ListBoxRow, payload: SidebarDragPayload) -> DragSource {
         let source = DragSource()
         source.actions = GDK_ACTION_MOVE
         source.setTextContent(payload.encoded)
         row.addController(source)
+        return source
     }
 
     private func attachDropTarget(to row: ListBoxRow, destinationFolder: String) {

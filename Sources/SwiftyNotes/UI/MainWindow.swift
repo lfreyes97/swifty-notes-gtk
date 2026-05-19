@@ -392,7 +392,7 @@ final class MainWindow {
             setSortMode(sortMode)
         }
 
-        MacOSClickWorkaround.onClick(sidebarToggle) { [weak self] in
+        MacOSClickWorkaround.onClick(sidebarToggle, label: "SidebarToggle") { [weak self] in
             self?.toggleSidebarVisibility()
         }
 
@@ -401,32 +401,32 @@ final class MainWindow {
         // `togglesActive: false` so the macOS path forces `active = true`
         // on release rather than flipping it; the `onToggled` handler
         // below stays the single source of truth for applying the mode.
-        MacOSClickWorkaround.onToggle(editorModeToggle, togglesActive: false) { [weak self] in
+        MacOSClickWorkaround.onToggle(editorModeToggle, togglesActive: false, label: "EditorModeToggle") { [weak self] in
             guard let self, !self.suppressViewModeToggleChange, editorModeToggle.active else { return }
             setViewMode(.editor, animated: false)
         }
-        MacOSClickWorkaround.onToggle(splitModeToggle, togglesActive: false) { [weak self] in
+        MacOSClickWorkaround.onToggle(splitModeToggle, togglesActive: false, label: "SplitModeToggle") { [weak self] in
             guard let self, !self.suppressViewModeToggleChange, splitModeToggle.active else { return }
             setViewMode(.split, animated: false)
         }
-        MacOSClickWorkaround.onToggle(previewModeToggle, togglesActive: false) { [weak self] in
+        MacOSClickWorkaround.onToggle(previewModeToggle, togglesActive: false, label: "PreviewModeToggle") { [weak self] in
             guard let self, !self.suppressViewModeToggleChange, previewModeToggle.active else { return }
             setViewMode(.preview, animated: false)
         }
 
-        MacOSClickWorkaround.onClick(newNoteButton) { [weak self] in
+        MacOSClickWorkaround.onClick(newNoteButton, label: "NewNote") { [weak self] in
             self?.requestCreateNote()
         }
-        MacOSClickWorkaround.onClick(newFolderButton) { [weak self] in
+        MacOSClickWorkaround.onClick(newFolderButton, label: "NewFolder") { [weak self] in
             self?.presentNewFolderDialog(parentPath: "")
         }
-        MacOSClickWorkaround.onClick(saveNoteButton) { [weak self] in
+        MacOSClickWorkaround.onClick(saveNoteButton, label: "Save") { [weak self] in
             self?.saveSelectedNoteNow()
         }
-        MacOSClickWorkaround.onClick(deleteNoteButton) { [weak self] in
+        MacOSClickWorkaround.onClick(deleteNoteButton, label: "Delete") { [weak self] in
             self?.presentDeleteConfirmationForSelectedNote()
         }
-        MacOSClickWorkaround.onMenuButtonPress(menuButton)
+        MacOSClickWorkaround.onMenuButtonPress(menuButton, label: "HamburgerMenu")
 
         editor.view.onChanged { [weak self] in
             guard let self, !self.suppressEditorChange else { return }
