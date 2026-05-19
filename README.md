@@ -146,6 +146,33 @@ swift run swiftynotes cli move <note-id> --folder Personal
 swift run swiftynotes cli update <note-id> --stdin
 ```
 
+If you installed the macOS DMG into `/Applications/Swifty Notes.app`,
+invoke the executable directly from the bundle — the CLI path exits
+before any GTK initialisation, so it works without `XDG_DATA_DIRS` or a
+graphical session:
+
+```bash
+"/Applications/Swifty Notes.app/Contents/MacOS/swiftynotes" cli list
+"/Applications/Swifty Notes.app/Contents/MacOS/swiftynotes" cli get <note-id>
+"/Applications/Swifty Notes.app/Contents/MacOS/swiftynotes" cli create --content '# Title\n\nBody'
+```
+
+Same wrapper idea as below works for a short host command:
+
+```bash
+mkdir -p ~/.local/bin
+cat > ~/.local/bin/swiftynotes <<'EOF'
+#!/bin/sh
+exec "/Applications/Swifty Notes.app/Contents/MacOS/swiftynotes" "$@"
+EOF
+chmod +x ~/.local/bin/swiftynotes
+```
+
+After that, `swiftynotes cli ...` works from any terminal once
+`~/.local/bin` (or wherever you put the wrapper, e.g. `/usr/local/bin`)
+is on your `PATH`. The macOS CLI reads from and writes to the same
+notes folder configured in the GUI's Settings → Notes folder.
+
 If you installed from Flathub, use the Flatpak form:
 
 ```bash
