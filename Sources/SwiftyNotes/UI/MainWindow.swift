@@ -20,9 +20,14 @@ final class MainWindow {
     /// the breadcrumb don't have to re-parse the markdown on every
     /// scroll tick. Refreshed by ``refreshOutline(markdown:blocks:)``.
     var currentHeadings: [Heading] = []
-    /// Recent-jumps in-memory store backing the Ctrl+G palette
-    /// (Phase 5). Persisted in Phase 9.
+    /// Recent-jumps in-memory store backing the Ctrl+G palette.
+    /// Reset to the per-note persisted history whenever the active
+    /// note changes.
     var outlineRecentJumps = RecentJumps()
+    /// Tracks the active note across `refreshOutline` calls so we
+    /// know when to hydrate the panel from the persisted per-note
+    /// state. `nil` until the first refresh after a note is selected.
+    var currentOutlineNoteID: UUID?
     /// Built lazily in `wireSignals` (deferred so the editor / preview
     /// widget trees are constructed before we connect signals to them).
     var outlineScrollSpyDriver: OutlineScrollSpyDriver?
@@ -469,9 +474,13 @@ final class MainWindow {
             guard let self else { return }
             outlineSidebar.setQuery(outlineSidebar.searchEntry.text)
         }
-        // H2 chevron click — re-renders the visible row list.
+        // H2 chevron click — re-renders the visible row list, then
+        // mirrors the new collapsed set into AppState so it survives
+        // a note switch + relaunch.
         outlineSidebar.onToggleCollapsed { [weak self] id in
-            self?.outlineSidebar.toggleCollapsed(id)
+            guard let self else { return }
+            outlineSidebar.toggleCollapsed(id)
+            persistOutlineStateForCurrentNote()
         }
 
         // Lazy scroll-spy bind. Done here (rather than in init) so the

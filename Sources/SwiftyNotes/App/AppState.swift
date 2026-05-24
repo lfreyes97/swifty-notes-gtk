@@ -19,6 +19,10 @@ public final class AppState {
     public var lastTableAlignments: [MarkdownTableAlignment]
     public var isTrashExpanded: Bool
     public var isOutlineVisible: Bool
+    /// In-memory mirror of `WorkspaceState.collapsedOutlineSections` keyed by note id.
+    public var collapsedOutlineSections: [UUID: Set<String>]
+    /// In-memory mirror of `WorkspaceState.recentOutlineJumps` keyed by note id.
+    public var recentOutlineJumps: [UUID: [String]]
 
     public var isPreviewVisible: Bool {
         viewMode.isPreviewVisible
@@ -43,6 +47,18 @@ public final class AppState {
         expandedFolders = Set(persistedState.expandedFolders)
         isTrashExpanded = persistedState.isTrashExpanded
         isOutlineVisible = persistedState.isOutlineVisible
+        collapsedOutlineSections = Self.decodeNoteKeyed(persistedState.collapsedOutlineSections).mapValues(Set.init)
+        recentOutlineJumps = Self.decodeNoteKeyed(persistedState.recentOutlineJumps)
+    }
+
+    private static func decodeNoteKeyed<T>(_ raw: [String: T]) -> [UUID: T] {
+        var out: [UUID: T] = [:]
+        for (key, value) in raw {
+            if let id = UUID(uuidString: key) {
+                out[id] = value
+            }
+        }
+        return out
     }
 
     public func setLastTableSize(rows: Int, cols: Int, alignments: [MarkdownTableAlignment]) {
@@ -150,6 +166,12 @@ public final class AppState {
             expandedFolders: expandedFolders.sorted(),
             isTrashExpanded: isTrashExpanded,
             isOutlineVisible: isOutlineVisible,
+            collapsedOutlineSections: collapsedOutlineSections.reduce(into: [String: [String]]()) { result, entry in
+                result[entry.key.uuidString] = Array(entry.value).sorted()
+            },
+            recentOutlineJumps: recentOutlineJumps.reduce(into: [String: [String]]()) { result, entry in
+                result[entry.key.uuidString] = entry.value
+            },
         )
     }
 

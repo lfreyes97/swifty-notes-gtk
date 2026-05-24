@@ -43,6 +43,7 @@ extension MainWindow {
             onPick: { [weak self] id in
                 guard let self else { return }
                 outlineRecentJumps.record(id)
+                persistOutlineStateForCurrentNote()
                 if let heading = currentHeadings.first(where: { $0.id == id }) {
                     scrollToHeading(heading)
                 }
@@ -54,14 +55,56 @@ extension MainWindow {
     /// Re-extracts the outline for the current note and pushes the
     /// resulting headings into ``outlineSidebar``. Called from
     /// ``refreshPreview`` so the panel stays in lockstep with the
-    /// preview's view of the document.
+    /// preview's view of the document. When the active note changes,
+    /// hydrates per-note collapse + recent-jumps state from
+    /// ``AppState`` so the user's last-session structure survives a
+    /// note switch.
     func refreshOutline(markdown: String, blocks: [RenderedBlock]) {
+        let activeNoteID = state.selectedNote?.id
+        if activeNoteID != currentOutlineNoteID {
+            // Note transition. Persist any in-memory state from the
+            // outgoing note (in case the user collapsed something
+            // moments before switching), then hydrate the incoming
+            // one from `AppState`.
+            persistOutgoingOutlineState()
+            currentOutlineNoteID = activeNoteID
+            hydrateOutlineForCurrentNote()
+        }
+
         let headings = MarkdownOutlineExtractor.extract(markdown: markdown, blocks: blocks)
-        outlineSidebar.render(headings: headings)
+        outlineSidebar.setHeadings(headings)
         currentHeadings = headings
-        // Reset the breadcrumb to the doc title with no active section
-        // until the next scroll-spy tick decides what's currently in view.
         refreshBreadcrumb()
+    }
+
+    private func persistOutgoingOutlineState() {
+        guard let noteID = currentOutlineNoteID else { return }
+        state.collapsedOutlineSections[noteID] = outlineSidebar.collapsedSections
+        state.recentOutlineJumps[noteID] = outlineRecentJumps.ids
+        persistStateBestEffort()
+    }
+
+    /// Same shape as ``persistOutgoingOutlineState`` but for the
+    /// currently active note. Called from chevron-toggle / palette
+    /// pick handlers so the JSON on disk catches the change before
+    /// the user switches notes / quits the app.
+    func persistOutlineStateForCurrentNote() {
+        guard let noteID = state.selectedNote?.id else { return }
+        state.collapsedOutlineSections[noteID] = outlineSidebar.collapsedSections
+        state.recentOutlineJumps[noteID] = outlineRecentJumps.ids
+        persistStateBestEffort()
+    }
+
+    private func hydrateOutlineForCurrentNote() {
+        guard let noteID = currentOutlineNoteID else {
+            outlineSidebar.setCollapsedSections([])
+            outlineRecentJumps = RecentJumps()
+            return
+        }
+        let collapsed = state.collapsedOutlineSections[noteID] ?? []
+        outlineSidebar.setCollapsedSections(collapsed)
+        let recentIDs = state.recentOutlineJumps[noteID] ?? []
+        outlineRecentJumps = RecentJumps(ids: recentIDs)
     }
 
     /// Sync the breadcrumb's three segments with the current heading
@@ -152,5 +195,9 @@ extension MainWindow {
     var debugIsOutlineVisible: Bool { outlineSplitView.showSidebar }
     var debugAppStateIsOutlineVisible: Bool { state.isOutlineVisible }
     func debugToggleOutline() { toggleOutlineVisibility() }
+    var debugAppState: AppState { state }
+    var debugSelectedNoteID: UUID? { state.selectedNote?.id }
+    var debugOutlineRecentIDs: [String] { outlineRecentJumps.ids }
+    func debugResetOutlineNoteID() { currentOutlineNoteID = nil }
 }
 #endif

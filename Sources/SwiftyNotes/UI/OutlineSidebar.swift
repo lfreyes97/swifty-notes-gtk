@@ -122,6 +122,15 @@ struct OutlineSidebar {
         rerender()
     }
 
+    /// Replace the collapsed-set wholesale. Used by ``MainWindow`` to
+    /// hydrate from persisted per-note state on a note transition.
+    /// Re-renders so the visible row list reflects the new mask
+    /// immediately.
+    func setCollapsedSections(_ set: Set<String>) {
+        renderState.collapsed = set
+        rerender()
+    }
+
     /// Flip the collapsed flag for an H2 section. No-op on other levels.
     func toggleCollapsed(_ id: String) {
         guard renderState.allHeadings.contains(where: { $0.id == id && $0.level == 2 }) else { return }

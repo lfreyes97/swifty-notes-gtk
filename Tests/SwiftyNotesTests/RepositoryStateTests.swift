@@ -962,6 +962,50 @@ struct RepositoryStateTests {
     }
 
     @Test
+    func `workspace state round trips per-note outline collapse + recents`() throws {
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let store = WorkspaceStateStore(
+            stateFileURL: temp.appendingPathComponent("workspace.json", isDirectory: false),
+        )
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let noteA = UUID()
+        let noteB = UUID()
+        let saved = WorkspaceState(
+            collapsedOutlineSections: [
+                noteA.uuidString: ["overview", "features"],
+                noteB.uuidString: [],
+            ],
+            recentOutlineJumps: [
+                noteA.uuidString: ["overview", "goals"],
+                noteB.uuidString: ["intro"],
+            ],
+        )
+        try store.save(saved)
+        let loaded = try store.load()
+        #expect(Set(loaded.collapsedOutlineSections[noteA.uuidString] ?? []) == ["overview", "features"])
+        #expect(loaded.recentOutlineJumps[noteA.uuidString] == ["overview", "goals"])
+        #expect(loaded.recentOutlineJumps[noteB.uuidString] == ["intro"])
+    }
+
+    @Test
+    func `workspace state defaults the new outline-persistence maps for legacy payloads`() throws {
+        let data = Data("""
+        {
+          "selectedNoteID": null,
+          "isPreviewVisible": true,
+          "searchQuery": "legacy",
+          "sortMode": "newestFirst",
+          "windowWidth": 1200,
+          "windowHeight": 800
+        }
+        """.utf8)
+        let decoded = try JSONDecoder().decode(WorkspaceState.self, from: data)
+        #expect(decoded.collapsedOutlineSections.isEmpty)
+        #expect(decoded.recentOutlineJumps.isEmpty)
+    }
+
+    @Test
     func `workspace state round trips isOutlineVisible`() throws {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         let store = WorkspaceStateStore(

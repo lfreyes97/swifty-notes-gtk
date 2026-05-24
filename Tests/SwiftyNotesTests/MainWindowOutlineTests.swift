@@ -95,6 +95,28 @@ struct MainWindowOutlineTests {
     }
 
     @Test @MainActor
+    func `collapse state is hydrated from AppState when the active note changes`() throws {
+        let window = try Self.makeWindow(appID: "me.spaceinbox.swiftynotes.tests.outline.hydrate")
+        window.debugLoadInitialNotes()
+        guard let noteID = window.debugSelectedNoteID else {
+            Issue.record("seed should select a note")
+            return
+        }
+        // Seed AppState directly — that's where note transition hydrates from.
+        window.debugAppState.collapsedOutlineSections[noteID] = ["overview"]
+        window.debugAppState.recentOutlineJumps[noteID] = ["features", "goals"]
+
+        // Force a refresh that simulates a fresh note transition by
+        // clearing the cached current id then re-running refreshPreview.
+        window.debugResetOutlineNoteID()
+        window.debugSetEditorText("# Doc\n\n## Overview\n\n## Features\n\n## Goals\n")
+        _ = window.debugPreviewText
+
+        #expect(window.outlineSidebar.collapsedSections == ["overview"])
+        #expect(window.debugOutlineRecentIDs == ["features", "goals"])
+    }
+
+    @Test @MainActor
     func `outline panel falls back to empty-state when the note has no headings`() throws {
         let window = try Self.makeWindow(appID: "me.spaceinbox.swiftynotes.tests.outline.emptynote")
         window.debugLoadInitialNotes()

@@ -81,6 +81,13 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
     /// users discover the feature without having to enable it from a
     /// menu. The F9 / headerbar toggle persists user-driven changes.
     public var isOutlineVisible: Bool
+    /// Per-note collapsed-H2 outline state, keyed by stringified
+    /// note UUID. Stored as sorted `[String]` (rather than `Set`) so
+    /// the on-disk JSON has a stable ordering across saves.
+    public var collapsedOutlineSections: [String: [String]]
+    /// Per-note Ctrl+G "recent jumps" history, keyed by stringified
+    /// note UUID. Newest-first; capped at ``RecentJumps.cap`` in code.
+    public var recentOutlineJumps: [String: [String]]
 
     public var isPreviewVisible: Bool {
         viewMode.isPreviewVisible
@@ -102,6 +109,8 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
         expandedFolders: [String] = [],
         isTrashExpanded: Bool = false,
         isOutlineVisible: Bool = true,
+        collapsedOutlineSections: [String: [String]] = [:],
+        recentOutlineJumps: [String: [String]] = [:],
     ) {
         self.selectedNoteID = selectedNoteID
         self.isSidebarVisible = isSidebarVisible
@@ -117,6 +126,8 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
         self.expandedFolders = Self.deduplicatedFolderPaths(expandedFolders)
         self.isTrashExpanded = isTrashExpanded
         self.isOutlineVisible = isOutlineVisible
+        self.collapsedOutlineSections = collapsedOutlineSections.mapValues { $0.sorted() }
+        self.recentOutlineJumps = recentOutlineJumps
     }
 
     private static func deduplicatedFolderPaths(_ paths: [String]) -> [String] {
@@ -149,6 +160,8 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
         case expandedFolders
         case isTrashExpanded
         case isOutlineVisible
+        case collapsedOutlineSections
+        case recentOutlineJumps
     }
 
     public init(from decoder: any Decoder) throws {
@@ -173,6 +186,8 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
         )
         isTrashExpanded = try container.decodeIfPresent(Bool.self, forKey: .isTrashExpanded) ?? false
         isOutlineVisible = try container.decodeIfPresent(Bool.self, forKey: .isOutlineVisible) ?? true
+        collapsedOutlineSections = try container.decodeIfPresent([String: [String]].self, forKey: .collapsedOutlineSections) ?? [:]
+        recentOutlineJumps = try container.decodeIfPresent([String: [String]].self, forKey: .recentOutlineJumps) ?? [:]
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -192,5 +207,10 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
         try container.encode(expandedFolders, forKey: .expandedFolders)
         try container.encode(isTrashExpanded, forKey: .isTrashExpanded)
         try container.encode(isOutlineVisible, forKey: .isOutlineVisible)
+        // Stable sort the ids inside each entry so the on-disk JSON
+        // diffs cleanly across saves — the underlying Set is unordered.
+        let stableCollapsed = collapsedOutlineSections.mapValues { $0.sorted() }
+        try container.encode(stableCollapsed, forKey: .collapsedOutlineSections)
+        try container.encode(recentOutlineJumps, forKey: .recentOutlineJumps)
     }
 }
