@@ -462,6 +462,17 @@ final class MainWindow {
             guard let heading = outlineSidebar.heading(at: index) else { return }
             scrollToHeading(heading)
         }
+        // Search filter — SearchEntry already debounces per its
+        // `searchDelay` setting, so we don't need to add another layer
+        // on top.
+        outlineSidebar.searchEntry.onSearchChanged { [weak self] in
+            guard let self else { return }
+            outlineSidebar.setQuery(outlineSidebar.searchEntry.text)
+        }
+        // H2 chevron click — re-renders the visible row list.
+        outlineSidebar.onToggleCollapsed { [weak self] id in
+            self?.outlineSidebar.toggleCollapsed(id)
+        }
 
         // Lazy scroll-spy bind. Done here (rather than in init) so the
         // editor / preview widget trees are fully constructed before

@@ -80,5 +80,68 @@ struct OutlineSidebarTests {
         outline.setActiveHeading(nil)
         #expect(outline.activeHeadingID == nil)
     }
+
+    @Test @MainActor
+    func `setting a query filters the visible rows via OutlineFilter`() throws {
+        let outline = try Self.makeOutline(suffix: "query")
+        outline.setHeadings([
+            .init(id: "doc",      level: 1, text: "Doc",       blockIndex: 0, line: 1),
+            .init(id: "overview", level: 2, text: "Overview",  blockIndex: 1, line: 3),
+            .init(id: "goals",    level: 3, text: "Goals",     blockIndex: 2, line: 5),
+            .init(id: "features", level: 2, text: "Features",  blockIndex: 3, line: 7),
+        ])
+        outline.setQuery("over")
+        #expect(outline.renderedHeadings.map(\.id) == ["overview"])
+        #expect(outline.allHeadings.count == 4) // unfiltered storage unchanged
+        outline.setQuery("")
+        #expect(outline.renderedHeadings.count == 4)
+    }
+
+    @Test @MainActor
+    func `toggling collapse hides H3 children of that H2`() throws {
+        let outline = try Self.makeOutline(suffix: "collapse")
+        outline.setHeadings([
+            .init(id: "overview", level: 2, text: "Overview",  blockIndex: 0, line: 1),
+            .init(id: "goals",    level: 3, text: "Goals",     blockIndex: 1, line: 3),
+            .init(id: "non",      level: 3, text: "Non-goals", blockIndex: 2, line: 5),
+            .init(id: "features", level: 2, text: "Features",  blockIndex: 3, line: 7),
+        ])
+        outline.toggleCollapsed("overview")
+        #expect(outline.collapsedSections.contains("overview"))
+        #expect(outline.renderedHeadings.map(\.id) == ["overview", "features"])
+        outline.toggleCollapsed("overview")
+        #expect(outline.collapsedSections.isEmpty)
+        #expect(outline.renderedHeadings.map(\.id) == ["overview", "goals", "non", "features"])
+    }
+
+    @Test @MainActor
+    func `toggling collapse on non-H2 is a no-op`() throws {
+        let outline = try Self.makeOutline(suffix: "collapse-h3")
+        outline.setHeadings([
+            .init(id: "overview", level: 2, text: "Overview", blockIndex: 0, line: 1),
+            .init(id: "goals",    level: 3, text: "Goals",    blockIndex: 1, line: 3),
+        ])
+        outline.toggleCollapsed("goals")
+        #expect(outline.collapsedSections.isEmpty)
+    }
+
+    @Test @MainActor
+    func `setHeadings prunes collapse entries for removed H2 sections`() throws {
+        let outline = try Self.makeOutline(suffix: "prune")
+        outline.setHeadings([
+            .init(id: "overview", level: 2, text: "Overview", blockIndex: 0, line: 1),
+            .init(id: "features", level: 2, text: "Features", blockIndex: 1, line: 3),
+        ])
+        outline.toggleCollapsed("overview")
+        outline.toggleCollapsed("features")
+        #expect(outline.collapsedSections == ["overview", "features"])
+        // Replace with a new heading set that drops "features" — its
+        // collapse entry should be gone so the set doesn't accumulate
+        // stale ids across edits.
+        outline.setHeadings([
+            .init(id: "overview", level: 2, text: "Overview", blockIndex: 0, line: 1),
+        ])
+        #expect(outline.collapsedSections == ["overview"])
+    }
 }
 #endif
