@@ -42,6 +42,52 @@ extension MainWindow {
     func refreshOutline(markdown: String, blocks: [RenderedBlock]) {
         let headings = MarkdownOutlineExtractor.extract(markdown: markdown, blocks: blocks)
         outlineSidebar.render(headings: headings)
+        currentHeadings = headings
+        // Reset the breadcrumb to the doc title with no active section
+        // until the next scroll-spy tick decides what's currently in view.
+        refreshBreadcrumb()
+    }
+
+    /// Sync the breadcrumb's three segments with the current heading
+    /// list + active id. Pulls the doc title from the selected note
+    /// (falls back to "Swifty Notes" so a heading-less note doesn't
+    /// flash an empty strip).
+    func refreshBreadcrumb() {
+        let title = state.selectedNote?.title ?? ""
+        breadcrumb.update(
+            docTitle: title,
+            headings: currentHeadings,
+            activeID: outlineSidebar.activeHeadingID,
+        )
+    }
+
+    /// Lazy-built scroll-spy driver. Hooked once in `wireSignals` and
+    /// rebound from `applyViewMode` whenever the view mode flips so the
+    /// driver follows the visually dominant scroll target.
+    func makeOutlineScrollSpyDriver() -> OutlineScrollSpyDriver {
+        OutlineScrollSpyDriver(
+            editorScroll: editorScroll,
+            previewScroll: preview.rootScroll,
+            resolveHeadings: { [weak self] in self?.currentHeadings ?? [] },
+            previewPositionsFor: { [weak self] heading in
+                guard let self else { return nil }
+                return OutlinePositions.previewY(for: heading, in: preview.container)
+            },
+            editorPositionsFor: { [weak self] heading in
+                guard let self else { return nil }
+                return OutlinePositions.editorY(
+                    for: heading,
+                    view: editor.view,
+                    buffer: editor.buffer,
+                    scroll: editorScroll,
+                )
+            },
+            onActive: { [weak self] activeID in
+                guard let self else { return }
+                outlineSidebar.setActiveHeading(activeID)
+                refreshBreadcrumb()
+            },
+        )
     }
 
     /// Click / Ctrl+G handler. Scrolls both the editor and the preview

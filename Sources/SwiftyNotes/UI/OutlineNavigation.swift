@@ -40,3 +40,49 @@ enum OutlineNavigation {
 /// call sites read like the underlying API rather than peppering literal
 /// `1`s around.
 private func gtk_true() -> gboolean { 1 }
+
+/// Heading-position queries used by ``OutlineScrollSpyDriver``. Both
+/// return values are in the scroll container's coordinate system so
+/// they can be compared directly against the `verticalAdjustment.value`.
+@MainActor
+enum OutlinePositions {
+    /// Y of the rendered preview block at `heading.blockIndex`,
+    /// relative to the preview's scrolled-window child. Returns `nil`
+    /// when the index is out of bounds (the typing-deferred render
+    /// hasn't committed yet) or the widget has no allocation (the
+    /// preview pane is offscreen).
+    static func previewY(for heading: Heading, in container: Box) -> Double? {
+        let children = container.children()
+        guard children.indices.contains(heading.blockIndex) else { return nil }
+        return widgetY(of: children[heading.blockIndex])
+    }
+
+    /// Y of the source-view iter at `heading.line` (1-based). Uses
+    /// `gtk_text_view_get_iter_location`, which fills a rectangle in
+    /// the buffer's coordinate space; we translate that into widget
+    /// coordinates and add the editor's current scroll offset so the
+    /// number is directly comparable against the adjustment value.
+    static func editorY(for heading: Heading, view: SourceView, buffer: SourceBuffer, scroll: ScrolledWindow) -> Double? {
+        let bufferPtr = UnsafeMutablePointer<GtkTextBuffer>(buffer.opaquePointer)
+        let viewPtr = UnsafeMutablePointer<GtkTextView>(view.opaquePointer)
+        var iter = GtkTextIter()
+        gtk_text_buffer_get_iter_at_line(bufferPtr, &iter, gint(max(heading.line - 1, 0)))
+        var rect = GdkRectangle()
+        gtk_text_view_get_iter_location(viewPtr, &iter, &rect)
+        // `rect.y` is in buffer coordinates; the source view's vertical
+        // adjustment also reports in buffer coords (it scrolls the whole
+        // buffer, not the visible window), so they're directly
+        // comparable. `scroll` is unused for now but kept on the
+        // signature so the API matches the preview path one day.
+        _ = scroll
+        return Double(rect.y)
+    }
+
+    private static func widgetY(of widget: Widget) -> Double? {
+        let widgetPtr = widget.widgetPointer
+        var allocation = GtkAllocation()
+        gtk_widget_get_allocation(widgetPtr, &allocation)
+        guard allocation.height > 0 else { return nil }
+        return Double(allocation.y)
+    }
+}

@@ -85,6 +85,16 @@ struct MainWindowOutlineTests {
     }
 
     @Test @MainActor
+    func `editing the note refreshes the breadcrumb's doc title segment`() throws {
+        let window = try Self.makeWindow(appID: "me.spaceinbox.swiftynotes.tests.outline.breadcrumb")
+        window.debugLoadInitialNotes()
+        window.debugSetEditorText("# Roadmap\n\n## Overview\n\nBody.")
+        _ = window.debugPreviewText
+        // First line "# Roadmap" → note title resolves to "Roadmap".
+        #expect(window.breadcrumb.docLabel.text == "Roadmap")
+    }
+
+    @Test @MainActor
     func `outline panel falls back to empty-state when the note has no headings`() throws {
         let window = try Self.makeWindow(appID: "me.spaceinbox.swiftynotes.tests.outline.emptynote")
         window.debugLoadInitialNotes()

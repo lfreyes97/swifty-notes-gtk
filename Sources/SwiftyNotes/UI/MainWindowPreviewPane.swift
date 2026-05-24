@@ -549,6 +549,7 @@ extension MainWindow {
             showPreviewOnlyContent()
         }
         refreshEditorFormattingToolbarLayout()
+        outlineScrollSpyDriver?.rebind(mode: state.viewMode)
     }
 
     func showEditorContent() {

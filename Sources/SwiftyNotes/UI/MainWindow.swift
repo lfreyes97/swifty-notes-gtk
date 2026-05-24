@@ -15,6 +15,17 @@ final class MainWindow {
 
     let sidebar = NotesSidebar()
     let outlineSidebar = OutlineSidebar()
+    let breadcrumb = BreadcrumbStrip()
+    /// Latest extraction result. Cached so the scroll-spy driver and
+    /// the breadcrumb don't have to re-parse the markdown on every
+    /// scroll tick. Refreshed by ``refreshOutline(markdown:blocks:)``.
+    var currentHeadings: [Heading] = []
+    /// Recent-jumps in-memory store backing the Ctrl+G palette
+    /// (Phase 5). Persisted in Phase 9.
+    var outlineRecentJumps = RecentJumps()
+    /// Built lazily in `wireSignals` (deferred so the editor / preview
+    /// widget trees are constructed before we connect signals to them).
+    var outlineScrollSpyDriver: OutlineScrollSpyDriver?
     var editor = MarkdownEditor()
     let preview = MarkdownPreview()
     let headerTitle = WindowTitle(title: "Swifty Notes", subtitle: "Markdown notes")
@@ -348,6 +359,12 @@ final class MainWindow {
 
         editorContent.append(trashedNoteBanner)
         updateBanner.attach(to: editorContent)
+        // Breadcrumb sits between the trash/update banners and the
+        // formatting toolbar so its 48 px height lines up exactly with
+        // the toolbar's natural height — the design's `.sn-breadcrumb`
+        // rule sets `height: 48px` to "start the doc content at the
+        // same Y on both sides of the split."
+        editorContent.append(breadcrumb.root)
         editorContent.append(editorFormattingToolbar.scrolled)
         editorContent.append(Separator())
         editorContent.append(editorScroll)
@@ -445,6 +462,14 @@ final class MainWindow {
             guard let heading = outlineSidebar.heading(at: index) else { return }
             scrollToHeading(heading)
         }
+
+        // Lazy scroll-spy bind. Done here (rather than in init) so the
+        // editor / preview widget trees are fully constructed before
+        // we wire signals to their adjustments.
+        if outlineScrollSpyDriver == nil {
+            outlineScrollSpyDriver = makeOutlineScrollSpyDriver()
+        }
+        outlineScrollSpyDriver?.rebind(mode: state.viewMode)
 
         // The view-mode switcher is a linked group: clicking one button
         // must end up with exactly that button active. Pass
