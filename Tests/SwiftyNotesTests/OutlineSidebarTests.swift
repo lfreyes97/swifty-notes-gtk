@@ -130,6 +130,36 @@ struct OutlineSidebarTests {
     }
 
     @Test @MainActor
+    func `setActiveHeading early-exits and does not rebuild rows on no-op`() throws {
+        // Performance regression guard: the scroll-spy fires this
+        // method ~30/s during a kinetic scroll, often with the same
+        // id back-to-back. Touching `list.removeAll` + re-appending
+        // 8 rows on every tick (the original implementation) tanks
+        // FPS on long notes. The contract is: same-id calls must be
+        // no-ops and different-id calls must not rebuild rows.
+        let outline = try Self.makeOutline(suffix: "noop")
+        outline.setHeadings([
+            .init(id: "a", level: 2, text: "A", blockIndex: 0, line: 1),
+            .init(id: "b", level: 2, text: "B", blockIndex: 1, line: 3),
+            .init(id: "c", level: 2, text: "C", blockIndex: 2, line: 5),
+        ])
+        // Capture the row identities. Storing the GObject pointer
+        // (opaquePointer) catches widget rebuilds across activation
+        // changes — if a row is replaced, the pointer changes.
+        let originalRows = (0..<3).compactMap { outline.list.rowAt( $0)?.opaquePointer }
+        #expect(originalRows.count == 3)
+
+        outline.setActiveHeading("a")
+        outline.setActiveHeading("a") // repeat
+        outline.setActiveHeading("b")
+        outline.setActiveHeading("c")
+        outline.setActiveHeading(nil)
+
+        let afterRows = (0..<3).compactMap { outline.list.rowAt( $0)?.opaquePointer }
+        #expect(afterRows == originalRows, "row widgets must survive setActiveHeading toggles")
+    }
+
+    @Test @MainActor
     func `clicked row stays selected in the ListBox after re-render`() throws {
         // Regression: setActiveHeading used to clear the ListBox
         // selection via removeAll(), leaving the first row visually

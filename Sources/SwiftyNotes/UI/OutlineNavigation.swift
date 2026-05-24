@@ -126,11 +126,36 @@ enum OutlinePositions {
     /// `[PreviewRow]`). We bridge through
     /// ``MarkdownPreview.headingBlockToRowIndex`` instead — the
     /// preview tracks the mapping at render time.
+    ///
+    /// One-off lookup. For the scroll-spy's hot path call
+    /// ``previewPositions(for:in:)`` instead — it walks
+    /// `container.children()` once for every heading rather than
+    /// rebuilding the children list per call.
     static func previewY(for heading: Heading, in preview: MarkdownPreview) -> Double? {
         guard let rowIndex = preview.headingBlockToRowIndex[heading.blockIndex] else { return nil }
         let children = preview.container.children()
         guard children.indices.contains(rowIndex) else { return nil }
         return widgetY(of: children[rowIndex])
+    }
+
+    /// Batched form used by the scroll-spy tick. Walks
+    /// `container.children()` exactly once and returns positions for
+    /// every heading that has a corresponding rendered widget. The
+    /// per-heading variant above allocates a fresh Widget array on
+    /// every call, which adds up fast when called N times per tick.
+    static func previewPositions(for headings: [Heading], in preview: MarkdownPreview) -> [(id: String, y: Double)] {
+        guard !headings.isEmpty else { return [] }
+        let children = preview.container.children()
+        let mapping = preview.headingBlockToRowIndex
+        var result: [(id: String, y: Double)] = []
+        result.reserveCapacity(headings.count)
+        for heading in headings {
+            guard let rowIndex = mapping[heading.blockIndex] else { continue }
+            guard children.indices.contains(rowIndex) else { continue }
+            guard let y = widgetY(of: children[rowIndex]) else { continue }
+            result.append((heading.id, y))
+        }
+        return result
     }
 
     /// Y of the source-view iter at `heading.line` (1-based). Uses
@@ -152,6 +177,20 @@ enum OutlinePositions {
         // signature so the API matches the preview path one day.
         _ = scroll
         return Double(rect.y)
+    }
+
+    /// Batched form for the editor pane. Computing one iter location
+    /// per heading is already cheap (no allocation walk), but the
+    /// driver still benefits from a single call site that returns the
+    /// full position list.
+    static func editorPositions(for headings: [Heading], view: SourceView, buffer: SourceBuffer, scroll: ScrolledWindow) -> [(id: String, y: Double)] {
+        var result: [(id: String, y: Double)] = []
+        result.reserveCapacity(headings.count)
+        for heading in headings {
+            guard let y = editorY(for: heading, view: view, buffer: buffer, scroll: scroll) else { continue }
+            result.append((heading.id, y))
+        }
+        return result
     }
 
     private static func widgetY(of widget: Widget) -> Double? {

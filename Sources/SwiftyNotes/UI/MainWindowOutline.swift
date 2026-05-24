@@ -180,14 +180,14 @@ extension MainWindow {
             editorScroll: editorScroll,
             previewScroll: preview.rootScroll,
             resolveHeadings: { [weak self] in self?.currentHeadings ?? [] },
-            previewPositionsFor: { [weak self] heading in
-                guard let self else { return nil }
-                return OutlinePositions.previewY(for: heading, in: preview)
+            previewPositions: { [weak self] headings in
+                guard let self else { return [] }
+                return OutlinePositions.previewPositions(for: headings, in: preview)
             },
-            editorPositionsFor: { [weak self] heading in
-                guard let self else { return nil }
-                return OutlinePositions.editorY(
-                    for: heading,
+            editorPositions: { [weak self] headings in
+                guard let self else { return [] }
+                return OutlinePositions.editorPositions(
+                    for: headings,
                     view: editor.view,
                     buffer: editor.buffer,
                     scroll: editorScroll,

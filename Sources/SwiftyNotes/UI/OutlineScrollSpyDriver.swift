@@ -14,14 +14,13 @@ import Foundation
 @MainActor
 final class OutlineScrollSpyDriver {
     typealias HeadingResolver = () -> [Heading]
-    typealias EditorPositioning = (Heading) -> Double?
-    typealias PreviewPositioning = (Heading) -> Double?
+    typealias PositionLookup = ([Heading]) -> [(id: String, y: Double)]
 
     private let onActive: (String?) -> Void
     private let editorScroll: ScrolledWindow
     private let previewScroll: ScrolledWindow
-    private let editorPositionsFor: EditorPositioning
-    private let previewPositionsFor: PreviewPositioning
+    private let editorPositions: PositionLookup
+    private let previewPositions: PositionLookup
     private let resolveHeadings: HeadingResolver
 
     /// Anchor offset, in pixels, below the visible top of the scrolled
@@ -45,15 +44,15 @@ final class OutlineScrollSpyDriver {
         editorScroll: ScrolledWindow,
         previewScroll: ScrolledWindow,
         resolveHeadings: @escaping HeadingResolver,
-        previewPositionsFor: @escaping PreviewPositioning,
-        editorPositionsFor: @escaping EditorPositioning,
+        previewPositions: @escaping PositionLookup,
+        editorPositions: @escaping PositionLookup,
         onActive: @escaping (String?) -> Void,
     ) {
         self.editorScroll = editorScroll
         self.previewScroll = previewScroll
         self.resolveHeadings = resolveHeadings
-        self.previewPositionsFor = previewPositionsFor
-        self.editorPositionsFor = editorPositionsFor
+        self.previewPositions = previewPositions
+        self.editorPositions = editorPositions
         self.onActive = onActive
     }
 
@@ -120,14 +119,10 @@ final class OutlineScrollSpyDriver {
         switch mode {
         case .editor:
             scrollTop = editorScroll.verticalAdjustment.value
-            positions = headings.compactMap { heading in
-                editorPositionsFor(heading).map { (heading.id, $0) }
-            }
+            positions = editorPositions(headings)
         case .split, .preview:
             scrollTop = previewScroll.verticalAdjustment.value
-            positions = headings.compactMap { heading in
-                previewPositionsFor(heading).map { (heading.id, $0) }
-            }
+            positions = previewPositions(headings)
         }
         let active = ScrollSpyResolver.activeHeadingID(
             positions: positions,

@@ -176,14 +176,33 @@ struct OutlineSidebar {
 
     /// Set the active highlight on the row whose heading id matches.
     /// Pass `nil` to clear.
+    ///
+    /// Performance: this fires every scroll-spy tick (30+/s during a
+    /// kinetic scroll), often with the same id. Hot path — must NOT
+    /// rebuild rows. Early-exits on unchanged id and only toggles the
+    /// `is-active` CSS class + `ListBox.selectRow` on the relevant
+    /// rows. The previous `rerender()` here was a regression that
+    /// tanked scroll FPS on long notes.
     func setActiveHeading(_ id: String?) {
+        guard renderState.activeID != id else { return }
+        let oldID = renderState.activeID
         renderState.activeID = id
-        // Phase 3 wires the visual highlight by re-applying CSS classes
-        // on the relevant row. The render path always honors the current
-        // activeID, so a full rerender on activation change is the
-        // simplest correct path — heading lists are short (dozens of
-        // entries) so the cost is negligible.
-        rerender()
+
+        if let oldID,
+           let oldIdx = renderState.visible.firstIndex(where: { $0.id == oldID }),
+           renderState.rows.indices.contains(oldIdx)
+        {
+            renderState.rows[oldIdx].removeCSSClass("is-active")
+        }
+        if let id,
+           let newIdx = renderState.visible.firstIndex(where: { $0.id == id }),
+           renderState.rows.indices.contains(newIdx)
+        {
+            renderState.rows[newIdx].addCSSClass("is-active")
+            list.selectRow(at: newIdx)
+        } else if id == nil {
+            list.unselectAll()
+        }
     }
 
     /// Legacy API kept for callers that already use it; equivalent to
@@ -213,10 +232,12 @@ struct OutlineSidebar {
         }
 
         list.removeAll()
+        renderState.rows.removeAll()
         renderState.rowLabels.removeAll()
         for heading in visible {
             let (row, label) = makeRow(for: heading)
             list.append(row)
+            renderState.rows.append(row)
             renderState.rowLabels.append(label)
         }
 
@@ -432,6 +453,7 @@ struct OutlineSidebar {
         var dropHandler: ((_ droppedID: String, _ targetID: String) -> Void)?
         var treeLines: Bool = true
         var dragHandles: Bool = true
+        var rows: [ListBoxRow] = []
         var rowLabels: [Label] = []
     }
 

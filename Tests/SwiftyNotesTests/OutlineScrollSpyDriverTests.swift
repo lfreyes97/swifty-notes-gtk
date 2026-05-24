@@ -22,8 +22,12 @@ struct OutlineScrollSpyDriverTests {
                 .init(id: "a", level: 2, text: "A", blockIndex: 0, line: 1),
                 .init(id: "b", level: 2, text: "B", blockIndex: 1, line: 5),
             ] },
-            previewPositionsFor: { heading in heading.id == "a" ? 0 : 500 },
-            editorPositionsFor: { heading in heading.id == "a" ? 0 : 500 },
+            previewPositions: { headings in
+                headings.map { ($0.id, $0.id == "a" ? 0.0 : 500.0) }
+            },
+            editorPositions: { headings in
+                headings.map { ($0.id, $0.id == "a" ? 0.0 : 500.0) }
+            },
             onActive: onActive,
         )
     }
