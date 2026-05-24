@@ -273,8 +273,10 @@ final class CommandPaletteWindow {
             leafLabel.useMarkup = false
             leafLabel.text = heading.text
         } else {
-            leafLabel.useMarkup = true
-            leafLabel.text = Self.highlightedMarkup(heading.text, query: query)
+            // `label.markup` parses the Pango `<span>` highlight;
+            // `label.text` would strip it back to literal angle
+            // brackets. Same fix the outline rows use.
+            leafLabel.markup = Self.highlightedMarkup(heading.text, query: query)
         }
         leafLabel.ellipsize = .end
         leafLabel.hexpand = true

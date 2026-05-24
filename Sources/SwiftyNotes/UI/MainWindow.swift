@@ -401,9 +401,9 @@ final class MainWindow {
         splitView.enableShowGesture = true
         splitView.enableHideGesture = true
         #endif
-        splitView.sidebarWidthFraction = 0.26
-        splitView.minSidebarWidth = 240
-        splitView.maxSidebarWidth = 380
+        splitView.sidebarWidthFraction = 0.20
+        splitView.minSidebarWidth = 220
+        splitView.maxSidebarWidth = 340
         splitView.sidebar = sidebar.root
         splitView.content = editorPreviewPane
         applySidebarVisibility()
@@ -417,9 +417,9 @@ final class MainWindow {
         outlineSplitView.sidebarPosition = .end
         outlineSplitView.enableShowGesture = false
         outlineSplitView.enableHideGesture = false
-        outlineSplitView.minSidebarWidth = 240
-        outlineSplitView.maxSidebarWidth = 360
-        outlineSplitView.sidebarWidthFraction = 0.22
+        outlineSplitView.minSidebarWidth = 220
+        outlineSplitView.maxSidebarWidth = 320
+        outlineSplitView.sidebarWidthFraction = 0.18
         outlineSplitView.sidebar = outlineSidebar.root
         outlineSplitView.content = splitView
         outlineSplitView.showSidebar = state.isOutlineVisible
@@ -643,8 +643,8 @@ final class MainWindow {
         )
     }
 
-    static let minimumPreviewWidth = 400
-    static let minimumEditorWidth = 360
+    static let minimumPreviewWidth = 360
+    static let minimumEditorWidth = 320
     static let editorFormattingCompactWidthThreshold = 520
     static let previewAnimationDuration = 220
 

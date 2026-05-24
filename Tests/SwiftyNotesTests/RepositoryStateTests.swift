@@ -1044,7 +1044,9 @@ struct RepositoryStateTests {
     func `preview width resolution expands legacy default but preserves custom widths`() {
         #expect(MainWindow.resolvedPreviewWidth(storedWidth: WorkspaceState.legacyDefaultPreviewWidth, availableWidth: 1600) == 560)
         #expect(MainWindow.resolvedPreviewWidth(storedWidth: 720, availableWidth: 1600) == 720)
-        #expect(MainWindow.resolvedPreviewWidth(storedWidth: 720, availableWidth: 900) == 540)
+        // With minimumEditorWidth=320, a 900-wide pair clamps preview
+        // to 900 - 320 = 580 instead of the older 540.
+        #expect(MainWindow.resolvedPreviewWidth(storedWidth: 720, availableWidth: 900) == 580)
     }
 
     // MARK: - Trash auto-prune (pure)

@@ -213,19 +213,35 @@ struct OutlineSidebar {
         }
 
         list.removeAll()
+        renderState.rowLabels.removeAll()
         for heading in visible {
-            list.append(makeRow(for: heading))
+            let (row, label) = makeRow(for: heading)
+            list.append(row)
+            renderState.rowLabels.append(label)
+        }
+
+        // ListBox selection (the blue "currently selected row" tint)
+        // resets every time `removeAll` runs, so a rerender from a
+        // scroll-spy tick — or from a follow-up click — would leave
+        // whatever row used to be selected highlighted forever. Snap
+        // the selection to whichever row matches the active id so the
+        // visible selection mirrors what the scroll-spy / palette /
+        // click actually marked active.
+        if let active = renderState.activeID,
+           let index = visible.firstIndex(where: { $0.id == active })
+        {
+            list.selectRow(at: index)
+        } else {
+            list.unselectAll()
         }
 
         let isQuery = !renderState.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         if renderState.allHeadings.isEmpty {
-            emptyLabel.useMarkup = true
             // The `Add ## Heading` segment is a Pango hyperlink that
             // routes to `insert-heading` via `onActivateLink` above.
-            // The link target is opaque to GTK (it's not a real URL)
-            // but Pango requires the `href` syntax for activate-link
-            // to fire.
-            emptyLabel.text = "No headings in this note. <a href=\"insert-heading\">Add <tt>## Heading</tt></a> to start."
+            // Setting `markup` (not `text`) is what actually parses the
+            // anchor — `text` strips markup back to plain.
+            emptyLabel.markup = "No headings in this note. <a href=\"insert-heading\">Add <tt>## Heading</tt></a> to start."
             emptyLabel.visible = true
             scroll.visible = false
         } else if isQuery, visible.isEmpty {
@@ -239,7 +255,7 @@ struct OutlineSidebar {
         }
     }
 
-    private func makeRow(for heading: Heading) -> ListBoxRow {
+    private func makeRow(for heading: Heading) -> (ListBoxRow, Label) {
         let row = ListBoxRow()
         row.setAccessibleLabel(heading.text)
 
@@ -251,14 +267,16 @@ struct OutlineSidebar {
         // Pango markup highlights query matches in the row text. With
         // no query the label is a plain non-markup string so an
         // ampersand or angle bracket in the heading doesn't accidentally
-        // turn into entity-escape territory.
+        // turn into entity-escape territory. `label.markup` is the
+        // only setter that actually parses Pango syntax — `label.text`
+        // strips markup, which was the source of the "raw <span...>"
+        // bug.
         let trimmedQuery = renderState.query.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmedQuery.isEmpty {
             label.useMarkup = false
             label.text = heading.text
         } else {
-            label.useMarkup = true
-            label.text = Self.highlightedMarkup(heading.text, query: trimmedQuery)
+            label.markup = Self.highlightedMarkup(heading.text, query: trimmedQuery)
         }
 
         row.addCSSClass("sn-out")
@@ -322,7 +340,7 @@ struct OutlineSidebar {
             }
             row.addController(drop)
         }
-        return row
+        return (row, label)
     }
 
     private func hasChildren(of h2: Heading) -> Bool {
@@ -414,6 +432,15 @@ struct OutlineSidebar {
         var dropHandler: ((_ droppedID: String, _ targetID: String) -> Void)?
         var treeLines: Bool = true
         var dragHandles: Bool = true
+        var rowLabels: [Label] = []
+    }
+
+    /// The Label widget for the visible row at `index`. Exposed so
+    /// tests can verify Pango-markup behaviour without walking the
+    /// widget tree (`children()` returns generic `Widget` borrows that
+    /// don't downcast to `Label`).
+    func rowLabel(at index: Int) -> Label? {
+        renderState.rowLabels.indices.contains(index) ? renderState.rowLabels[index] : nil
     }
 }
 

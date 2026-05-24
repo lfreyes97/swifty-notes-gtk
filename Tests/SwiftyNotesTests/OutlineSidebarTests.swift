@@ -22,8 +22,12 @@ struct OutlineSidebarTests {
         #expect(outline.countBadge.text == "0")
         #expect(outline.footerLabel.text == "0 sections · 0 subsections")
         #expect(outline.emptyLabel.visible == true)
-        // Pango markup carries the inline-code styling for `## Heading`.
-        #expect(outline.emptyLabel.text.contains("<tt>## Heading</tt>"))
+        // Pango markup carries the inline-code styling for `## Heading`
+        // *and* the `<a href>` hyperlink for the insert handler. Has to
+        // live in `.markup` (not `.text`) — `gtk_label_set_text` strips
+        // markup.
+        #expect(outline.emptyLabel.markup.contains("<tt>## Heading</tt>"))
+        #expect(outline.emptyLabel.markup.contains("href=\"insert-heading\""))
     }
 
     @Test @MainActor
@@ -123,6 +127,44 @@ struct OutlineSidebarTests {
         ])
         outline.toggleCollapsed("goals")
         #expect(outline.collapsedSections.isEmpty)
+    }
+
+    @Test @MainActor
+    func `clicked row stays selected in the ListBox after re-render`() throws {
+        // Regression: setActiveHeading used to clear the ListBox
+        // selection via removeAll(), leaving the first row visually
+        // selected even though scroll-spy / click had moved past it.
+        let outline = try Self.makeOutline(suffix: "selection-persists")
+        outline.setHeadings([
+            .init(id: "a", level: 2, text: "A", blockIndex: 0, line: 1),
+            .init(id: "b", level: 2, text: "B", blockIndex: 1, line: 3),
+            .init(id: "c", level: 2, text: "C", blockIndex: 2, line: 5),
+        ])
+        outline.setActiveHeading("b")
+        #expect(outline.list.selectedRow?.index == 1)
+        outline.setActiveHeading("c")
+        #expect(outline.list.selectedRow?.index == 2)
+        outline.setActiveHeading(nil)
+        #expect(outline.list.selectedRow == nil)
+    }
+
+    @Test @MainActor
+    func `search highlight uses Pango markup, not literal text`() throws {
+        // Regression: label.text uses gtk_label_set_text which strips
+        // markup. The highlight has to land on label.markup instead.
+        let outline = try Self.makeOutline(suffix: "search-markup")
+        outline.setHeadings([
+            .init(id: "overview", level: 2, text: "Overview", blockIndex: 0, line: 1),
+        ])
+        outline.setQuery("over")
+        let label = outline.rowLabel(at: 0)
+        #expect(label?.useMarkup == true)
+        // `.markup` returns the markup string (the raw `<span…>…`).
+        #expect(label?.markup.contains("<span") == true)
+        // `.text` returns the rendered text — what the user actually
+        // sees on screen — which must be the plain heading text, not
+        // the raw markup.
+        #expect(label?.text == "Overview")
     }
 
     @Test @MainActor
