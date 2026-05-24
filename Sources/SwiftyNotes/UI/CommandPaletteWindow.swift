@@ -15,7 +15,8 @@ import Foundation
 ///     pill so the user knows where they are even when they search.
 @MainActor
 final class CommandPaletteWindow {
-    private let window: Window
+    private let dialog: Dialog
+    private let transient: ApplicationWindow
     private let searchEntry: SearchEntry
     private let list: ListBox
     private let footerCount: Label
@@ -43,6 +44,7 @@ final class CommandPaletteWindow {
         self.recents = recents
         self.currentID = currentID
         self.onPick = onPick
+        self.transient = transientFor
 
         // Build the H3+ → parent H2 lookup once; the ranker doesn't
         // need it but our row rendering does (parent breadcrumb on
@@ -57,11 +59,19 @@ final class CommandPaletteWindow {
         }
         parentText = parentMap
 
-        window = Window()
-        window.title = "Jump to heading"
-        window.modal = true
-        window.transientFor = transientFor
-        window.setDefaultSize(width: 640, height: 480)
+        // AdwDialog draws its own dimmed backdrop behind the floating
+        // dialog (libadwaita ≥ 1.5), which is the closest GTK4
+        // equivalent of the design's `backdrop-filter: blur(2px)`.
+        // True frosted blur isn't available on GTK4 yet — pinning a
+        // GskBlurNode behind the dialog is technically possible but
+        // requires custom drawing; the AdwDialog dim is the
+        // production-quality compromise the rest of the GNOME stack
+        // uses.
+        dialog = Dialog()
+        dialog.title = "Jump to heading"
+        dialog.contentWidth = 640
+        dialog.contentHeight = 480
+        dialog.presentationMode = .floating
 
         searchEntry = SearchEntry()
         searchEntry.placeholderText = "Jump to heading…"
@@ -119,17 +129,17 @@ final class CommandPaletteWindow {
         content.append(Separator())
         content.append(footerRow)
 
-        window.content = content
+        dialog.child = content
         wireSignals()
         rebuildItems()
     }
 
     func present() {
-        // Re-derive items with currentID highlighted before the window
+        // Re-derive items with currentID highlighted before the dialog
         // ever paints — otherwise the first render briefly shows the
         // 0th row highlighted before our currentID resolution kicks in.
         rebuildItems()
-        window.present()
+        dialog.present(transient)
         _ = searchEntry.grabFocus()
     }
 
@@ -148,38 +158,38 @@ final class CommandPaletteWindow {
         // Window-level shortcuts intercept before SearchEntry's default
         // cursor-movement handlers, so the user can type AND navigate
         // the list without having to leave the input.
-        window.addKeyboardShortcut("Down") { [weak self] in
+        dialog.addKeyboardShortcut("Down") { [weak self] in
             self?.move(by: 1); return true
         }
-        window.addKeyboardShortcut("Up") { [weak self] in
+        dialog.addKeyboardShortcut("Up") { [weak self] in
             self?.move(by: -1); return true
         }
-        window.addKeyboardShortcut("Page_Down") { [weak self] in
+        dialog.addKeyboardShortcut("Page_Down") { [weak self] in
             self?.move(by: 5); return true
         }
-        window.addKeyboardShortcut("Page_Up") { [weak self] in
+        dialog.addKeyboardShortcut("Page_Up") { [weak self] in
             self?.move(by: -5); return true
         }
-        window.addKeyboardShortcut("Home") { [weak self] in
+        dialog.addKeyboardShortcut("Home") { [weak self] in
             self?.setHighlight(0); return true
         }
-        window.addKeyboardShortcut("End") { [weak self] in
+        dialog.addKeyboardShortcut("End") { [weak self] in
             guard let self else { return true }
             setHighlight(items.count - 1)
             return true
         }
-        window.addKeyboardShortcut("Return") { [weak self] in
+        dialog.addKeyboardShortcut("Return") { [weak self] in
             self?.activateHighlighted(); return true
         }
-        window.addKeyboardShortcut("KP_Enter") { [weak self] in
+        dialog.addKeyboardShortcut("KP_Enter") { [weak self] in
             self?.activateHighlighted(); return true
         }
-        window.addKeyboardShortcut("Escape") { [weak self] in
-            self?.window.close(); return true
+        dialog.addKeyboardShortcut("Escape") { [weak self] in
+            _ = self?.dialog.close(); return true
         }
         // Ctrl+G toggles — pressing again closes the palette.
-        window.addKeyboardShortcut("<Primary>g") { [weak self] in
-            self?.window.close(); return true
+        dialog.addKeyboardShortcut("<Primary>g") { [weak self] in
+            _ = self?.dialog.close(); return true
         }
     }
 
@@ -312,7 +322,7 @@ final class CommandPaletteWindow {
 
     private func commit(_ id: String) {
         onPick(id)
-        window.close()
+        _ = dialog.close()
     }
 
     /// Same Pango entity escape + yellow highlight as the outline rows.
