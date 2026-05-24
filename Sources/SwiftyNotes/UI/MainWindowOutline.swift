@@ -98,6 +98,23 @@ extension MainWindow {
         persistStateBestEffort()
     }
 
+    /// Drag-to-reorder handler. Rewrites the source markdown through
+    /// `OutlineReorder.movedMarkdown` and pushes the result into the
+    /// editor buffer; the typing-refresh path then re-extracts the
+    /// outline and the panel snaps to the new shape.
+    func reorderOutlineSection(movingID: String, beforeTargetID: String) {
+        let currentMarkdown = editor.buffer.text
+        guard let rewritten = OutlineReorder.movedMarkdown(
+            currentMarkdown,
+            movingID: movingID,
+            beforeTargetID: beforeTargetID,
+            headings: currentHeadings,
+        ) else {
+            return
+        }
+        editor.buffer.text = rewritten
+    }
+
     /// Inserts a starter `## Heading` at the cursor in the editor and
     /// focuses the editor. Wired to the empty-state "Add `## Heading`"
     /// link in the outline panel — clicking it scaffolds the section

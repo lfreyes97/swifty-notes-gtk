@@ -489,6 +489,13 @@ final class MainWindow {
         outlineSidebar.onInsertHeadingRequest { [weak self] in
             self?.insertStarterHeadingIntoEditor()
         }
+        // Drag-to-reorder: route the (droppedID, targetID) pair
+        // through the pure `OutlineReorder` rewriter and replace the
+        // editor's buffer text wholesale. Refresh propagates from
+        // the editor's onChanged → typing-deferred refresh.
+        outlineSidebar.onDropReorder { [weak self] droppedID, targetID in
+            self?.reorderOutlineSection(movingID: droppedID, beforeTargetID: targetID)
+        }
 
         // Lazy scroll-spy bind. Done here (rather than in init) so the
         // editor / preview widget trees are fully constructed before

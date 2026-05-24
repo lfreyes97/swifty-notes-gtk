@@ -151,6 +151,31 @@ struct MainWindowOutlineTests {
     }
 
     @Test @MainActor
+    func `drag-to-reorder rewrites the editor buffer in section-block order`() throws {
+        let window = try Self.makeWindow(appID: "me.spaceinbox.swiftynotes.tests.outline.reorder")
+        window.debugLoadInitialNotes()
+        window.debugSetEditorText("""
+        ## A
+
+        A body.
+
+        ## B
+
+        B body.
+        """)
+        _ = window.debugPreviewText
+        window.reorderOutlineSection(movingID: "b", beforeTargetID: "a")
+        let after = window.debugSelectedNoteContent ?? ""
+        // B's section landed above A's; original A section retained.
+        let bPos = after.range(of: "## B")?.lowerBound
+        let aPos = after.range(of: "## A")?.lowerBound
+        #expect(bPos != nil && aPos != nil)
+        if let bPos, let aPos {
+            #expect(bPos < aPos)
+        }
+    }
+
+    @Test @MainActor
     func `the empty-state link inserts a starter heading and focuses the editor`() throws {
         let window = try Self.makeWindow(appID: "me.spaceinbox.swiftynotes.tests.outline.insertheading")
         window.debugLoadInitialNotes()

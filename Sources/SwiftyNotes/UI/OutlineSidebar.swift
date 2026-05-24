@@ -297,6 +297,31 @@ struct OutlineSidebar {
         leadingContainer.append(label)
 
         row.child = leadingContainer
+
+        // Drag source: identifies the row by its heading id. The drop
+        // handler on every sibling row reads this string and routes
+        // it through `OutlineReorder.movedMarkdown`.
+        if renderState.dragHandles {
+            let source = DragSource()
+            source.actions = GDK_ACTION_MOVE
+            source.setTextContent(heading.id)
+            row.addController(source)
+
+            // Drop target: accepts an id-string drop, then calls the
+            // toggle handler with `(droppedID, ownID)`. We piggyback on
+            // the existing toggleHandler / new dropHandler so the
+            // struct doesn't have to close over `self`.
+            let drop = DropTarget.forText(actions: GDK_ACTION_MOVE)
+            let dropHandler = renderState.dropHandler
+            let targetID = heading.id
+            drop.onDrop { droppedID in
+                guard let droppedID, !droppedID.isEmpty else { return false }
+                guard droppedID != targetID else { return false }
+                dropHandler?(droppedID, targetID)
+                return true
+            }
+            row.addController(drop)
+        }
         return row
     }
 
@@ -367,6 +392,13 @@ struct OutlineSidebar {
         renderState.insertHeadingHandler = handler
     }
 
+    /// Hooked from `MainWindow.wireSignals` for drag-to-reorder.
+    /// `droppedID` is the heading the user dragged; `targetID` is the
+    /// heading they dropped on (the move lands *before* the target).
+    func onDropReorder(_ handler: @escaping (_ droppedID: String, _ targetID: String) -> Void) {
+        renderState.dropHandler = handler
+    }
+
     func emptyStateInsertHandler() -> (() -> Void)? {
         renderState.insertHeadingHandler
     }
@@ -379,6 +411,7 @@ struct OutlineSidebar {
         var activeID: String?
         var toggleHandler: ((String) -> Void)?
         var insertHeadingHandler: (() -> Void)?
+        var dropHandler: ((_ droppedID: String, _ targetID: String) -> Void)?
         var treeLines: Bool = true
         var dragHandles: Bool = true
     }
