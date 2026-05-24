@@ -26,13 +26,29 @@ extension MainWindow {
         quickJumpButton.tooltipText = "Quick jump… (Ctrl+G)"
     }
 
-    /// Opens the Ctrl+G command palette. Stub for Phase 1 — Phase 5
-    /// brings the actual ``CommandPaletteWindow``.
+    /// Opens the Ctrl+G command palette. Headings + recents + current
+    /// scroll-spy anchor are snapshotted at open time so the palette
+    /// state doesn't churn under the user if the editor changes
+    /// underneath them.
     func openCommandPalette() {
-        // Phase 5 placeholder. Surfaced as a toast for now so the
-        // wiring (button + Ctrl+G + lupa) is testable end-to-end before
-        // the palette UI lands.
-        toastOverlay.addToast(Toast(title: "Command palette coming in Phase 5."))
+        guard !currentHeadings.isEmpty else {
+            toastOverlay.addToast(Toast(title: "No headings to jump to."))
+            return
+        }
+        let palette = CommandPaletteWindow(
+            transientFor: window,
+            headings: currentHeadings,
+            currentID: outlineSidebar.activeHeadingID,
+            recents: outlineRecentJumps.ids,
+            onPick: { [weak self] id in
+                guard let self else { return }
+                outlineRecentJumps.record(id)
+                if let heading = currentHeadings.first(where: { $0.id == id }) {
+                    scrollToHeading(heading)
+                }
+            },
+        )
+        palette.present()
     }
 
     /// Re-extracts the outline for the current note and pushes the
