@@ -52,7 +52,7 @@ enum OutlineNavigation {
     /// of bounds for the current render).
     static func scrollPreview(heading: Heading, preview: MarkdownPreview, editorScroll: ScrolledWindow, smooth: Bool = true) {
         let previewScroll = preview.rootScroll
-        if let blockY = OutlinePositions.previewY(for: heading, in: preview.container) {
+        if let blockY = OutlinePositions.previewY(for: heading, in: preview) {
             let target = blockY - scrollMarginTopPx
             let adj = previewScroll.verticalAdjustment
             let clamped = clampToAdjustment(adj, target: target)
@@ -113,15 +113,24 @@ private func gtk_true() -> gboolean { 1 }
 /// they can be compared directly against the `verticalAdjustment.value`.
 @MainActor
 enum OutlinePositions {
-    /// Y of the rendered preview block at `heading.blockIndex`,
-    /// relative to the preview's scrolled-window child. Returns `nil`
-    /// when the index is out of bounds (the typing-deferred render
-    /// hasn't committed yet) or the widget has no allocation (the
-    /// preview pane is offscreen).
-    static func previewY(for heading: Heading, in container: Box) -> Double? {
-        let children = container.children()
-        guard children.indices.contains(heading.blockIndex) else { return nil }
-        return widgetY(of: children[heading.blockIndex])
+    /// Y of the rendered preview block matching `heading`, relative
+    /// to the preview's scrolled-window child. Returns `nil` when no
+    /// matching widget exists yet (typing-deferred render hasn't
+    /// committed, virtualized render mode that elides row widgets,
+    /// etc) or the widget has no allocation.
+    ///
+    /// `MarkdownPreview.makeRows` groups consecutive paragraphs /
+    /// blockquotes / list items into single rows, which means
+    /// `heading.blockIndex` (an index into `[RenderedBlock]`) does
+    /// NOT line up with `container.children()` (which lays out
+    /// `[PreviewRow]`). We bridge through
+    /// ``MarkdownPreview.headingBlockToRowIndex`` instead — the
+    /// preview tracks the mapping at render time.
+    static func previewY(for heading: Heading, in preview: MarkdownPreview) -> Double? {
+        guard let rowIndex = preview.headingBlockToRowIndex[heading.blockIndex] else { return nil }
+        let children = preview.container.children()
+        guard children.indices.contains(rowIndex) else { return nil }
+        return widgetY(of: children[rowIndex])
     }
 
     /// Y of the source-view iter at `heading.line` (1-based). Uses

@@ -182,7 +182,7 @@ extension MainWindow {
             resolveHeadings: { [weak self] in self?.currentHeadings ?? [] },
             previewPositionsFor: { [weak self] heading in
                 guard let self else { return nil }
-                return OutlinePositions.previewY(for: heading, in: preview.container)
+                return OutlinePositions.previewY(for: heading, in: preview)
             },
             editorPositionsFor: { [weak self] heading in
                 guard let self else { return nil }

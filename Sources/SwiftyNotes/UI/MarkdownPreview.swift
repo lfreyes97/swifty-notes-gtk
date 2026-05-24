@@ -254,6 +254,14 @@ final class MarkdownPreview {
     private var lastObservedPreviewWidth: Int = -1
     private var lastRenderedBlocks: [RenderedBlock] = []
     private var renderedRows: [PreviewRow] = []
+    /// Maps `RenderedBlock` index (the same one stored on
+    /// ``Heading.blockIndex``) to the matching ``PreviewRow`` index
+    /// in `container.children()`. Populated by ``makeRows`` so the
+    /// outline scroll-spy can find each heading's rendered widget
+    /// even when adjacent blocks were grouped into a single row
+    /// (consecutive paragraphs collapse into one `paragraphRun`,
+    /// list items collapse into one `list`, …).
+    private(set) var headingBlockToRowIndex: [Int: Int] = [:]
     private var renderedBaseDirectory: URL?
     private var renderMode: RenderMode = .stacked
     private var virtualizedRows: [PreviewRow] = []
@@ -473,8 +481,20 @@ final class MarkdownPreview {
     private func makeRows(from blocks: [RenderedBlock]) -> [PreviewRow] {
         var rows: [PreviewRow] = []
         var index = 0
+        // Reset before populating — a previous render may have
+        // tracked an entirely different note.
+        headingBlockToRowIndex = [:]
         while index < blocks.count {
             let block = blocks[index]
+            // Headings are always 1:1 with a row (the grouping logic
+            // below only consumes listItem / paragraph / blockquote
+            // blocks). Record the mapping before appending so the
+            // scroll-spy can look up each heading's rendered widget
+            // by row-index later.
+            let blockStartIndex = index
+            if case .heading = block {
+                headingBlockToRowIndex[blockStartIndex] = rows.count
+            }
             if case .listItem = block {
                 var items: [ListPreviewItem] = []
                 while index < blocks.count {

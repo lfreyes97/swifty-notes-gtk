@@ -176,6 +176,51 @@ struct MainWindowOutlineTests {
     }
 
     @Test @MainActor
+    func `heading block-indices map correctly to row indices when adjacent paragraphs are grouped`() throws {
+        // Regression: the showcase note has consecutive paragraphs +
+        // list items between headings. `MarkdownPreview.makeRows`
+        // collapses those into single rows, so a heading at
+        // `blockIndex=11` may live at row 6 in the preview's
+        // container. Before the fix we used `blockIndex` to look up
+        // `container.children()[N]` directly, which pointed at the
+        // wrong widget — scroll-spy then claimed the *previous*
+        // heading was active and the click selection looked stuck.
+        let window = try Self.makeWindow(appID: "me.spaceinbox.swiftynotes.tests.outline.blockmap")
+        window.debugLoadInitialNotes()
+        window.debugSetEditorText("""
+        # Doc
+
+        ## A
+
+        Paragraph A1.
+
+        Paragraph A2.
+
+        Paragraph A3.
+
+        ## B
+
+        Body B.
+        """)
+        _ = window.debugPreviewText
+
+        // Three consecutive paragraphs in section A collapse into a
+        // single PreviewRow. The map should still place "## B" at the
+        // *row* that follows that single grouped paragraph row, NOT
+        // at the raw block index.
+        let mapping = window.preview.headingBlockToRowIndex
+        // Doc, A, B → three headings. Row indices come from
+        // [Doc, A, paragraphRun(A1+A2+A3), B, paragraphRun(B)].
+        // Doc=0, A=1, B=3.
+        let docHeading = window.currentHeadings.first { $0.text == "Doc" }!
+        let aHeading = window.currentHeadings.first { $0.text == "A" }!
+        let bHeading = window.currentHeadings.first { $0.text == "B" }!
+        #expect(mapping[docHeading.blockIndex] == 0)
+        #expect(mapping[aHeading.blockIndex] == 1)
+        #expect(mapping[bHeading.blockIndex] == 3)
+    }
+
+    @Test @MainActor
     func `the empty-state link inserts a starter heading and focuses the editor`() throws {
         let window = try Self.makeWindow(appID: "me.spaceinbox.swiftynotes.tests.outline.insertheading")
         window.debugLoadInitialNotes()
