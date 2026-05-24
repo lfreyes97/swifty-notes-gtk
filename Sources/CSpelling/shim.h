@@ -167,4 +167,49 @@ swifty_notes_spelling_for_each_language(SwiftyNotesSpellingLanguageCallback call
     g_object_unref(model);
 }
 
+// ---------------------------------------------------------------------------
+// Outline-fold helpers — same opaque-pointer pattern as the no-spell-tag
+// shims above. `invisible` is a GtkTextTag property exposed only through
+// `g_object_set`; wrapping the variadic call in C keeps the Swift caller
+// out of GValue/property-name juggling. The tag is named so we can look
+// it up later instead of caching the pointer ourselves.
+static inline gpointer
+swifty_notes_outline_create_fold_tag(gpointer source_buffer) {
+    GtkTextBuffer *buffer = GTK_TEXT_BUFFER(source_buffer);
+    GtkTextTagTable *table = gtk_text_buffer_get_tag_table(buffer);
+    GtkTextTag *existing = gtk_text_tag_table_lookup(table, "swifty-notes-outline-fold");
+    if (existing != NULL) {
+        return existing;
+    }
+    return gtk_text_buffer_create_tag(buffer,
+                                      "swifty-notes-outline-fold",
+                                      "invisible", TRUE,
+                                      NULL);
+}
+
+static inline void
+swifty_notes_outline_clear_fold(gpointer source_buffer, gpointer tag) {
+    GtkTextBuffer *buffer = GTK_TEXT_BUFFER(source_buffer);
+    GtkTextIter start_iter;
+    GtkTextIter end_iter;
+    gtk_text_buffer_get_bounds(buffer, &start_iter, &end_iter);
+    gtk_text_buffer_remove_tag(buffer, (GtkTextTag *)tag, &start_iter, &end_iter);
+}
+
+static inline void
+swifty_notes_outline_apply_fold(gpointer source_buffer, gpointer tag,
+                                int heading_line, int boundary_line) {
+    GtkTextBuffer *buffer = GTK_TEXT_BUFFER(source_buffer);
+    GtkTextIter start_iter;
+    GtkTextIter end_iter;
+    gtk_text_buffer_get_iter_at_line(buffer, &start_iter, heading_line);
+    // Move start to end of the heading line so the heading itself
+    // stays visible; the fold hides body + trailing newlines.
+    gtk_text_iter_forward_to_line_end(&start_iter);
+    gtk_text_buffer_get_iter_at_line(buffer, &end_iter, boundary_line);
+    if (gtk_text_iter_compare(&start_iter, &end_iter) < 0) {
+        gtk_text_buffer_apply_tag(buffer, (GtkTextTag *)tag, &start_iter, &end_iter);
+    }
+}
+
 #endif /* SWIFTYNOTES_CSPELLING_SHIM_H */

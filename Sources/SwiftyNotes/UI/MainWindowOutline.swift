@@ -75,6 +75,20 @@ extension MainWindow {
         outlineSidebar.setHeadings(headings)
         currentHeadings = headings
         refreshBreadcrumb()
+        applyEditorFolding()
+    }
+
+    /// Mirror the outline's collapsed-set into the editor as
+    /// invisible-tag ranges so a folded section in the panel also
+    /// disappears in the source view. Called from `refreshOutline`
+    /// (lines may have shifted) and from the chevron-toggle handler
+    /// (the set itself changed).
+    func applyEditorFolding() {
+        OutlineEditorFolding.apply(
+            buffer: editor.buffer,
+            collapsed: outlineSidebar.collapsedSections,
+            headings: currentHeadings,
+        )
     }
 
     private func persistOutgoingOutlineState() {

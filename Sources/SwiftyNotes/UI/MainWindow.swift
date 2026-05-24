@@ -481,6 +481,7 @@ final class MainWindow {
             guard let self else { return }
             outlineSidebar.toggleCollapsed(id)
             persistOutlineStateForCurrentNote()
+            applyEditorFolding()
         }
         // Empty-state "Add ## Heading" link: insert a starter heading
         // at the current cursor position and focus the editor so the
