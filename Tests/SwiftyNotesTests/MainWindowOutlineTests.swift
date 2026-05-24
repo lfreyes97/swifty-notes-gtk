@@ -176,6 +176,66 @@ struct MainWindowOutlineTests {
     }
 
     @Test @MainActor
+    func `clicking every outline row in turn leaves the clicked row active, never the one above`() throws {
+        // Regression: with smooth-scroll animations enabled, an in-
+        // flight scroll fires `onValueChanged` ticks at intermediate
+        // scrollTop values, the resolver picked whichever heading was
+        // still above the anchor *right now* (i.e. the previous one),
+        // and that overwrote the click's explicit active-id. The
+        // outline ended up "stuck" one row above the user's choice.
+        // After the suppression fix this should be deterministic
+        // across an entire forward + reverse sweep of the panel.
+        let window = try Self.makeWindow(appID: "me.spaceinbox.swiftynotes.tests.outline.allrows")
+        window.debugLoadInitialNotes()
+        window.debugSetEditorText("""
+        # Showcase
+
+        Intro paragraph.
+
+        ## Highlights
+
+        - Bullet A
+        - Bullet B
+
+        ## Checklist
+
+        - [ ] Item A
+        - [ ] Item B
+
+        ## Quote
+
+        > Quoted.
+
+        ## Code
+
+        ```swift
+        let x = 1
+        ```
+
+        ## End
+        """)
+        _ = window.debugPreviewText
+
+        let order = window.currentHeadings.map(\.id)
+        // Sanity: we built a doc with several headings.
+        #expect(order.count >= 5)
+
+        for id in order {
+            guard let heading = window.currentHeadings.first(where: { $0.id == id }) else {
+                Issue.record("missing heading \(id)")
+                continue
+            }
+            window.scrollToHeading(heading)
+            #expect(window.outlineSidebar.activeHeadingID == id, "forward click \(id) failed")
+        }
+        for id in order.reversed() {
+            guard let heading = window.currentHeadings.first(where: { $0.id == id }) else { continue }
+            window.scrollToHeading(heading)
+            #expect(window.outlineSidebar.activeHeadingID == id, "reverse click \(id) failed")
+        }
+    }
+
+    @Test @MainActor
     func `heading block-indices map correctly to row indices when adjacent paragraphs are grouped`() throws {
         // Regression: the showcase note has consecutive paragraphs +
         // list items between headings. `MarkdownPreview.makeRows`

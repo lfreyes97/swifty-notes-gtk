@@ -31,6 +31,15 @@ final class OutlineScrollSpyDriver {
     private var editorConnection: SignalConnection?
     private var previewConnection: SignalConnection?
     private var pendingTick = false
+    /// Wall-clock instant past which scroll-spy ticks resume firing
+    /// the resolver. Set by ``suppress(until:)`` whenever a click /
+    /// palette pick / Ctrl+G jump triggers a programmatic scroll —
+    /// otherwise the in-flight animation's intermediate scrollTop
+    /// values would let the resolver pick whatever heading is still
+    /// above the anchor *right now*, overriding the click's explicit
+    /// active-id and producing the "selects the heading above the
+    /// clicked one" symptom users report.
+    private var suppressedUntil: ContinuousClock.Instant?
 
     init(
         editorScroll: ScrolledWindow,
@@ -46,6 +55,19 @@ final class OutlineScrollSpyDriver {
         self.previewPositionsFor = previewPositionsFor
         self.editorPositionsFor = editorPositionsFor
         self.onActive = onActive
+    }
+
+    /// Park the scroll-spy resolver for `interval` from `now`. While
+    /// the suppression window is active, scroll ticks still fire but
+    /// skip the resolver — the most recent `onActive` value (which
+    /// the click handler set explicitly) stays authoritative.
+    /// Re-entry just bumps the deadline forward.
+    func suppress(for interval: Duration) {
+        let deadline = ContinuousClock.now.advanced(by: interval)
+        if let current = suppressedUntil, current > deadline {
+            return
+        }
+        suppressedUntil = deadline
     }
 
     /// Wires `onValueChanged` on the appropriate adjustment for the
@@ -84,6 +106,10 @@ final class OutlineScrollSpyDriver {
     }
 
     private func tick(for mode: EditorViewMode) {
+        if let suppressedUntil, suppressedUntil > ContinuousClock.now {
+            return
+        }
+        suppressedUntil = nil
         let headings = resolveHeadings()
         guard !headings.isEmpty else {
             onActive(nil)
@@ -110,6 +136,14 @@ final class OutlineScrollSpyDriver {
         )
         onActive(active)
     }
+
+    #if DEBUG
+    /// Test surface — drives a single tick synchronously without
+    /// having to feed the GLib main loop. The production tick path
+    /// (`scheduleTick`) waits for `MainContext.idle`, which doesn't
+    /// pump in the unit-test environment.
+    func debugTick(mode: EditorViewMode) { tick(for: mode) }
+    #endif
 
     deinit {
         // Disconnect synchronously so the bound closures stop firing

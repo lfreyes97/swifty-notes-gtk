@@ -206,6 +206,14 @@ extension MainWindow {
     /// so the outline highlight matches the click immediately (without
     /// waiting for the next scroll-spy tick).
     func scrollToHeading(_ heading: Heading) {
+        // Park the scroll-spy for the duration of the smooth-scroll
+        // animation plus a small buffer. Otherwise the resolver fires
+        // on intermediate scrollTop values, sees we haven't reached
+        // the target heading yet, picks the previous one (it's still
+        // above the anchor line), and overwrites the click's explicit
+        // active-id selection — that's what produced the "click
+        // Highlights, but the first heading stays selected" bug.
+        outlineScrollSpyDriver?.suppress(for: .milliseconds(OutlineNavigation.smoothScrollDurationMs + 120))
         OutlineNavigation.scrollEditor(
             view: editor.view,
             buffer: editor.buffer,
