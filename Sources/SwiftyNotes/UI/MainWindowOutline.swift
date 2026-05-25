@@ -35,6 +35,10 @@ extension MainWindow {
             toastOverlay.addToast(Toast(title: "No headings to jump to."))
             return
         }
+        // If a palette is already showing (rapid double-press of
+        // Ctrl+G), drop the old wrapper — its dialog will be closed
+        // by GTK as soon as we present a new one over the top.
+        activeCommandPalette = nil
         let palette = CommandPaletteWindow(
             transientFor: window,
             headings: currentHeadings,
@@ -48,7 +52,11 @@ extension MainWindow {
                     scrollToHeading(heading)
                 }
             },
+            onClosed: { [weak self] in
+                self?.activeCommandPalette = nil
+            },
         )
+        activeCommandPalette = palette
         palette.present()
     }
 

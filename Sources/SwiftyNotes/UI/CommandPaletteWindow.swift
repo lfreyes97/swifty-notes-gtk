@@ -28,6 +28,7 @@ final class CommandPaletteWindow {
     private let currentID: String?
     private let parentText: [String: String]
     private let onPick: (String) -> Void
+    private let onClosed: () -> Void
 
     private var items: [Heading] = []
     private var rowWidgets: [ListBoxRow] = []
@@ -39,11 +40,13 @@ final class CommandPaletteWindow {
         currentID: String?,
         recents: [String],
         onPick: @escaping (String) -> Void,
+        onClosed: @escaping () -> Void = {},
     ) {
         self.headings = headings
         self.recents = recents
         self.currentID = currentID
         self.onPick = onPick
+        self.onClosed = onClosed
         self.transient = transientFor
 
         // Build the H3+ → parent H2 lookup once; the ranker doesn't
@@ -101,11 +104,12 @@ final class CommandPaletteWindow {
         footerCount.addCSSClass("caption")
         footerCount.xalign = 1
 
+        // SearchEntry already renders its own magnifier glyph
+        // inside the field, so the wrapping row carries the
+        // entry alone — adding an external `Image(icon:)` next to
+        // it duplicated the icon.
         let searchRow = Box(orientation: .horizontal, spacing: 8)
         searchRow.setMargins(12)
-        let searchIcon = Image(icon: .systemSearch)
-        searchIcon.addCSSClass(.dimLabel)
-        searchRow.append(searchIcon)
         searchRow.append(searchEntry)
 
         let footerRow = Box(orientation: .horizontal, spacing: 16)
@@ -144,6 +148,17 @@ final class CommandPaletteWindow {
     }
 
     private func wireSignals() {
+        // Bridge AdwDialog's intrinsic "I'm closing" signal back up
+        // to the owner so it can drop its strong reference to this
+        // wrapper. Without that release the wrapper would leak; with
+        // the release happening too early (i.e. without the owner
+        // holding a strong ref in the first place) every callback
+        // below would be invoked on a deallocated `self` and silently
+        // no-op — which is exactly the bug that motivated this code.
+        dialog.onClosed { [weak self] in
+            self?.onClosed()
+        }
+
         searchEntry.onSearchChanged { [weak self] in
             self?.rebuildItems()
         }

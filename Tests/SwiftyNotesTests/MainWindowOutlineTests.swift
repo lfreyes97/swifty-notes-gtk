@@ -304,5 +304,33 @@ struct MainWindowOutlineTests {
         #expect(window.outlineSidebar.renderedHeadings.isEmpty)
         #expect(window.outlineSidebar.emptyLabel.visible == true)
     }
+
+    @Test @MainActor
+    func `Ctrl+G keeps a strong reference to the palette so signal handlers can fire`() throws {
+        // Regression: `openCommandPalette` used to leave the
+        // `CommandPaletteWindow` in a local variable. The moment the
+        // function returned the Swift wrapper was deallocated — GTK
+        // still rendered the AdwDialog (it holds widgets through C),
+        // but every `[weak self]` callback inside the wrapper now
+        // resolved to nil and silently no-op'd. Visible symptom: the
+        // search box didn't filter, row clicks did nothing, and the
+        // Escape keyboard shortcut couldn't call `dialog.close()`.
+        // Fix: park the wrapper on `MainWindow.activeCommandPalette`
+        // until the dialog's `closed` signal fires.
+        let window = try Self.makeWindow(appID: "me.spaceinbox.swiftynotes.tests.outline.paletteretain")
+        window.debugLoadInitialNotes()
+        window.debugSetEditorText("# Doc\n\n## A\n\n## B\n")
+        _ = window.debugPreviewText
+
+        #expect(window.activeCommandPalette == nil)
+        window.openCommandPalette()
+        #expect(window.activeCommandPalette != nil)
+
+        // Sanity: with the wrapper alive, search filtering reflects
+        // the typed query — this is the behaviour the deallocation
+        // bug masked in production.
+        window.activeCommandPalette?.debugSetQuery("A")
+        #expect(window.activeCommandPalette?.debugItems.map(\.id) == ["a"])
+    }
 }
 #endif

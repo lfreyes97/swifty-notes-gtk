@@ -28,6 +28,15 @@ final class MainWindow {
     /// know when to hydrate the panel from the persisted per-note
     /// state. `nil` until the first refresh after a note is selected.
     var currentOutlineNoteID: UUID?
+    /// Holds the active Ctrl+G palette so its Swift-side signal
+    /// handlers stay alive while AdwDialog displays it. Without
+    /// this strong reference the wrapper was deallocated the moment
+    /// `openCommandPalette` returned — GTK kept the dialog widget
+    /// onscreen but every `[weak self]` callback (search filter,
+    /// row activation, Escape shortcut) silently no-op'd. Cleared
+    /// in the dialog's `onClosed` so the next press of Ctrl+G
+    /// creates a fresh palette.
+    var activeCommandPalette: CommandPaletteWindow?
     /// Built lazily in `wireSignals` (deferred so the editor / preview
     /// widget trees are constructed before we connect signals to them).
     var outlineScrollSpyDriver: OutlineScrollSpyDriver?
