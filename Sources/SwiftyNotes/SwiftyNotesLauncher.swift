@@ -273,6 +273,23 @@ public enum SwiftyNotesLauncher {
         }
         app.addAction(quickJump)
         installAccelerator("<Primary>g", forAction: "app.quick-jump", on: app)
+
+        // Find + Find/Replace bars (in-document search, #26).
+        // Lifting these to the GApplication action map means they
+        // light up the standard Cocoa Edit menu items on macOS and
+        // they fire from any pane focus on Linux without per-window
+        // keyboard wiring.
+        let find = SimpleAction(name: "find") { [weak controller] in
+            controller?.mainWindow?.openFindBar(mode: .find)
+        }
+        app.addAction(find)
+        installAccelerator("<Primary>f", forAction: "app.find", on: app)
+
+        let findReplace = SimpleAction(name: "find-replace") { [weak controller] in
+            controller?.mainWindow?.openFindBar(mode: .replace)
+        }
+        app.addAction(findReplace)
+        installAccelerator("<Primary>h", forAction: "app.find-replace", on: app)
     }
 
     @MainActor

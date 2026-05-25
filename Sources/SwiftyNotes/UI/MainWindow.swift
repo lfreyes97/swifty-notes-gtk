@@ -37,6 +37,19 @@ final class MainWindow {
     /// in the dialog's `onClosed` so the next press of Ctrl+G
     /// creates a fresh palette.
     var activeCommandPalette: CommandPaletteWindow?
+
+    /// In-document find / replace bar, mounted at the top of the
+    /// editor pane. Visible only while the user is actively
+    /// searching — `searchModeEnabled = false` collapses it to zero
+    /// height. Wired by ``editorSearchController``.
+    let findReplaceBar = FindReplaceBar()
+
+    /// Controller that drives ``findReplaceBar`` against the editor
+    /// buffer. Built in `wireSignals` (deferred so the bar + editor
+    /// widgets are constructed first). Held strongly so the
+    /// controller's callbacks survive across user interactions —
+    /// same lifetime rule we hit on `activeCommandPalette`.
+    var editorSearchController: EditorSearchController?
     /// Built lazily in `wireSignals` (deferred so the editor / preview
     /// widget trees are constructed before we connect signals to them).
     var outlineScrollSpyDriver: OutlineScrollSpyDriver?
@@ -381,6 +394,11 @@ final class MainWindow {
         editorContent.append(breadcrumb.root)
         editorContent.append(editorFormattingToolbar.scrolled)
         editorContent.append(Separator())
+        // Find / replace bar lives directly above the source view —
+        // GtkSearchBar collapses to zero height while
+        // searchModeEnabled is false, so this only takes layout
+        // space when the user actually opens it.
+        editorContent.append(findReplaceBar.root)
         editorContent.append(editorScroll)
         editorPreviewPane.startChild = editorContent
         editorPreviewPane.resizeStartChild = true
@@ -605,7 +623,13 @@ final class MainWindow {
             self?.saveSelectedNoteNow()
             return true
         }
-        window.addKeyboardShortcut("<Ctrl>f") { [weak self] in
+        // Ctrl+Shift+F focuses the notes sidebar search (workspace-
+        // wide). Plain Ctrl+F is now the in-document find bar —
+        // registered as the `app.find` GApplication action in
+        // SwiftyNotesLauncher.installOutlineActions, same as F9 /
+        // Ctrl+G. Same VS Code / GNOME convention: Ctrl+F searches
+        // this view, Ctrl+Shift+F searches across files.
+        window.addKeyboardShortcut("<Ctrl><Shift>f") { [weak self] in
             self?.focusSearch()
             return true
         }
