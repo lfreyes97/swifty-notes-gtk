@@ -77,6 +77,10 @@ final class MainWindow {
     /// the editor has a selection, which takes precedence — GNOME
     /// convention). Reset when the user clears the field manually.
     var lastFindQuery: String = ""
+
+    /// One-shot guard for ``wirePaneFocusTracking`` so the focus
+    /// controllers are only attached once.
+    var paneFocusTrackingWired: Bool = false
     /// Built lazily in `wireSignals` (deferred so the editor / preview
     /// widget trees are constructed before we connect signals to them).
     var outlineScrollSpyDriver: OutlineScrollSpyDriver?

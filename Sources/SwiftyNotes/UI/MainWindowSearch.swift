@@ -78,6 +78,34 @@ extension MainWindow {
         }
     }
 
+    /// Attaches focus event controllers to the editor and the
+    /// preview-pane root so `lastFocusedPane` tracks the user's
+    /// attention. Called lazily on first `openFindBar` — focus
+    /// tracking is only meaningful once the find feature is in
+    /// play, so paying the controller installation cost up front
+    /// would be wasted on users who never search.
+    func wirePaneFocusTracking() {
+        guard !paneFocusTrackingWired else { return }
+        paneFocusTrackingWired = true
+
+        let editorFocus = EventControllerFocus()
+        editorFocus.onEnter { [weak self] in
+            self?.lastFocusedPane = .editor
+        }
+        editor.view.addController(editorFocus)
+
+        let previewFocus = EventControllerFocus()
+        previewFocus.onEnter { [weak self] in
+            self?.lastFocusedPane = .preview
+        }
+        // The preview pane root isn't itself focusable, but the
+        // Labels and SourceView code blocks inside it bubble focus
+        // up to the scroll container. EventControllerFocus reports
+        // `enter` whenever any descendant gains focus, which is
+        // exactly what we want here.
+        preview.rootScroll.addController(previewFocus)
+    }
+
     /// Open the find / replace bar in the requested mode. The
     /// active pane (editor vs preview) is decided by which one had
     /// focus most recently — same affordance GNOME Builder uses
@@ -85,6 +113,7 @@ extension MainWindow {
     /// looking at). In `.replace` mode we always land in the
     /// editor pane because the preview bar is read-only.
     func openFindBar(mode: FindReplaceBar.Mode) {
+        wirePaneFocusTracking()
         let target: FocusedPane = mode == .replace ? .editor : lastFocusedPane
         switch target {
         case .editor:

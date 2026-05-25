@@ -107,6 +107,35 @@ struct MainWindowSearchTests {
     }
 
     @Test @MainActor
+    func `lastFocusedPane controls which bar Ctrl+F opens in split mode`() throws {
+        let window = try Self.makeWindow(appID: "me.spaceinbox.swiftynotes.tests.search.focuspane")
+        window.debugLoadInitialNotes()
+        window.debugSetEditorText("alpha beta gamma")
+
+        // Default: editor pane. Ctrl+F opens the editor bar.
+        window.openFindBar(mode: .find)
+        #expect(window.findReplaceBar.isVisible == true)
+        #expect(window.previewFindReplaceBar.isVisible == false)
+        window.findReplaceBar.setVisible(false)
+
+        // Flip the tracking to preview — the next Ctrl+F should
+        // open the preview's bar instead.
+        window.lastFocusedPane = .preview
+        window.openFindBar(mode: .find)
+        #expect(window.previewFindReplaceBar.isVisible == true)
+        #expect(window.findReplaceBar.isVisible == false)
+        window.previewFindReplaceBar.setVisible(false)
+
+        // .replace always lands in the editor pane regardless of
+        // focus — the preview bar is read-only.
+        window.lastFocusedPane = .preview
+        window.openFindBar(mode: .replace)
+        #expect(window.findReplaceBar.isVisible == true)
+        #expect(window.findReplaceBar.mode == .replace)
+        #expect(window.previewFindReplaceBar.isVisible == false)
+    }
+
+    @Test @MainActor
     func `replace-all completion shows a toast through the window`() throws {
         // We can't introspect ToastOverlay's queue from headless
         // tests, but we can confirm the callback wiring runs — by
