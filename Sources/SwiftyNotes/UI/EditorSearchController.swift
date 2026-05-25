@@ -1,4 +1,5 @@
 import Adwaita
+import CSpelling
 import Foundation
 
 /// Wires a ``FindReplaceBar`` to the editor's ``SourceBuffer`` /
@@ -37,6 +38,16 @@ final class EditorSearchController {
     /// match. `nil` when no match is active (empty query, no hits,
     /// or just-cleared state).
     private var activeIndex: Int?
+
+    /// Raw pointers to the two GtkTextTags we maintain on the
+    /// editor buffer for the find bar. Created lazily via the
+    /// CSpelling C shim (where g_object_set's varargs don't fight
+    /// Swift). Persistent — once on the buffer's tag table they
+    /// stay there for the buffer's lifetime; we toggle highlights
+    /// by adding / removing the tags from ranges, not by recreating
+    /// them.
+    private var matchTagPointer: UnsafeMutableRawPointer?
+    private var activeMatchTagPointer: UnsafeMutableRawPointer?
 
     init(bar: FindReplaceBar, view: SourceView, buffer: SourceBuffer) {
         self.bar = bar
@@ -120,6 +131,41 @@ final class EditorSearchController {
         if let active = activeIndex, active >= matches.count {
             activeIndex = matches.isEmpty ? nil : matches.count - 1
         }
+        applyHighlightTags()
+    }
+
+    /// Re-apply the buffer-level tags so every match is visible
+    /// (dim yellow background) and the active one stands out
+    /// (saturated background + bold). Called after every match
+    /// recomputation and after every step.
+    private func applyHighlightTags() {
+        let bufferPointer = UnsafeMutableRawPointer(buffer.opaquePointer)
+        if matchTagPointer == nil {
+            matchTagPointer = swifty_notes_search_create_match_tag(bufferPointer)
+        }
+        if activeMatchTagPointer == nil {
+            activeMatchTagPointer = swifty_notes_search_create_active_tag(bufferPointer)
+        }
+        swifty_notes_search_clear_tags(bufferPointer, matchTagPointer, activeMatchTagPointer)
+        guard !matches.isEmpty else { return }
+        let text = buffer.text
+        for (index, match) in matches.enumerated() {
+            let startOffset = text.distance(from: text.startIndex, to: match.lowerBound)
+            let endOffset = text.distance(from: text.startIndex, to: match.upperBound)
+            let tag = (index == activeIndex) ? activeMatchTagPointer : matchTagPointer
+            guard let tag else { continue }
+            swifty_notes_search_apply_tag(
+                bufferPointer,
+                tag,
+                Int32(startOffset),
+                Int32(endOffset),
+            )
+        }
+    }
+
+    private func clearHighlightTags() {
+        let bufferPointer = UnsafeMutableRawPointer(buffer.opaquePointer)
+        swifty_notes_search_clear_tags(bufferPointer, matchTagPointer, activeMatchTagPointer)
     }
 
     /// Move to the next / previous match. Wraps around the document.
@@ -157,6 +203,10 @@ final class EditorSearchController {
         }
         activeIndex = newIndex
         selectMatch(at: newIndex)
+        // Refresh tag styling so the new active match wears the
+        // saturated background and the previous one falls back to
+        // the dim yellow.
+        applyHighlightTags()
         updateBarCount()
     }
 
@@ -210,6 +260,7 @@ final class EditorSearchController {
         matches.removeAll()
         activeIndex = nil
         bar.setMatchCount(total: 0, activeDisplayIndex: nil)
+        clearHighlightTags()
     }
 
     /// Replace the currently active match with the bar's
@@ -310,6 +361,8 @@ extension EditorSearchController {
     var debugMatchCount: Int { matches.count }
     var debugActiveIndex: Int? { activeIndex }
     var debugCachedQuery: String { lastQuery }
+    var debugMatchTagCreated: Bool { matchTagPointer != nil }
+    var debugActiveTagCreated: Bool { activeMatchTagPointer != nil }
     func debugRecomputeFromBuffer() {
         guard !lastQuery.isEmpty else { return }
         recomputeMatches()

@@ -212,4 +212,73 @@ swifty_notes_outline_apply_fold(gpointer source_buffer, gpointer tag,
     }
 }
 
+// ---------------------------------------------------------------------------
+// Find-bar highlight helpers — same g_object_set wrapping as the
+// outline-fold tag above. Two tags so the active match (the one
+// `step` just landed on) is distinguishable from the rest:
+//
+//   - `swifty-notes-search-match`        — yellow background, dim text;
+//   - `swifty-notes-search-match-active` — saturated background, dark text.
+//
+// Both tags are persistent on the buffer's tag table once created;
+// `gtk_text_buffer_remove_tag` is the way to clear highlights, not
+// destroying the tags themselves.
+static inline gpointer
+swifty_notes_search_create_match_tag(gpointer source_buffer) {
+    GtkTextBuffer *buffer = GTK_TEXT_BUFFER(source_buffer);
+    GtkTextTagTable *table = gtk_text_buffer_get_tag_table(buffer);
+    GtkTextTag *existing = gtk_text_tag_table_lookup(table, "swifty-notes-search-match");
+    if (existing != NULL) {
+        return existing;
+    }
+    return gtk_text_buffer_create_tag(buffer,
+                                      "swifty-notes-search-match",
+                                      "background", "#fff59d",
+                                      "foreground", "#1e1e1e",
+                                      NULL);
+}
+
+static inline gpointer
+swifty_notes_search_create_active_tag(gpointer source_buffer) {
+    GtkTextBuffer *buffer = GTK_TEXT_BUFFER(source_buffer);
+    GtkTextTagTable *table = gtk_text_buffer_get_tag_table(buffer);
+    GtkTextTag *existing = gtk_text_tag_table_lookup(table, "swifty-notes-search-match-active");
+    if (existing != NULL) {
+        return existing;
+    }
+    return gtk_text_buffer_create_tag(buffer,
+                                      "swifty-notes-search-match-active",
+                                      "background", "#f9a825",
+                                      "foreground", "#1e1e1e",
+                                      "weight", PANGO_WEIGHT_BOLD,
+                                      NULL);
+}
+
+static inline void
+swifty_notes_search_clear_tags(gpointer source_buffer, gpointer match_tag, gpointer active_tag) {
+    GtkTextBuffer *buffer = GTK_TEXT_BUFFER(source_buffer);
+    GtkTextIter start_iter;
+    GtkTextIter end_iter;
+    gtk_text_buffer_get_bounds(buffer, &start_iter, &end_iter);
+    if (match_tag != NULL) {
+        gtk_text_buffer_remove_tag(buffer, (GtkTextTag *)match_tag, &start_iter, &end_iter);
+    }
+    if (active_tag != NULL) {
+        gtk_text_buffer_remove_tag(buffer, (GtkTextTag *)active_tag, &start_iter, &end_iter);
+    }
+}
+
+static inline void
+swifty_notes_search_apply_tag(gpointer source_buffer, gpointer tag,
+                              int start_offset, int end_offset) {
+    GtkTextBuffer *buffer = GTK_TEXT_BUFFER(source_buffer);
+    GtkTextIter start_iter;
+    GtkTextIter end_iter;
+    gtk_text_buffer_get_iter_at_offset(buffer, &start_iter, start_offset);
+    gtk_text_buffer_get_iter_at_offset(buffer, &end_iter, end_offset);
+    if (gtk_text_iter_compare(&start_iter, &end_iter) < 0) {
+        gtk_text_buffer_apply_tag(buffer, (GtkTextTag *)tag, &start_iter, &end_iter);
+    }
+}
+
 #endif /* SWIFTYNOTES_CSPELLING_SHIM_H */

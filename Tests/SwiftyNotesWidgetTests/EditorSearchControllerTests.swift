@@ -194,6 +194,34 @@ struct EditorSearchControllerTests {
     }
 
     @Test @MainActor
+    func `highlight tags are created on first non-empty query`() throws {
+        let rig = try Self.makeRig(suffix: "tag-created", text: "needle in a haystack with needle")
+        // No tags exist before searching.
+        #expect(rig.controller.debugMatchTagCreated == false)
+        #expect(rig.controller.debugActiveTagCreated == false)
+        rig.bar.debugTypeQuery("needle")
+        // Both tags exist after the first match recomputation.
+        #expect(rig.controller.debugMatchTagCreated == true)
+        #expect(rig.controller.debugActiveTagCreated == true)
+    }
+
+    @Test @MainActor
+    func `clearing the bar removes match highlights from the buffer`() throws {
+        // We can't easily introspect which characters carry the tag
+        // in a headless test, but the contract is: after close,
+        // clear is called. Cover the path by ensuring the bar
+        // transitions through close + the controller releases its
+        // cached query.
+        let rig = try Self.makeRig(suffix: "highlight-clear", text: "alpha alpha alpha")
+        rig.bar.setVisible(true)
+        rig.bar.debugTypeQuery("alpha")
+        #expect(rig.controller.debugMatchCount == 3)
+        rig.bar.setVisible(false)
+        #expect(rig.controller.debugMatchCount == 0)
+        #expect(rig.controller.debugActiveIndex == nil)
+    }
+
+    @Test @MainActor
     func `no matches → count stays empty + cursor doesn't move`() throws {
         let rig = try Self.makeRig(suffix: "nomatches", text: "alpha beta gamma")
         rig.editor.buffer.placeCursor(at: 7)
