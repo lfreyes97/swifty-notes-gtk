@@ -91,7 +91,7 @@ struct MainWindowOutlineTests {
         window.debugSetEditorText("# Roadmap\n\n## Overview\n\nBody.")
         _ = window.debugPreviewText
         // First line "# Roadmap" → note title resolves to "Roadmap".
-        #expect(window.breadcrumb.docLabel.text == "Roadmap")
+        #expect(window.breadcrumb.label.markup.contains("Roadmap"))
     }
 
     @Test @MainActor

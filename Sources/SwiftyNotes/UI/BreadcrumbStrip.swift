@@ -2,67 +2,52 @@ import Adwaita
 import Foundation
 
 /// "You are here" strip above the editor in variant A — mirrors the
-/// design's `.sn-breadcrumb` block. Three segments separated by chevron
-/// glyphs: document title, the most recent H2 section, and the deepest
-/// heading the user has scrolled past.
+/// design's `.sn-breadcrumb` block. Three segments separated by
+/// chevron glyphs: document title, the most recent H2 section, and
+/// the deepest heading the user has scrolled past.
+///
+/// Single-Label implementation: every segment + chevron is rendered
+/// through one Pango-markup string. The earlier Box-of-5-Labels
+/// shape added 7 widgets to every render-tree walk on every frame —
+/// after the scroll-perf audit (sysprof showed render walk dominating
+/// scroll CPU) collapsing this to one widget visibly reduces the
+/// per-frame cost without losing any visual fidelity.
 ///
 /// The strip stays a fixed 48 px tall so the editor toolbar and the
 /// breadcrumb start their content at the same vertical position on
 /// both sides of the split (matching the design's `height: 48 px`
-/// rule — same logic as `EditorFormattingToolbar` padding).
+/// rule).
 @MainActor
 final class BreadcrumbStrip {
     let root: Box
 
-    // Exposed so widget tests can verify visibility / text without
-    // having to reach in via accessibility lookups.
-    let docLabel: Label
-    let chevron1: Label
-    let sectionLabel: Label
-    let chevron2: Label
-    let leafLabel: Label
+    /// Single Pango-markup Label that renders the whole breadcrumb.
+    /// Exposed so widget tests can assert on the rendered text / markup
+    /// (tests previously inspected the per-segment labels directly).
+    let label: Label
 
-    // Memoization keys so the scroll-spy hot path (which can fire
-    // 60/s during a kinetic scroll, often with the same active id
-    // back-to-back) doesn't re-write the three labels every tick —
-    // each assignment invalidates Pango layout for that label.
+    // Memoization keys so the scroll-spy hot path doesn't re-write the
+    // markup on every tick when the (docTitle, section, leaf) tuple is
+    // unchanged — each markup assignment invalidates Pango layout.
     private var lastDocTitle: String?
     private var lastSection: String?
     private var lastLeaf: String?
 
     init() {
-        docLabel = Label("")
-        docLabel.xalign = 0
-        docLabel.addCSSClass(.dimLabel)
+        label = Label("")
+        label.xalign = 0
+        label.useMarkup = true
+        label.ellipsize = .end
 
-        sectionLabel = Label("")
-        sectionLabel.xalign = 0
-        sectionLabel.addCSSClass(.dimLabel)
-        sectionLabel.ellipsize = .end
-
-        leafLabel = Label("")
-        leafLabel.xalign = 0
-        leafLabel.ellipsize = .end
-
-        chevron1 = Label("›")
-        chevron1.addCSSClass(.dimLabel)
-        chevron2 = Label("›")
-        chevron2.addCSSClass(.dimLabel)
-
-        root = Box(orientation: .horizontal, spacing: 8)
+        root = Box(orientation: .horizontal, spacing: 0)
         root.addCSSClass("sn-breadcrumb")
         root.marginStart = 36
         root.marginEnd = 36
         // 48 px height matches the editor toolbar's natural height
-        // (9 px padding + 30 px button content). Wraps + fixed margins
-        // place the doc title at the same vertical position as the
-        // toolbar's first button on the other side of the split.
+        // so the doc title lines up with the toolbar's first button
+        // on the other side of the split.
         root.setSizeRequest(height: 48)
-        root.append(docLabel)
-        root.append(chevron1)
-        root.append(sectionLabel)
-        root.append(chevron2)
-        root.append(leafLabel)
+        root.append(label)
 
         update(docTitle: "", section: nil, leaf: nil)
     }
@@ -71,35 +56,14 @@ final class BreadcrumbStrip {
     /// preceding chevron disappears too) so a heading-less note shows
     /// only the doc title and an H1-only note shows "Doc › H1".
     func update(docTitle: String, section: String?, leaf: String?) {
-        // Skip on no-change: the scroll-spy callback path calls this
-        // ~60/s during a kinetic scroll, almost always with the same
-        // (docTitle, section, leaf) tuple. Setting `label.text`
-        // unconditionally triggers Pango re-layout for that label.
         if lastDocTitle == docTitle, lastSection == section, lastLeaf == leaf { return }
         lastDocTitle = docTitle
         lastSection = section
         lastLeaf = leaf
 
-        docLabel.text = docTitle
-        docLabel.visible = !docTitle.isEmpty
-
-        if let section, !section.isEmpty {
-            sectionLabel.text = section
-            sectionLabel.visible = true
-            chevron1.visible = !docTitle.isEmpty
-        } else {
-            sectionLabel.visible = false
-            chevron1.visible = false
-        }
-
-        if let leaf, !leaf.isEmpty {
-            leafLabel.text = leaf
-            leafLabel.visible = true
-            chevron2.visible = sectionLabel.visible
-        } else {
-            leafLabel.visible = false
-            chevron2.visible = false
-        }
+        label.markup = Self.buildMarkup(docTitle: docTitle, section: section, leaf: leaf)
+        // Visibility: hide the whole strip if there's nothing to show.
+        label.visible = !docTitle.isEmpty || section?.isEmpty == false || leaf?.isEmpty == false
     }
 
     /// Convenience: derive the section + leaf from the currently active
@@ -113,9 +77,7 @@ final class BreadcrumbStrip {
             return
         }
         switch active.level {
-        case 1:
-            update(docTitle: docTitle, section: active.text, leaf: nil)
-        case 2:
+        case 1, 2:
             update(docTitle: docTitle, section: active.text, leaf: nil)
         default:
             // For H3+ find the most recent H2 above.
@@ -126,5 +88,58 @@ final class BreadcrumbStrip {
             }
             update(docTitle: docTitle, section: parent?.text ?? "", leaf: active.text)
         }
+    }
+
+    /// Build the single Pango-markup string. Dim color for doc + section
+    /// + chevrons; full-weight foreground for the leaf when present;
+    /// otherwise dim foreground on the section so an H1/H2-only state
+    /// reads as a "passive you-are-here" cue. The colors use Adwaita's
+    /// CSS-resolved foreground / muted tokens by way of opacity spans —
+    /// avoids hard-coding hex values that wouldn't track theme changes.
+    static func buildMarkup(docTitle: String, section: String?, leaf: String?) -> String {
+        var pieces: [String] = []
+        if !docTitle.isEmpty {
+            pieces.append("<span alpha=\"60%\">\(escape(docTitle))</span>")
+        }
+        if let section, !section.isEmpty {
+            let renderedSection: String
+            if let leaf, !leaf.isEmpty {
+                renderedSection = "<span alpha=\"60%\">\(escape(section))</span>"
+            } else {
+                // No leaf — the section is the current focus, render full-weight.
+                renderedSection = "<span weight=\"500\">\(escape(section))</span>"
+            }
+            if !pieces.isEmpty {
+                pieces.append(separator)
+            }
+            pieces.append(renderedSection)
+        }
+        if let leaf, !leaf.isEmpty {
+            if !pieces.isEmpty {
+                pieces.append(separator)
+            }
+            pieces.append("<span weight=\"500\">\(escape(leaf))</span>")
+        }
+        return pieces.joined(separator: " ")
+    }
+
+    /// Pango-escaped chevron `›` with a dim alpha matching the design's
+    /// `.sn-breadcrumb svg { opacity: 0.5 }` rule.
+    private static let separator = "<span alpha=\"45%\">›</span>"
+
+    private static func escape(_ text: String) -> String {
+        var out = ""
+        out.reserveCapacity(text.count)
+        for character in text {
+            switch character {
+            case "&": out.append("&amp;")
+            case "<": out.append("&lt;")
+            case ">": out.append("&gt;")
+            case "\"": out.append("&quot;")
+            case "'": out.append("&apos;")
+            default: out.append(character)
+            }
+        }
+        return out
     }
 }

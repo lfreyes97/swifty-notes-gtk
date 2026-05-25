@@ -22,12 +22,10 @@ struct BreadcrumbStripTests {
             ],
             activeID: nil,
         )
-        #expect(strip.docLabel.text == "Q3 Roadmap")
-        #expect(strip.docLabel.visible == true)
-        #expect(strip.sectionLabel.visible == false)
-        #expect(strip.leafLabel.visible == false)
-        #expect(strip.chevron1.visible == false)
-        #expect(strip.chevron2.visible == false)
+        // Only the doc title contributes — no separator or section span.
+        let markup = strip.label.markup
+        #expect(markup.contains("Q3 Roadmap"))
+        #expect(!markup.contains("›"))
     }
 
     @Test @MainActor
@@ -38,11 +36,11 @@ struct BreadcrumbStripTests {
             headings: [.init(id: "intro", level: 1, text: "Intro", blockIndex: 0, line: 1)],
             activeID: "intro",
         )
-        #expect(strip.docLabel.text == "Doc")
-        #expect(strip.sectionLabel.text == "Intro")
-        #expect(strip.sectionLabel.visible == true)
-        #expect(strip.leafLabel.visible == false)
-        #expect(strip.chevron2.visible == false)
+        let markup = strip.label.markup
+        #expect(markup.contains("Doc"))
+        #expect(markup.contains("Intro"))
+        // Doc › Intro, but no second chevron / leaf segment.
+        #expect(markup.filter { $0 == "›" }.count == 1)
     }
 
     @Test @MainActor
@@ -53,8 +51,9 @@ struct BreadcrumbStripTests {
             headings: [.init(id: "overview", level: 2, text: "Overview", blockIndex: 0, line: 1)],
             activeID: "overview",
         )
-        #expect(strip.sectionLabel.text == "Overview")
-        #expect(strip.leafLabel.visible == false)
+        let markup = strip.label.markup
+        #expect(markup.contains("Overview"))
+        #expect(markup.filter { $0 == "›" }.count == 1)
     }
 
     @Test @MainActor
@@ -69,43 +68,57 @@ struct BreadcrumbStripTests {
         ]
         // Activate Goals — its parent is Overview, not Features.
         strip.update(docTitle: "Doc", headings: headings, activeID: "goals")
-        #expect(strip.sectionLabel.text == "Overview")
-        #expect(strip.leafLabel.text == "Goals")
-        #expect(strip.leafLabel.visible == true)
+        var markup = strip.label.markup
+        #expect(markup.contains("Doc"))
+        #expect(markup.contains("Overview"))
+        #expect(markup.contains("Goals"))
+        // Two chevrons: doc › section › leaf.
+        #expect(markup.filter { $0 == "›" }.count == 2)
 
         // Activate Outline — its parent is Features.
         strip.update(docTitle: "Doc", headings: headings, activeID: "outline")
-        #expect(strip.sectionLabel.text == "Features")
-        #expect(strip.leafLabel.text == "Outline")
+        markup = strip.label.markup
+        #expect(markup.contains("Features"))
+        #expect(markup.contains("Outline"))
     }
 
     @Test @MainActor
     func `update no-ops when the doc title, section, and leaf are unchanged`() throws {
         // Performance regression guard: scroll-spy calls this ~60/s
         // during a kinetic scroll, almost always with the same tuple.
-        // Setting `label.text` re-invalidates Pango layout every time,
-        // so the memoized early-exit really has to short-circuit.
         let strip = try Self.makeStrip(suffix: "memo")
         strip.update(docTitle: "Doc", section: "Section", leaf: "Leaf")
-        let originalDocPtr = strip.docLabel.opaquePointer
-        // Same inputs again. The labels must keep their identities
-        // (no replacement) and observable state should be unchanged.
+        let originalLabelPtr = strip.label.opaquePointer
+        let originalMarkup = strip.label.markup
         strip.update(docTitle: "Doc", section: "Section", leaf: "Leaf")
-        #expect(strip.docLabel.opaquePointer == originalDocPtr)
-        #expect(strip.docLabel.text == "Doc")
+        // Same widget identity (no replacement) and same markup state.
+        #expect(strip.label.opaquePointer == originalLabelPtr)
+        #expect(strip.label.markup == originalMarkup)
         // Changing one field must flow through.
         strip.update(docTitle: "Doc", section: "Section", leaf: "Other")
-        #expect(strip.leafLabel.text == "Other")
+        #expect(strip.label.markup.contains("Other"))
     }
 
     @Test @MainActor
     func `empty doc title hides the leading segment and its chevron`() throws {
         let strip = try Self.makeStrip(suffix: "emptydoc")
         strip.update(docTitle: "", section: "Section", leaf: nil)
-        #expect(strip.docLabel.visible == false)
-        #expect(strip.chevron1.visible == false)
-        #expect(strip.sectionLabel.visible == true)
-        #expect(strip.sectionLabel.text == "Section")
+        let markup = strip.label.markup
+        // No doc title means no leading chevron either — the markup
+        // starts straight with the section span.
+        #expect(!markup.contains("›"))
+        #expect(markup.contains("Section"))
+    }
+
+    @Test @MainActor
+    func `Pango-special characters in headings are escaped, not interpreted`() throws {
+        let strip = try Self.makeStrip(suffix: "escape")
+        // Headings with `&`, `<`, `>` would crash Pango if passed raw
+        // into a `markup` string. They have to be entity-escaped.
+        strip.update(docTitle: "A & B", section: "<x>", leaf: nil)
+        let markup = strip.label.markup
+        #expect(markup.contains("A &amp; B"))
+        #expect(markup.contains("&lt;x&gt;"))
     }
 }
 #endif
