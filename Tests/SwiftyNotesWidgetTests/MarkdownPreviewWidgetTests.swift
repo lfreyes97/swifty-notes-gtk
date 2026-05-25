@@ -484,6 +484,40 @@ struct MarkdownPreviewWidgetTests {
     }
 
     @Test @MainActor
+    func `preview collapses table cells into a single monospaced Label inside the card wrapper`() throws {
+        // Phase B.3 (scroll perf): the old Grid + cell-Labels layout
+        // exposed ~12 widgets for a 4-row, 2-column table; per-frame
+        // GTK snapshot walks dominated scroll CPU on notes that
+        // contained even one table. Collapse the table body to a
+        // single Pango-markup Label inside the existing `.card`
+        // wrapper Box. Column alignment comes from <tt>-monospaced
+        // character-count padding.
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.table-collapse")
+        try app.register()
+
+        let preview = MarkdownPreview(remoteImageLoader: { _, _ in })
+        preview.render(blocks: [
+            .table(
+                headers: [.plain("Area"), .plain("What")],
+                rows: [
+                    [.plain("Toolbar"),    .plain("Quick formatting")],
+                    [.plain("Split view"), .plain("Side by side")],
+                    [.plain("CLI"),        .plain("Automation")],
+                ],
+                alignments: [.leading, .leading],
+            ),
+        ])
+
+        #expect(preview.debugTopLevelWidgetCount == 1)
+        // Container + card-wrapper Box + single Label = 3 widgets total.
+        #expect(preview.debugWidgetTreeCount == 3)
+        let texts = labelTexts(in: preview.container)
+        #expect(texts.contains { $0.contains("Area") })
+        #expect(texts.contains { $0.contains("Toolbar") })
+        #expect(texts.contains { $0.contains("Automation") })
+    }
+
+    @Test @MainActor
     func `preview coalesces long paragraph runs into a single label subtree`() throws {
         let app = Application(id: "me.spaceinbox.swiftynotes.tests.paragraph-run-coalescing")
         try app.register()

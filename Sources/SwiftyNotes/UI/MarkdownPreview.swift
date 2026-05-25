@@ -212,19 +212,6 @@ final class MarkdownPreview {
         line-height: 1.14;
     }
 
-    .preview-table-header {
-        margin-top: 0;
-        margin-bottom: 0;
-        padding-bottom: 4px;
-    }
-
-    .preview-table-cell {
-        margin-top: 0;
-        margin-bottom: 0;
-        padding-top: 3px;
-        padding-bottom: 3px;
-    }
-
     .preview-image-link {
         padding: 0;
         margin: 0;
@@ -1388,6 +1375,18 @@ final class MarkdownPreview {
     }
 
     private func makeTable(headers: [RenderedText], rows: [[RenderedText]], alignments: [RenderedTableAlignment]) -> Widget {
+        // Phase B.3 (scroll perf): the previous Grid-with-cells layout
+        // was the heaviest remaining preview block on the showcase note
+        // (wrapper Box + inner Box + Grid + 1 separator + N labels — 12
+        // widgets for a 4-row × 2-column table). GTK's per-frame
+        // snapshot walk dominated scroll CPU on that note, so we
+        // collapse the table body into a single monospaced Pango
+        // markup Label inside the existing card wrapper. Character-
+        // count padding keeps the columns aligned because <tt> picks a
+        // monospace family. Loss: cells no longer auto-wrap (wide
+        // cells stretch the label and the scrolled-window scrolls
+        // horizontally); markdown tables in practice keep cells
+        // short, so this is an acceptable trade.
         let wrapper = Box(orientation: .vertical, spacing: 0)
         wrapper.addCSSClass("card")
         wrapper.addCSSClass("preview-table-card")
@@ -1397,51 +1396,82 @@ final class MarkdownPreview {
         wrapper.valign = .start
         wrapper.overflow = .hidden
 
-        let inner = Box(orientation: .vertical, spacing: 10)
-        inner.setMargins(14)
-        inner.hexpand = true
-        inner.vexpand = false
-        inner.halign = .fill
-        inner.valign = .start
-
-        let grid = Grid(columnSpacing: 18, rowSpacing: 6)
-        grid.columnHomogeneous = false
-        grid.hexpand = true
-        grid.vexpand = false
-        grid.halign = .fill
-        grid.valign = .start
-
-        for (column, header) in headers.enumerated() {
-            let label = makeMarkupLabel("<b>\(header.markup)</b>")
-            label.addCSSClass("preview-table-header")
-            applyTableCellWrapping(label)
-            applyAlignment(label, alignments: alignments, column: column)
-            grid.attach(label, column: column, row: 0)
-        }
-
-        let separator = Separator()
-        separator.marginTop = 0
-        separator.marginBottom = 4
-        grid.attach(separator, column: 0, row: 1, width: max(headers.count, 1))
-
-        for (rowIndex, row) in rows.enumerated() {
-            for (column, cell) in row.enumerated() {
-                let label = makeMarkupLabel(cell.markup)
-                label.selectable = true
-                label.addCSSClass("preview-table-cell")
-                applyTableCellWrapping(label)
-                applyAlignment(label, alignments: alignments, column: column)
-                grid.attach(label, column: column, row: rowIndex + 2)
-            }
-        }
-
-        inner.append(grid)
-        wrapper.append(inner)
+        let label = makeMarkupLabel(tableMarkup(headers: headers, rows: rows, alignments: alignments))
+        label.addCSSClass("preview-table-body")
+        label.marginStart = 14
+        label.marginEnd = 14
+        label.marginTop = 14
+        label.marginBottom = 14
+        label.hexpand = true
+        label.halign = .fill
+        label.xalign = 0
+        // Inherit makeMarkupLabel's wrap=true default. Character-count
+        // padding gives clean column alignment when there's enough
+        // horizontal room (the common case); at very narrow widths
+        // Pango falls back to word-wrap and columns soften — still
+        // readable, just no longer pixel-aligned. The narrow-shrink
+        // test relies on this.
+        wrapper.append(label)
         return wrapper
     }
 
-    private func applyTableCellWrapping(_ label: Label) {
-        label.maxWidthChars = 40
+    /// Build the Pango-markup string for an entire table, rendered in
+    /// monospace so character-count padding aligns the columns.
+    /// Headers are bold, the divider row uses `─` characters with a
+    /// muted alpha. Per-column alignment is honored.
+    private func tableMarkup(headers: [RenderedText], rows: [[RenderedText]], alignments: [RenderedTableAlignment]) -> String {
+        let columnCount = headers.count
+        guard columnCount > 0 else { return "" }
+
+        // Column widths derive from the longest plain-text cell in
+        // each column — markup glyphs render at the same width as
+        // their plain-text source under <tt>, so the count is
+        // representative.
+        var widths = Array(repeating: 0, count: columnCount)
+        for (index, cell) in headers.enumerated() {
+            widths[index] = max(widths[index], cell.plainText.count)
+        }
+        for row in rows {
+            for (index, cell) in row.enumerated() where index < columnCount {
+                widths[index] = max(widths[index], cell.plainText.count)
+            }
+        }
+
+        func renderRow(_ cells: [RenderedText], bold: Bool) -> String {
+            var pieces: [String] = []
+            pieces.reserveCapacity(columnCount)
+            for column in 0..<columnCount {
+                let cell = column < cells.count ? cells[column] : RenderedText.plain("")
+                let width = widths[column]
+                let pad = max(0, width - cell.plainText.count)
+                let alignment: RenderedTableAlignment = column < alignments.count ? alignments[column] : .leading
+                let body = bold ? "<b>\(cell.markup)</b>" : cell.markup
+                switch alignment {
+                case .leading:
+                    pieces.append(body + String(repeating: " ", count: pad))
+                case .trailing:
+                    pieces.append(String(repeating: " ", count: pad) + body)
+                case .center:
+                    let left = pad / 2
+                    let right = pad - left
+                    pieces.append(String(repeating: " ", count: left) + body + String(repeating: " ", count: right))
+                }
+            }
+            return pieces.joined(separator: "  ")
+        }
+
+        var lines: [String] = []
+        lines.reserveCapacity(rows.count + 2)
+        lines.append(renderRow(headers, bold: true))
+
+        let totalWidth = widths.reduce(0, +) + max(0, columnCount - 1) * 2
+        lines.append("<span alpha=\"45%\">\(String(repeating: "─", count: totalWidth))</span>")
+
+        for row in rows {
+            lines.append(renderRow(row, bold: false))
+        }
+
+        return "<tt>\(lines.joined(separator: "\n"))</tt>"
     }
 
     private func makeImageBlock(alt: String, source: String?, title: String?, style: ImageBlockStyle) -> Widget {
@@ -1757,24 +1787,6 @@ final class MarkdownPreview {
             launcher.launch(parent: window)
         }
         return label
-    }
-
-    private func applyAlignment(_ label: Label, alignments: [RenderedTableAlignment], column: Int) {
-        guard column < alignments.count else {
-            label.xalign = 0
-            return
-        }
-        switch alignments[column] {
-        case .leading:
-            label.xalign = 0
-            label.justify = .left
-        case .center:
-            label.xalign = 0.5
-            label.justify = .center
-        case .trailing:
-            label.xalign = 1
-            label.justify = .right
-        }
     }
 
     private func resolveImageSource(_ source: String) -> ResolvedImageSource? {
