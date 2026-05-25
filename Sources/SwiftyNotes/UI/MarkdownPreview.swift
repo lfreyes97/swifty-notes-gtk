@@ -1310,6 +1310,14 @@ final class MarkdownPreview {
         // here would leave the post-render walk with no spans to
         // attach Label pointers to. They're reset at the top of
         // `makeRows` instead.
+        //
+        // The highlight tracking sets DO need resetting here: the
+        // labels they reference are about to be removed below, so
+        // a later clear/apply would dereference freed pointers.
+        // The next applySearchHighlights from the controller will
+        // re-populate against the rebuilt widget tree.
+        highlightedLabelPointers = []
+        highlightedCodeBlockBuffers = [:]
         if rootScroll.child?.widgetPointer != container.widgetPointer {
             rootScroll.child = container
         }

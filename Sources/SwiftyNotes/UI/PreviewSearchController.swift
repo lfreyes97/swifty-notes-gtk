@@ -45,6 +45,11 @@ final class PreviewSearchController {
             step(forward: true)
         } else {
             updateBarCount()
+            // The previous query's highlights are gone (the render
+            // wiped them) — keep state consistent so the next
+            // typed character or close doesn't try to clear
+            // already-cleared labels.
+            preview.clearSearchHighlights()
         }
     }
 
@@ -68,6 +73,10 @@ final class PreviewSearchController {
         activeIndex = nil
         if matches.isEmpty {
             updateBarCount()
+            // No hits — drop any overlay attributes left over
+            // from the previous query so the preview reads as
+            // unhighlighted.
+            preview.clearSearchHighlights()
         } else {
             step(forward: true)
         }
@@ -105,6 +114,10 @@ final class PreviewSearchController {
         activeIndex = newIndex
         scrollToMatch(matches[newIndex])
         updateBarCount()
+        // Each step refreshes the overlay so the new active-match
+        // styling (saturated orange + bold) follows the cursor
+        // across labels and code blocks.
+        preview.applySearchHighlights(matches: matches, activeIndex: activeIndex)
     }
 
     /// Bring the matched block into the preview's visible band by
@@ -168,6 +181,7 @@ final class PreviewSearchController {
         matches.removeAll()
         activeIndex = nil
         bar.setMatchCount(total: 0, activeDisplayIndex: nil)
+        preview.clearSearchHighlights()
     }
 }
 

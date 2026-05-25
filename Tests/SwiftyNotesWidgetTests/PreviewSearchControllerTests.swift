@@ -122,6 +122,57 @@ struct PreviewSearchControllerTests {
     }
 
     @Test @MainActor
+    func `typing a query activates Pango highlights on matching labels`() throws {
+        // Phase D: PreviewSearchController must call
+        // preview.applySearchHighlights when the bar's query
+        // changes. Verifying through the public hook:
+        // debugHighlightedLabelPointers on the preview becomes
+        // non-empty.
+        let rig = try Self.makeRig(suffix: "wire-apply", markdown: """
+        # Title
+
+        first match here
+
+        second match line
+        """)
+        rig.bar.debugTypeQuery("match")
+        #expect(rig.controller.debugMatchCount == 2)
+        #expect(!rig.preview.debugHighlightedLabelPointers.isEmpty)
+    }
+
+    @Test @MainActor
+    func `closing the bar clears all preview highlight attributes`() throws {
+        let rig = try Self.makeRig(suffix: "wire-clear", markdown: "needle in haystack and needle")
+        rig.bar.setVisible(true, mode: .find)
+        rig.bar.debugTypeQuery("needle")
+        #expect(!rig.preview.debugHighlightedLabelPointers.isEmpty)
+        rig.bar.setVisible(false)
+        // Controller's onClose path routed through clearState ->
+        // preview.clearSearchHighlights, so no labels carry
+        // attributes any more.
+        #expect(rig.preview.debugHighlightedLabelPointers.isEmpty)
+    }
+
+    @Test @MainActor
+    func `code-block-only query activates the SourceBuffer-tag overlay`() throws {
+        let rig = try Self.makeRig(suffix: "wire-code", markdown: """
+        # Doc
+
+        body text without the term
+
+        ```
+        let value = findMe()
+        ```
+        """)
+        rig.bar.debugTypeQuery("findMe")
+        #expect(rig.controller.debugMatchCount == 1)
+        // Label overlay stays empty (only code-block match), but
+        // the code-block buffer is highlighted.
+        #expect(rig.preview.debugHighlightedLabelPointers.isEmpty)
+        #expect(!rig.preview.debugHighlightedCodeBlockBlockIndexes.isEmpty)
+    }
+
+    @Test @MainActor
     func `images and thematic breaks do not contribute matches even when alt-text would match`() throws {
         let rig = try Self.makeRig(
             suffix: "skip-image",
