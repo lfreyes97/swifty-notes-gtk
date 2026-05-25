@@ -276,6 +276,41 @@ final class MarkdownPreview {
     /// preview-side search controller (#26) to scroll to the
     /// rendered widget for a given match's block.
     private(set) var blockToRowIndex: [Int: Int] = [:]
+
+    /// Where each block's searchable plain text lives inside its
+    /// rendered Label's plain text. Needed by the preview-side
+    /// match-highlight overlay (#27) so a PangoAttrList for one
+    /// match can be turned into the byte range it occupies inside
+    /// the rendered Label, even when the row coalesces several
+    /// blocks (`paragraphRun`, `richTextRun`, `blockquoteRun`,
+    /// flat-list-as-label) or pads each item with a marker glyph.
+    ///
+    /// Blocks that don't fit the "single Pango Label" model are
+    /// deliberately absent: tables (Label content joins cells in a
+    /// different order than the engine's searchable view), task
+    /// lists (Grid / Box layout, no single label), images / image
+    /// groups / thematic breaks (engine doesn't search them). The
+    /// highlight pass simply skips matches whose blockIndex isn't
+    /// in this map — those blocks still get scrolled to, just not
+    /// underlined.
+    ///
+    /// The label pointer in each span fills in only after the row
+    /// widgets are constructed; ``makeRows`` populates the offset
+    /// / length, and the post-render walk attaches the Label.
+    struct BlockTextSpan: Equatable {
+        var labelPointer: OpaquePointer?
+        let plainTextOffset: Int
+        let plainTextLength: Int
+    }
+    private(set) var blockTextSpans: [Int: BlockTextSpan] = [:]
+
+    /// `GtkSourceBuffer` behind each rendered code block, keyed by
+    /// the block's index in the original `[RenderedBlock]`. The
+    /// match-highlight overlay applies tags to these buffers the
+    /// same way the editor side highlights its own buffer — same
+    /// `swifty-notes-search-match` / `*-active` tags from the
+    /// CSpelling shim.
+    private(set) var codeBlockBuffers: [Int: SourceBuffer] = [:]
     private var renderedBaseDirectory: URL?
     private var renderMode: RenderMode = .stacked
     private var virtualizedRows: [PreviewRow] = []
@@ -454,6 +489,7 @@ final class MarkdownPreview {
             renderedRows = rows
             renderedBaseDirectory = standardizedBaseDirectory
             renderMode = targetRenderMode
+            attachWidgetPointersToBlockSpans()
             return
         }
 
@@ -473,6 +509,7 @@ final class MarkdownPreview {
         for row in rows {
             container.append(makeWidget(for: row))
         }
+        attachWidgetPointersToBlockSpans()
     }
 
     private func resolvedRenderMode(for rows: [PreviewRow]) -> RenderMode {
@@ -516,6 +553,8 @@ final class MarkdownPreview {
         // tracked an entirely different note.
         headingBlockToRowIndex = [:]
         blockToRowIndex = [:]
+        blockTextSpans = [:]
+        codeBlockBuffers = [:]
         while index < blocks.count {
             let block = blocks[index]
 
@@ -527,13 +566,16 @@ final class MarkdownPreview {
             // close the current run.
             if case let .heading(level, text) = block {
                 let runStartRow = rows.count
+                let headingStartBlock = index
                 headingBlockToRowIndex[index] = runStartRow
                 blockToRowIndex[index] = runStartRow
                 var segments: [RichTextSegment] = [.heading(level: level, text: text)]
+                var coalescedBlockIndices: [Int] = [index]
                 index += 1
                 while index < blocks.count, case let .paragraph(pText) = blocks[index] {
                     segments.append(.paragraph(text: pText))
                     blockToRowIndex[index] = runStartRow
+                    coalescedBlockIndices.append(index)
                     index += 1
                 }
                 if segments.count == 1 {
@@ -544,8 +586,10 @@ final class MarkdownPreview {
                     // existing `.heading` widget builder uses stay
                     // unchanged in the common no-body-paragraph case.
                     rows.append(.heading(level: level, text: text))
+                    recordSpansForSingleBlockLabel(blockIndex: headingStartBlock, plainText: text.plainText)
                 } else {
                     rows.append(.richTextRun(segments))
+                    recordSpansForCoalescedTextRow(blocks: blocks, indices: coalescedBlockIndices)
                 }
                 continue
             }
@@ -553,13 +597,16 @@ final class MarkdownPreview {
             if case .listItem = block {
                 let listStartRow = rows.count
                 var items: [ListPreviewItem] = []
+                var listBlockIndices: [Int] = []
                 while index < blocks.count {
                     guard case let .listItem(text, depth, marker, loose, taskIndex) = blocks[index] else { break }
                     items.append((text, depth, marker, loose, taskIndex))
                     blockToRowIndex[index] = listStartRow
+                    listBlockIndices.append(index)
                     index += 1
                 }
                 rows.append(.list(items: items))
+                recordSpansForListRow(items: items, indices: listBlockIndices)
                 continue
             }
 
@@ -569,6 +616,12 @@ final class MarkdownPreview {
             }
 
             blockToRowIndex[index] = rows.count
+            switch block {
+            case let .paragraph(text), let .blockquote(text):
+                recordSpansForSingleBlockLabel(blockIndex: index, plainText: text.plainText)
+            default:
+                break
+            }
             rows.append(makeRow(for: block))
             index += 1
         }
@@ -586,10 +639,174 @@ final class MarkdownPreview {
     ) -> PreviewRow? {
         let start = index
         guard let row = makeTextRun(from: blocks, startingAt: &index) else { return nil }
-        for consumedIndex in start..<index {
+        let coalescedIndices = Array(start..<index)
+        for consumedIndex in coalescedIndices {
             blockToRowIndex[consumedIndex] = rowIndex
         }
+        recordSpansForCoalescedTextRow(blocks: blocks, indices: coalescedIndices)
         return row
+    }
+
+    // MARK: - blockTextSpans population (#27 Phase A)
+
+    /// Records a `BlockTextSpan` for a row that renders into a
+    /// single Label with one block's plain text starting at offset
+    /// 0. Covers `heading`, `paragraph`, and `blockquote` blocks
+    /// that didn't get coalesced into a multi-block run.
+    private func recordSpansForSingleBlockLabel(blockIndex: Int, plainText: String) {
+        blockTextSpans[blockIndex] = BlockTextSpan(
+            labelPointer: nil,
+            plainTextOffset: 0,
+            plainTextLength: plainText.count,
+        )
+    }
+
+    /// Records spans for a `paragraphRun`, `richTextRun`, or
+    /// `blockquoteRun` row — anywhere multiple `.paragraph` /
+    /// `.heading` / `.blockquote` blocks share one Label, joined
+    /// by `"\n\n"` (matches ``joinedMarkup`` and
+    /// ``richTextRunMarkup``).
+    private func recordSpansForCoalescedTextRow(blocks: [RenderedBlock], indices: [Int]) {
+        let separatorLength = 2 // "\n\n"
+        var runningOffset = 0
+        for (position, blockIndex) in indices.enumerated() {
+            let plainText = Self.searchablePlainText(for: blocks[blockIndex]) ?? ""
+            blockTextSpans[blockIndex] = BlockTextSpan(
+                labelPointer: nil,
+                plainTextOffset: runningOffset,
+                plainTextLength: plainText.count,
+            )
+            runningOffset += plainText.count
+            if position < indices.count - 1 {
+                runningOffset += separatorLength
+            }
+        }
+    }
+
+    /// Records spans for a `list` row when the row will render as
+    /// a flat single Label (non-task items only — task lists with
+    /// checkboxes use a Grid / Box layout per item, where there
+    /// isn't a single Label to attach a span to, so they're left
+    /// out of `blockTextSpans` deliberately). Mirrors the layout
+    /// rules used by ``flatListMarkup``: per-line prefix is
+    /// `depthIndent + marker + pad`, line separator is `\n` or
+    /// `\n\n` for loose lists.
+    private func recordSpansForListRow(items: [ListPreviewItem], indices: [Int]) {
+        guard items.allSatisfy({ $0.taskIndex == nil }) else { return }
+        let markers = items.map { displayMarker(for: $0.marker, depth: $0.depth) }
+        let maxMarkerWidth = markers.map(\.count).max() ?? 1
+        let padTarget = maxMarkerWidth + 2
+        let lineSeparatorLength = items.contains(where: \.loose) ? 2 : 1
+        var runningOffset = 0
+        for (position, item) in items.enumerated() {
+            let marker = markers[position]
+            let padCount = max(padTarget - marker.count, 1)
+            let depthIndentCount = item.depth > 0 ? item.depth * 2 : 0
+            let prefixLength = depthIndentCount + marker.count + padCount
+            let itemPlainText = item.text.plainText
+            blockTextSpans[indices[position]] = BlockTextSpan(
+                labelPointer: nil,
+                plainTextOffset: runningOffset + prefixLength,
+                plainTextLength: itemPlainText.count,
+            )
+            runningOffset += prefixLength + itemPlainText.count
+            if position < items.count - 1 {
+                runningOffset += lineSeparatorLength
+            }
+        }
+    }
+
+    /// Walks the rendered row widgets and writes Label pointers
+    /// into the matching ``blockTextSpans`` entries (so the
+    /// highlight overlay knows which Label to apply Pango
+    /// attributes to) plus retains code-block ``SourceBuffer``
+    /// references in ``codeBlockBuffers`` (so the editor's tag
+    /// helpers can apply highlight tags inside code blocks).
+    ///
+    /// Called after every render path that mutates
+    /// ``container.children()`` — fresh stacked render and
+    /// in-place incremental update. Virtualized + custom-text
+    /// modes skip highlighting (deliberate: virtualized realizes
+    /// rows lazily, custom-text replaces the per-row tree with a
+    /// single Label not suitable for per-block highlighting).
+    func attachWidgetPointersToBlockSpans() {
+        guard renderMode == .stacked else { return }
+        let children = container.children()
+        guard children.count == renderedRows.count else { return }
+        for (rowIndex, row) in renderedRows.enumerated() {
+            let widget = children[rowIndex]
+            if let labelPointer = Self.locateTargetLabelPointer(in: widget, for: row) {
+                for (blockIndex, var span) in blockTextSpans
+                where blockToRowIndex[blockIndex] == rowIndex
+                {
+                    span.labelPointer = labelPointer
+                    blockTextSpans[blockIndex] = span
+                }
+            }
+            if case .codeBlock = row, let buffer = Self.locateCodeBlockBuffer(in: widget) {
+                for (blockIndex, mappedRow) in blockToRowIndex where mappedRow == rowIndex {
+                    codeBlockBuffers[blockIndex] = buffer
+                }
+            }
+        }
+    }
+
+    private static func locateTargetLabelPointer(in widget: Widget, for row: PreviewRow) -> OpaquePointer? {
+        switch row {
+        case .heading, .paragraphRun, .richTextRun:
+            return widget.tryCast(Label.self)?.opaquePointer
+        case .blockquoteRun:
+            // Box → [Separator, Label]; the Label is the last child.
+            guard let box = widget.tryCast(Box.self) else { return nil }
+            for child in box.children().reversed() {
+                if let label = child.tryCast(Label.self) {
+                    return label.opaquePointer
+                }
+            }
+            return nil
+        case .list:
+            // Flat non-task list renders as a single Label; task /
+            // nested-task lists return a Box and don't get
+            // per-block spans (Phase A intentionally skips them).
+            return widget.tryCast(Label.self)?.opaquePointer
+        default:
+            return nil
+        }
+    }
+
+    private static func locateCodeBlockBuffer(in widget: Widget) -> SourceBuffer? {
+        guard let overlay = widget.tryCast(Overlay.self) else { return nil }
+        guard let inner = overlay.child?.tryCast(Box.self) else { return nil }
+        for child in inner.children() {
+            if let scroll = child.tryCast(ScrolledWindow.self),
+               let view = scroll.child?.tryCast(SourceView.self)
+            {
+                return view.buffer
+            }
+        }
+        return nil
+    }
+
+    /// Pure-logic accessor mirroring ``MarkdownSearchEngine.searchableText``
+    /// — kept private here to avoid bringing the engine into the
+    /// preview's import surface. The two implementations must stay
+    /// in sync for the highlight overlay to land on the right
+    /// substring.
+    private static func searchablePlainText(for block: RenderedBlock) -> String? {
+        switch block {
+        case .image, .imageGroup, .thematicBreak:
+            return nil
+        case let .heading(_, text), let .paragraph(text), let .blockquote(text):
+            return text.plainText
+        case let .codeBlock(code, _):
+            return code
+        case let .listItem(text, _, _, _, _):
+            return text.plainText
+        case let .table(headers, rows, _):
+            let headerLine = headers.map(\.plainText).joined(separator: "\n")
+            let cellLines = rows.flatMap { row in row.map(\.plainText) }
+            return ([headerLine] + cellLines).joined(separator: "\n")
+        }
     }
 
     private func shouldUseVirtualizedRows(_ rows: [PreviewRow]) -> Bool {
@@ -874,6 +1091,12 @@ final class MarkdownPreview {
         virtualizedStore = nil
         virtualizedListView = nil
         customTextLabel = nil
+        // NOTE: blockTextSpans + codeBlockBuffers are NOT reset
+        // here — `makeRows` runs before `clear()` in `render()`
+        // and rewrites the spans for the new blocks. Wiping them
+        // here would leave the post-render walk with no spans to
+        // attach Label pointers to. They're reset at the top of
+        // `makeRows` instead.
         if rootScroll.child?.widgetPointer != container.widgetPointer {
             rootScroll.child = container
         }
