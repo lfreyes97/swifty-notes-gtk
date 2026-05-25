@@ -138,22 +138,46 @@ enum OutlinePositions {
         return widgetY(of: children[rowIndex])
     }
 
-    /// Batched form used by the scroll-spy tick. Walks
-    /// `container.children()` exactly once and returns positions for
-    /// every heading that has a corresponding rendered widget. The
-    /// per-heading variant above allocates a fresh Widget array on
-    /// every call, which adds up fast when called N times per tick.
+    /// Batched form used by the scroll-spy tick. Walks the preview
+    /// container's child list using **raw GTK pointers** so we never
+    /// allocate `Widget` wrappers for children we're only inspecting
+    /// for allocation. swift-adwaita's `Widget.children()` creates a
+    /// `Widget(borrowing:)` per child — each one does
+    /// `g_object_weak_ref` + array growth + ref-count book-keeping —
+    /// and the scroll-spy was burning ~45 % of its tick on that
+    /// before this rewrite (sysprof confirmed). With raw pointers we
+    /// only pay for `get_first_child` + N × `get_next_sibling` +
+    /// `gtk_widget_get_allocation` per target row.
     static func previewPositions(for headings: [Heading], in preview: MarkdownPreview) -> [(id: String, y: Double)] {
         guard !headings.isEmpty else { return [] }
-        let children = preview.container.children()
         let mapping = preview.headingBlockToRowIndex
+
+        // Sort row-indices ascending so a single forward sibling walk
+        // covers them all. Stash the heading id alongside so the
+        // result preserves the document-order required by the resolver.
+        let targets: [(rowIndex: Int, headingID: String)] = headings
+            .compactMap { heading in
+                mapping[heading.blockIndex].map { ($0, heading.id) }
+            }
+            .sorted { $0.rowIndex < $1.rowIndex }
+        guard !targets.isEmpty else { return [] }
+
+        let containerPtr = UnsafeMutablePointer<GtkWidget>(preview.container.opaquePointer)
         var result: [(id: String, y: Double)] = []
-        result.reserveCapacity(headings.count)
-        for heading in headings {
-            guard let rowIndex = mapping[heading.blockIndex] else { continue }
-            guard children.indices.contains(rowIndex) else { continue }
-            guard let y = widgetY(of: children[rowIndex]) else { continue }
-            result.append((heading.id, y))
+        result.reserveCapacity(targets.count)
+        var currentChild: UnsafeMutablePointer<GtkWidget>? = gtk_widget_get_first_child(containerPtr)
+        var currentRowIndex = 0
+        for target in targets {
+            while currentRowIndex < target.rowIndex, currentChild != nil {
+                currentChild = gtk_widget_get_next_sibling(currentChild)
+                currentRowIndex += 1
+            }
+            guard let widget = currentChild else { break }
+            var allocation = GtkAllocation()
+            gtk_widget_get_allocation(widget, &allocation)
+            if allocation.height > 0 {
+                result.append((target.headingID, Double(allocation.y)))
+            }
         }
         return result
     }
