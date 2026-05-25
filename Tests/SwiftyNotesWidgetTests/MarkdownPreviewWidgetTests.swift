@@ -430,6 +430,33 @@ struct MarkdownPreviewWidgetTests {
     }
 
     @Test @MainActor
+    func `preview collapses flat non-task list into a single Label`() throws {
+        // Phase B.2: a depth-0 list with no checkbox markers no
+        // longer materializes a Grid + 2N cell Labels. The whole
+        // list becomes one Pango-markup Label so the per-frame
+        // snapshot walk sees one widget instead of 9 for a 4-item
+        // list.
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.flat-list-label")
+        try app.register()
+
+        let preview = MarkdownPreview(remoteImageLoader: { _, _ in })
+        preview.render(blocks: [
+            .listItem(text: .plain("First"),  depth: 0, marker: "-"),
+            .listItem(text: .plain("Second"), depth: 0, marker: "-"),
+            .listItem(text: .plain("Third"),  depth: 0, marker: "-"),
+            .listItem(text: .plain("Fourth"), depth: 0, marker: "-"),
+        ])
+        #expect(preview.debugTopLevelWidgetCount == 1)
+        // Container + the single Label = 2 widgets total.
+        #expect(preview.debugWidgetTreeCount == 2)
+        let texts = labelTexts(in: preview.container)
+        #expect(texts.contains { $0.contains("First") })
+        #expect(texts.contains { $0.contains("Second") })
+        #expect(texts.contains { $0.contains("Third") })
+        #expect(texts.contains { $0.contains("Fourth") })
+    }
+
+    @Test @MainActor
     func `preview coalesces long paragraph runs into a single label subtree`() throws {
         let app = Application(id: "me.spaceinbox.swiftynotes.tests.paragraph-run-coalescing")
         try app.register()

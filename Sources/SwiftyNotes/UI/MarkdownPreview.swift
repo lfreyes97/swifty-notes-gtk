@@ -721,6 +721,18 @@ final class MarkdownPreview {
             guard let label = widget.tryCast(Label.self) else { return false }
             label.markup = richTextRunMarkup(segments)
             return true
+        case let (.list(oldItems), .list(newItems)):
+            // Phase B.2: only the flat-non-task path uses a single
+            // Label. If both renders agree on that shape we can swap
+            // the markup in place; otherwise the row shape changed
+            // (e.g. user added a checkbox → task list) and the caller
+            // has to rebuild.
+            let oldFlatNonTask = oldItems.allSatisfy { $0.depth == 0 && $0.taskIndex == nil }
+            let newFlatNonTask = newItems.allSatisfy { $0.depth == 0 && $0.taskIndex == nil }
+            guard oldFlatNonTask, newFlatNonTask else { return false }
+            guard let label = widget.tryCast(Label.self) else { return false }
+            label.markup = flatListMarkup(newItems)
+            return true
         case let (.blockquoteRun(_), .blockquoteRun(texts)):
             guard let row = widget.tryCast(Box.self) else { return false }
             return configureBlockquoteRow(row, texts: texts)
@@ -1173,6 +1185,12 @@ final class MarkdownPreview {
 
     private func makeList(_ items: [(text: RenderedText, depth: Int, marker: String, loose: Bool, taskIndex: Int?)]) -> Widget {
         if items.allSatisfy({ $0.depth == 0 }) {
+            // Phase B.2: a flat list with no clickable checkbox can
+            // collapse to a single Label. Task lists keep the per-row
+            // Grid because each checkbox is an interactive widget.
+            if items.allSatisfy({ $0.taskIndex == nil }) {
+                return makeFlatListAsLabel(items)
+            }
             return makeFlatList(items)
         }
 
@@ -1188,6 +1206,51 @@ final class MarkdownPreview {
             ))
         }
         return list
+    }
+
+    /// Markup string for a flat non-task list. Shared between the
+    /// initial-build path (``makeFlatListAsLabel``) and the in-place
+    /// update path (``updateWidgetInPlace``), so a typing-debounced
+    /// refresh that only changed one bullet can keep the Label widget
+    /// alive and just swap its `markup`.
+    private func flatListMarkup(_ items: [(text: RenderedText, depth: Int, marker: String, loose: Bool, taskIndex: Int?)]) -> String {
+        let markers = items.map { displayMarker(for: $0.marker, depth: $0.depth) }
+        let maxMarkerWidth = markers.map(\.count).max() ?? 1
+        let padTarget = maxMarkerWidth + 2
+        var lines: [String] = []
+        lines.reserveCapacity(items.count)
+        for (index, item) in items.enumerated() {
+            let marker = markers[index]
+            let padCount = max(padTarget - marker.count, 1)
+            let pad = String(repeating: " ", count: padCount)
+            lines.append("<span alpha=\"60%\">\(marker)</span>\(pad)\(item.text.markup)")
+        }
+        let separator = items.contains(where: \.loose) ? "\n\n" : "\n"
+        return lines.joined(separator: separator)
+    }
+
+    /// Phase B.2 single-Label path for a flat list of non-task items.
+    /// Cuts a 4-bullet list from `Grid + 8 Labels` (9 widgets) down to
+    /// one Label — that's the per-frame snapshot of a third of the
+    /// showcase's preview-pane widget count.
+    ///
+    /// Visual fidelity trade-off: long bullets that wrap onto a
+    /// second line don't get a hanging indent (the wrapped text
+    /// starts back at column 0 because Pango Label doesn't expose
+    /// `pango_layout_set_indent` through swift-adwaita yet). Markers
+    /// stay aligned per-list via fixed-width padding computed off
+    /// the widest marker in the list — visually identical to the
+    /// Grid layout for the common case of single-line items.
+    private func makeFlatListAsLabel(_ items: [(text: RenderedText, depth: Int, marker: String, loose: Bool, taskIndex: Int?)]) -> Widget {
+        let label = makeMarkupLabel(flatListMarkup(items))
+        label.selectable = true
+        label.hexpand = true
+        label.halign = .fill
+        label.xalign = 0
+        if !label.hasCSSClass("preview-flat-list-label") {
+            label.addCSSClass("preview-flat-list-label")
+        }
+        return label
     }
 
     private func makeFlatList(_ items: [(text: RenderedText, depth: Int, marker: String, loose: Bool, taskIndex: Int?)]) -> Widget {
