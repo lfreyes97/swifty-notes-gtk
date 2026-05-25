@@ -195,8 +195,16 @@ extension MainWindow {
             },
             onActive: { [weak self] activeID in
                 guard let self else { return }
+                // Hot path: scroll-spy fires this ~60/s during a
+                // kinetic scroll. Both branches early-exit on
+                // unchanged active id — `setActiveHeading` toggles
+                // CSS only when the id moves, and the breadcrumb
+                // skip avoids 3 Pango layout invalidations per tick
+                // even when the scroll-spy is reporting the same
+                // section over and over.
+                let changed = outlineSidebar.activeHeadingID != activeID
                 outlineSidebar.setActiveHeading(activeID)
-                refreshBreadcrumb()
+                if changed { refreshBreadcrumb() }
             },
         )
     }

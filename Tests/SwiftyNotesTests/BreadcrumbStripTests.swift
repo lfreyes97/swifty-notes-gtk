@@ -80,6 +80,25 @@ struct BreadcrumbStripTests {
     }
 
     @Test @MainActor
+    func `update no-ops when the doc title, section, and leaf are unchanged`() throws {
+        // Performance regression guard: scroll-spy calls this ~60/s
+        // during a kinetic scroll, almost always with the same tuple.
+        // Setting `label.text` re-invalidates Pango layout every time,
+        // so the memoized early-exit really has to short-circuit.
+        let strip = try Self.makeStrip(suffix: "memo")
+        strip.update(docTitle: "Doc", section: "Section", leaf: "Leaf")
+        let originalDocPtr = strip.docLabel.opaquePointer
+        // Same inputs again. The labels must keep their identities
+        // (no replacement) and observable state should be unchanged.
+        strip.update(docTitle: "Doc", section: "Section", leaf: "Leaf")
+        #expect(strip.docLabel.opaquePointer == originalDocPtr)
+        #expect(strip.docLabel.text == "Doc")
+        // Changing one field must flow through.
+        strip.update(docTitle: "Doc", section: "Section", leaf: "Other")
+        #expect(strip.leafLabel.text == "Other")
+    }
+
+    @Test @MainActor
     func `empty doc title hides the leading segment and its chevron`() throws {
         let strip = try Self.makeStrip(suffix: "emptydoc")
         strip.update(docTitle: "", section: "Section", leaf: nil)

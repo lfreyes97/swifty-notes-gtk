@@ -22,6 +22,14 @@ final class BreadcrumbStrip {
     let chevron2: Label
     let leafLabel: Label
 
+    // Memoization keys so the scroll-spy hot path (which can fire
+    // 60/s during a kinetic scroll, often with the same active id
+    // back-to-back) doesn't re-write the three labels every tick —
+    // each assignment invalidates Pango layout for that label.
+    private var lastDocTitle: String?
+    private var lastSection: String?
+    private var lastLeaf: String?
+
     init() {
         docLabel = Label("")
         docLabel.xalign = 0
@@ -63,6 +71,15 @@ final class BreadcrumbStrip {
     /// preceding chevron disappears too) so a heading-less note shows
     /// only the doc title and an H1-only note shows "Doc › H1".
     func update(docTitle: String, section: String?, leaf: String?) {
+        // Skip on no-change: the scroll-spy callback path calls this
+        // ~60/s during a kinetic scroll, almost always with the same
+        // (docTitle, section, leaf) tuple. Setting `label.text`
+        // unconditionally triggers Pango re-layout for that label.
+        if lastDocTitle == docTitle, lastSection == section, lastLeaf == leaf { return }
+        lastDocTitle = docTitle
+        lastSection = section
+        lastLeaf = leaf
+
         docLabel.text = docTitle
         docLabel.visible = !docTitle.isEmpty
 
