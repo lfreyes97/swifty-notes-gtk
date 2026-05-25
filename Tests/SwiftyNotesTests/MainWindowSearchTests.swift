@@ -75,6 +75,38 @@ struct MainWindowSearchTests {
     }
 
     @Test @MainActor
+    func `reopening the bar without a selection restores the previous query`() throws {
+        let window = try Self.makeWindow(appID: "me.spaceinbox.swiftynotes.tests.search.memory")
+        window.debugLoadInitialNotes()
+        window.debugSetEditorText("alpha beta gamma")
+        // First open: type "beta" — should remember it across close.
+        window.openFindBar(mode: .find)
+        window.findReplaceBar.debugTypeQuery("beta")
+        window.findReplaceBar.setVisible(false)
+        // Second open: no selection in editor, no query yet — the
+        // bar should pre-fill with the remembered "beta".
+        window.editor.buffer.placeCursor(at: 0)
+        window.openFindBar(mode: .find)
+        #expect(window.findReplaceBar.query == "beta")
+    }
+
+    @Test @MainActor
+    func `selection wins over remembered query when both are available`() throws {
+        let window = try Self.makeWindow(appID: "me.spaceinbox.swiftynotes.tests.search.selwins")
+        window.debugLoadInitialNotes()
+        window.debugSetEditorText("the quick brown fox")
+        // Remember "brown" from a prior open.
+        window.openFindBar(mode: .find)
+        window.findReplaceBar.debugTypeQuery("brown")
+        window.findReplaceBar.setVisible(false)
+        // Now select "quick" and open again — selection takes
+        // priority over the remembered query (GNOME convention).
+        window.editor.buffer.select(range: 4..<9)
+        window.openFindBar(mode: .find)
+        #expect(window.findReplaceBar.query == "quick")
+    }
+
+    @Test @MainActor
     func `replace-all completion shows a toast through the window`() throws {
         // We can't introspect ToastOverlay's queue from headless
         // tests, but we can confirm the callback wiring runs — by

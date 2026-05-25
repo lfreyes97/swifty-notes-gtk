@@ -222,7 +222,7 @@ struct EditorSearchControllerTests {
     }
 
     @Test @MainActor
-    func `no matches → count stays empty + cursor doesn't move`() throws {
+    func `no matches → shows "No matches" + cursor doesn't move`() throws {
         let rig = try Self.makeRig(suffix: "nomatches", text: "alpha beta gamma")
         rig.editor.buffer.placeCursor(at: 7)
         let cursorBefore = rig.editor.buffer.selectedRange
@@ -230,7 +230,12 @@ struct EditorSearchControllerTests {
         #expect(rig.controller.debugMatchCount == 0)
         #expect(rig.controller.debugActiveIndex == nil)
         #expect(rig.editor.buffer.selectedRange == cursorBefore)
-        #expect(rig.bar.countLabel.text.isEmpty)
+        // Phase 7 polish: when the query is non-empty but produces
+        // zero hits, the count label flips to "No matches" rather
+        // than going invisible — gives users feedback that the
+        // search actually ran.
+        #expect(rig.bar.countLabel.text == "No matches")
+        #expect(rig.bar.countLabel.visible == true)
     }
 }
 #endif

@@ -144,14 +144,17 @@ final class FindReplaceBar {
 
         caseSensitiveToggle = ToggleButton(label: "Aa")
         caseSensitiveToggle.tooltipText = "Case Sensitive"
+        caseSensitiveToggle.setAccessibleLabel("Case Sensitive")
         caseSensitiveToggle.addCSSClass(.flat)
 
         wholeWordToggle = ToggleButton(label: "ab")
         wholeWordToggle.tooltipText = "Whole Word Match"
+        wholeWordToggle.setAccessibleLabel("Whole Word Match")
         wholeWordToggle.addCSSClass(.flat)
 
         regexToggle = ToggleButton(label: ".*")
         regexToggle.tooltipText = "Regular Expression"
+        regexToggle.setAccessibleLabel("Regular Expression")
         regexToggle.addCSSClass(.flat)
 
         countLabel = Label("")
@@ -162,10 +165,12 @@ final class FindReplaceBar {
 
         prevButton = Button(icon: .custom("go-up-symbolic"))
         prevButton.tooltipText = "Previous Match"
+        prevButton.setAccessibleLabel("Previous Match")
         prevButton.addCSSClass(.flat)
 
         nextButton = Button(icon: .custom("go-down-symbolic"))
         nextButton.tooltipText = "Next Match"
+        nextButton.setAccessibleLabel("Next Match")
         nextButton.addCSSClass(.flat)
 
         replaceEntry = Entry()
@@ -234,10 +239,20 @@ final class FindReplaceBar {
     /// Update the "N of M" label. Pass `total = 0` to clear it. The
     /// active index is 1-based for display purposes ("3 of 17") so
     /// callers should pass `currentMatch + 1`.
+    ///
+    /// When `total == 0` AND `query` is non-empty, the label
+    /// surfaces "No matches" instead of going invisible — that's
+    /// the empty-state feedback users expect when a search produces
+    /// no results.
     func setMatchCount(total: Int, activeDisplayIndex: Int?) {
-        guard total > 0 else {
-            countLabel.text = ""
-            countLabel.visible = false
+        if total == 0 {
+            if query.isEmpty {
+                countLabel.text = ""
+                countLabel.visible = false
+            } else {
+                countLabel.text = "No matches"
+                countLabel.visible = true
+            }
             return
         }
         if let activeDisplayIndex {

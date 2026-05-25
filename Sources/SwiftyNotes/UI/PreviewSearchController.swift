@@ -127,12 +127,23 @@ final class PreviewSearchController {
         let adjustment = preview.rootScroll.verticalAdjustment
         let viewTop = adjustment.value
         let viewBottom = viewTop + adjustment.pageSize
+        let target: Double?
         if rowTop < viewTop {
-            adjustment.value = max(adjustment.lower, rowTop)
+            target = rowTop
         } else if rowBottom > viewBottom {
-            adjustment.value = min(
-                adjustment.upper - adjustment.pageSize,
-                rowBottom - adjustment.pageSize,
+            target = rowBottom - adjustment.pageSize
+        } else {
+            // Already in view — no scroll needed.
+            target = nil
+        }
+        if let target {
+            // Smooth-scroll matches the outline's jump animation
+            // (#26 phase 7 polish) so stepping through preview
+            // matches feels consistent with the rest of the app.
+            OutlineNavigation.smoothScroll(
+                adjustment,
+                to: target,
+                widget: preview.rootScroll,
             )
         }
     }

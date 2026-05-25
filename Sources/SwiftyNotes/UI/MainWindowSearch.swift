@@ -39,6 +39,15 @@ extension MainWindow {
             existingOnClose?()
             self?.editor.focus()
         }
+        // Remember the user's query so the next Ctrl+F (without a
+        // selection to prefer over it) restores it. Empty queries
+        // are kept as a deliberate clear — we don't overwrite the
+        // memory with empty.
+        let existingOnQuery = findReplaceBar.onQueryChanged
+        findReplaceBar.onQueryChanged = { [weak self] query, options in
+            if !query.isEmpty { self?.lastFindQuery = query }
+            existingOnQuery?(query, options)
+        }
     }
 
     /// Lazily builds the preview-side search controller. Replace
@@ -62,6 +71,11 @@ extension MainWindow {
             // me edit again" affordance.
             self?.editor.focus()
         }
+        let existingOnQuery = previewFindReplaceBar.onQueryChanged
+        previewFindReplaceBar.onQueryChanged = { [weak self] query, options in
+            if !query.isEmpty { self?.lastFindQuery = query }
+            existingOnQuery?(query, options)
+        }
     }
 
     /// Open the find / replace bar in the requested mode. The
@@ -75,7 +89,7 @@ extension MainWindow {
         switch target {
         case .editor:
             wireEditorFindReplaceBar()
-            prefillBarFromSelection()
+            prefillBarFromSelection(target: findReplaceBar)
             findReplaceBar.setVisible(true, mode: mode)
             // Pre-fill is silent (programmatic setter doesn't fire
             // onQueryChanged) — so explicitly notify so the
@@ -84,6 +98,7 @@ extension MainWindow {
             findReplaceBar.notifyQueryChanged()
         case .preview:
             wirePreviewFindBar()
+            prefillBarFromLastQuery(target: previewFindReplaceBar)
             previewFindReplaceBar.setVisible(true, mode: .find)
             previewFindReplaceBar.notifyQueryChanged()
         }
@@ -96,20 +111,34 @@ extension MainWindow {
         previewSearchController?.onPreviewRerendered()
     }
 
-    private func prefillBarFromSelection() {
+    /// Editor-pane pre-fill: selection > remembered query > leave
+    /// whatever's already in the field. Selection wins per GNOME
+    /// Text Editor's behaviour ("I just highlighted this, search
+    /// for it").
+    private func prefillBarFromSelection(target bar: FindReplaceBar) {
         let selection = editor.buffer.selectedRange
-        // Only adopt the selection if it's a single-line range —
-        // multi-line selections rarely encode a meaningful query
-        // and they'd populate the find entry with a line break.
-        guard !selection.isEmpty else { return }
-        let text = editor.buffer.text
-        let startOffset = selection.lowerBound
-        let endOffset = selection.upperBound
-        guard startOffset <= endOffset, endOffset <= text.count else { return }
-        let startIndex = text.index(text.startIndex, offsetBy: startOffset)
-        let endIndex = text.index(text.startIndex, offsetBy: endOffset)
-        let selected = String(text[startIndex..<endIndex])
-        if selected.contains("\n") { return }
-        findReplaceBar.query = selected
+        if !selection.isEmpty {
+            let text = editor.buffer.text
+            let startOffset = selection.lowerBound
+            let endOffset = selection.upperBound
+            if startOffset <= endOffset, endOffset <= text.count {
+                let startIndex = text.index(text.startIndex, offsetBy: startOffset)
+                let endIndex = text.index(text.startIndex, offsetBy: endOffset)
+                let selected = String(text[startIndex..<endIndex])
+                if !selected.contains("\n") {
+                    bar.query = selected
+                    return
+                }
+            }
+        }
+        prefillBarFromLastQuery(target: bar)
+    }
+
+    /// Pre-fill from the in-session remembered query. Used by the
+    /// preview pane (no buffer selection to read from) and as a
+    /// fallback for the editor pane when there's no selection.
+    private func prefillBarFromLastQuery(target bar: FindReplaceBar) {
+        guard bar.query.isEmpty, !lastFindQuery.isEmpty else { return }
+        bar.query = lastFindQuery
     }
 }

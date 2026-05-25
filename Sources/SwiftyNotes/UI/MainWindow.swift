@@ -71,6 +71,12 @@ final class MainWindow {
         case editor
         case preview
     }
+
+    /// Last non-empty query the user typed into either find bar.
+    /// Survives bar close so re-opening Ctrl+F restores it (unless
+    /// the editor has a selection, which takes precedence — GNOME
+    /// convention). Reset when the user clears the field manually.
+    var lastFindQuery: String = ""
     /// Built lazily in `wireSignals` (deferred so the editor / preview
     /// widget trees are constructed before we connect signals to them).
     var outlineScrollSpyDriver: OutlineScrollSpyDriver?

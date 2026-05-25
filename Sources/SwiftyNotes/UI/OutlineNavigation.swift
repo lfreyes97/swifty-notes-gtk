@@ -79,6 +79,15 @@ enum OutlineNavigation {
         return min(max(lower, target), upper)
     }
 
+    /// Public reuse of the same easing curve / duration the outline
+    /// uses for its jump animations. The find-bar (#26) calls this
+    /// when stepping between preview matches so the panel feels
+    /// consistent with the outline jump.
+    static func smoothScroll(_ adj: Adjustment, to target: Double, widget: Widget) {
+        let clamped = clampToAdjustment(adj, target: target)
+        animate(adj: adj, from: adj.value, to: clamped, widget: widget)
+    }
+
     private static func animate(adj: Adjustment, from: Double, to: Double, widget: Widget) {
         // Bail out on tiny deltas so a flurry of clicks doesn't queue
         // up imperceptible animations. The Adjustment proportional-sync

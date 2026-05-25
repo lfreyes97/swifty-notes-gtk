@@ -104,6 +104,7 @@ struct FindReplaceBarWidgetTests {
     func `setMatchCount renders the standard "N of M" label`() throws {
         let bar = try Self.makeBar(suffix: "count")
         bar.setMatchCount(total: 0, activeDisplayIndex: nil)
+        // No query typed yet — empty state is silent.
         #expect(bar.countLabel.text.isEmpty)
         #expect(bar.countLabel.visible == false)
 
@@ -118,6 +119,14 @@ struct FindReplaceBarWidgetTests {
 
         bar.setMatchCount(total: 1, activeDisplayIndex: nil)
         #expect(bar.countLabel.text == "1 match")
+
+        // Empty-state feedback: when the query is non-empty but
+        // produced zero matches, surface "No matches" instead of
+        // leaving the label invisible.
+        bar.query = "zzz"
+        bar.setMatchCount(total: 0, activeDisplayIndex: nil)
+        #expect(bar.countLabel.text == "No matches")
+        #expect(bar.countLabel.visible == true)
     }
 
     @Test @MainActor
