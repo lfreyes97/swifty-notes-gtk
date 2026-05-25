@@ -132,6 +132,14 @@ public enum MarkdownSearchEngine {
         }
     }
 
+    /// Compile the user's query + options into a NSRegularExpression
+    /// the controller can re-use for richer operations such as
+    /// regex-backref-aware replacement. Returns `nil` on invalid
+    /// regex patterns.
+    public static func compileRegex(query: String, options: SearchOptions) -> NSRegularExpression? {
+        compile(query: query, options: options)
+    }
+
     private static func compile(query: String, options: SearchOptions) -> NSRegularExpression? {
         var pattern = options.regex ? query : NSRegularExpression.escapedPattern(for: query)
         if options.wholeWord {

@@ -50,12 +50,21 @@ final class EditorSearchController {
     // `weak var source` to the buffer, so once either the controller
     // or the buffer goes away the closure is effectively dead.
 
+    /// Fires when a replace-all completes. Wired by MainWindow to
+    /// surface a toast such as "Replaced 5 occurrences". Phase 3
+    /// keeps this on the controller (not the bar) because toast
+    /// presentation needs the ToastOverlay that lives on the
+    /// window, not the search bar.
+    var onReplaceAllCompleted: ((Int) -> Void)?
+
     private func wireBarCallbacks() {
         bar.onQueryChanged = { [weak self] query, options in
             self?.applyQuery(query, options: options)
         }
         bar.onStepNext = { [weak self] in self?.step(forward: true) }
         bar.onStepPrev = { [weak self] in self?.step(forward: false) }
+        bar.onReplaceOne = { [weak self] in self?.replaceCurrent() }
+        bar.onReplaceAll = { [weak self] in self?.replaceAll() }
         bar.onClose = { [weak self] in self?.clearState() }
     }
 
@@ -201,6 +210,98 @@ final class EditorSearchController {
         matches.removeAll()
         activeIndex = nil
         bar.setMatchCount(total: 0, activeDisplayIndex: nil)
+    }
+
+    /// Replace the currently active match with the bar's
+    /// replacement string. In regex mode, expands `$1` / `$2` etc.
+    /// backreferences against the matched substring. No-op when
+    /// there's no active match or the bar is in read-only mode.
+    private func replaceCurrent() {
+        guard !bar.isReadOnly,
+              let active = activeIndex,
+              matches.indices.contains(active)
+        else { return }
+        let text = buffer.text
+        let match = matches[active]
+        let startOffset = text.distance(from: text.startIndex, to: match.lowerBound)
+        let endOffset = text.distance(from: text.startIndex, to: match.upperBound)
+        let matchedSubstring = String(text[match])
+        let replacement = expandReplacement(for: matchedSubstring)
+
+        // Single user-action so undo collapses the delete + insert
+        // into one step.
+        buffer.beginUserAction()
+        buffer.delete(range: startOffset..<endOffset)
+        buffer.insert(replacement, at: startOffset)
+        buffer.endUserAction()
+
+        // Buffer.onChanged has already fired and recomputed
+        // `matches` against the new text. We want to land the next
+        // step on the match that's now nearest after the cursor —
+        // the active index from before the edit may no longer be
+        // valid, so reset it and step forward.
+        activeIndex = nil
+        step(forward: true)
+    }
+
+    /// Replace every match in document order. Reports the count via
+    /// ``onReplaceAllCompleted`` so the host window can surface a
+    /// toast. No-op when there are no matches or the bar is in
+    /// read-only mode.
+    private func replaceAll() {
+        guard !bar.isReadOnly, !matches.isEmpty else { return }
+        let snapshot = matches
+        let text = buffer.text
+
+        // Pre-compute the replacement for each match against the
+        // CURRENT buffer text, then apply them back-to-front so
+        // earlier ranges aren't shifted by later edits.
+        let replacements: [(Range<Int>, String)] = snapshot.map { range in
+            let startOffset = text.distance(from: text.startIndex, to: range.lowerBound)
+            let endOffset = text.distance(from: text.startIndex, to: range.upperBound)
+            let matchedSubstring = String(text[range])
+            let expanded = expandReplacement(for: matchedSubstring)
+            return (startOffset..<endOffset, expanded)
+        }
+
+        buffer.beginUserAction()
+        for (offsetRange, expanded) in replacements.reversed() {
+            buffer.delete(range: offsetRange)
+            buffer.insert(expanded, at: offsetRange.lowerBound)
+        }
+        buffer.endUserAction()
+
+        // After mass replace there's nothing useful to "step to" —
+        // the matches array has been invalidated and rebuilt by
+        // buffer.onChanged. Drop the active selection so the user
+        // isn't left looking at a stale highlight.
+        activeIndex = nil
+        updateBarCount()
+        onReplaceAllCompleted?(snapshot.count)
+    }
+
+    /// Expand the bar's replacement template against a matched
+    /// substring. In literal-search mode the template goes in
+    /// verbatim; in regex mode we re-run the compiled regex against
+    /// just the matched substring so we can call
+    /// NSRegularExpression.replacementString, which knows about
+    /// `$1` / `$2` / `$&` style references.
+    private func expandReplacement(for matchedSubstring: String) -> String {
+        let template = bar.replacement
+        guard lastOptions.regex else { return template }
+        guard let regex = MarkdownSearchEngine.compileRegex(query: lastQuery, options: lastOptions) else {
+            return template
+        }
+        let nsRange = NSRange(matchedSubstring.startIndex..<matchedSubstring.endIndex, in: matchedSubstring)
+        guard let result = regex.firstMatch(in: matchedSubstring, options: [], range: nsRange) else {
+            return template
+        }
+        return regex.replacementString(
+            for: result,
+            in: matchedSubstring,
+            offset: 0,
+            template: template,
+        )
     }
 }
 

@@ -128,6 +128,72 @@ struct EditorSearchControllerTests {
     }
 
     @Test @MainActor
+    func `replace one swaps the active match and steps to the next`() throws {
+        let rig = try Self.makeRig(suffix: "replaceone", text: "foo bar foo baz foo")
+        rig.bar.setVisible(true, mode: .replace)
+        rig.bar.debugTypeQuery("foo")
+        rig.bar.replacement = "X"
+        // First match (offset 0..<3) is active. Replace.
+        rig.bar.debugClickReplace()
+        #expect(rig.editor.buffer.text == "X bar foo baz foo")
+        // After replace, controller auto-steps to the next match
+        // (which used to be at offset 8 and is now at offset 6).
+        #expect(rig.editor.buffer.selectedRange == 6..<9)
+        #expect(rig.controller.debugMatchCount == 2)
+    }
+
+    @Test @MainActor
+    func `replace all swaps every match and reports the count`() throws {
+        let rig = try Self.makeRig(suffix: "replaceall", text: "foo bar foo baz foo")
+        rig.bar.setVisible(true, mode: .replace)
+        var observed: Int?
+        rig.controller.onReplaceAllCompleted = { observed = $0 }
+        rig.bar.debugTypeQuery("foo")
+        rig.bar.replacement = "X"
+        rig.bar.debugClickReplaceAll()
+        #expect(rig.editor.buffer.text == "X bar X baz X")
+        #expect(observed == 3)
+        // After mass replace, matches against the new buffer are 0.
+        #expect(rig.controller.debugMatchCount == 0)
+    }
+
+    @Test @MainActor
+    func `replace in regex mode expands backrefs`() throws {
+        let rig = try Self.makeRig(suffix: "regexreplace", text: "hello world hello")
+        rig.bar.setVisible(true, mode: .replace)
+        rig.bar.options = SearchOptions(regex: true)
+        rig.bar.debugTypeQuery("(h)ello")
+        rig.bar.replacement = "[$1]ELLO"
+        rig.bar.debugClickReplaceAll()
+        #expect(rig.editor.buffer.text == "[h]ELLO world [h]ELLO")
+    }
+
+    @Test @MainActor
+    func `replace in read-only bar is a no-op`() throws {
+        let rig = try Self.makeRig(suffix: "readonly-replace", text: "foo foo")
+        rig.bar.isReadOnly = true
+        rig.bar.setVisible(true, mode: .replace)
+        rig.bar.debugTypeQuery("foo")
+        rig.bar.replacement = "X"
+        let before = rig.editor.buffer.text
+        rig.bar.debugClickReplace()
+        rig.bar.debugClickReplaceAll()
+        #expect(rig.editor.buffer.text == before)
+    }
+
+    @Test @MainActor
+    func `replace with no active match is a no-op`() throws {
+        let rig = try Self.makeRig(suffix: "noactive-replace", text: "alpha beta")
+        rig.bar.setVisible(true, mode: .replace)
+        // Don't type anything — nothing active.
+        let before = rig.editor.buffer.text
+        rig.bar.replacement = "X"
+        rig.bar.debugClickReplace()
+        rig.bar.debugClickReplaceAll()
+        #expect(rig.editor.buffer.text == before)
+    }
+
+    @Test @MainActor
     func `no matches → count stays empty + cursor doesn't move`() throws {
         let rig = try Self.makeRig(suffix: "nomatches", text: "alpha beta gamma")
         rig.editor.buffer.placeCursor(at: 7)
