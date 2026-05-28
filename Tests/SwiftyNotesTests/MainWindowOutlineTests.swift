@@ -5,6 +5,34 @@ import Foundation
 @testable import SwiftyNotes
 import Testing
 
+// MARK: - Module-level log writer for CRITICAL detection
+// These are only used by the CRITICAL-detection test. Declared at module
+// scope because GLogWriterFunc closures cannot close over local variables.
+// Safe because MainWindowOutlineTests is @Suite(.serialized).
+private nonisolated(unsafe) var criticalTestActive = false
+private nonisolated(unsafe) var criticalWriterInstalled = false
+private nonisolated(unsafe) var capturedGtkCriticalCount = 0
+
+/// Installs via g_log_set_writer_func.  When `criticalTestActive` is set it
+/// records every Gtk-domain CRITICAL that contains the string
+/// "gtk_scrolled_window_get_child", then falls through to the default writer
+/// so messages are still printed to stderr (aids debugging).
+private let criticalCountingWriter: GLogWriterFunc = { level, fields, nFields, _ in
+    if criticalTestActive {
+        for i in 0 ..< Int(nFields) {
+            let field = fields!.advanced(by: i).pointee
+            guard let key = field.key, String(cString: key) == "MESSAGE" else { continue }
+            guard let rawPtr = field.value else { continue }
+            let msgPtr = rawPtr.assumingMemoryBound(to: CChar.self)
+            let msg = String(cString: msgPtr)
+            if msg.contains("gtk_scrolled_window_get_child") {
+                capturedGtkCriticalCount += 1
+            }
+        }
+    }
+    return g_log_writer_default(level, fields, nFields, nil)
+}
+
 @Suite(.serialized)
 struct MainWindowOutlineTests {
     @MainActor
@@ -422,5 +450,60 @@ struct MainWindowOutlineTests {
 
         #expect(window.activeCommandPalette == nil)
     }
+
+    @Test @MainActor
+    func `rendering the preview does not fire gtk_scrolled_window_get_child on a non-ScrolledWindow`() throws {
+        // Regression: a Gtk-CRITICAL "gtk_scrolled_window_get_child:
+        // assertion 'GTK_IS_SCROLLED_WINDOW (scrolled_window)' failed" fired
+        // whenever the preview first rendered a note containing a code block.
+        //
+        // Root cause (confirmed via gdb backtrace): swift-adwaita's
+        // ScrolledWindow and Overlay wrappers were missing the `gtkType`
+        // class-property override, so `Widget.gtkType` fell back to
+        // `gtk_widget_get_type()` and `tryCast(ScrolledWindow.self)` matched
+        // ANY widget. MarkdownPreview.locateCodeBlockBuffer walks a code-block
+        // row (Overlay → Box → [copy Button, ScrolledWindow → SourceView]) and
+        // calls `tryCast(ScrolledWindow.self)` on each child; the permissive
+        // cast matched the copy Button, and reading `.child` on it invoked
+        // `gtk_scrolled_window_get_child` on a non-ScrolledWindow GObject.
+        //
+        // Behavioral consequence: the CRITICAL aborted GTK's allocation pass
+        // early, leaving preview rows at height 0, so OutlineNavigation's
+        // widgetY saw no allocation and fell back to proportional sync instead
+        // of the smooth-scroll animation. Fixed by adding gtkType to
+        // ScrolledWindow/Overlay (and, defensively, every other Widget
+        // subclass) in swift-adwaita.
+        //
+        // This test installs a custom GLib log writer that counts CRITICAL
+        // messages containing "gtk_scrolled_window_get_child", then calls the
+        // exact path that triggers the regression (load + render), and asserts
+        // the count is zero. Runs synchronously on the MainActor; the
+        // @Suite(.serialized) annotation makes global state safe across tests.
+        capturedGtkCriticalCount = 0
+        // g_log_set_writer_func can only be called once per process — install
+        // the counting writer on first use (guarded by criticalTestActive=false
+        // at module init). The writer only increments the counter when
+        // criticalTestActive is true, so it is effectively a no-op at all other
+        // times, and subsequent tests are not affected by the installation.
+        if !criticalWriterInstalled {
+            g_log_set_writer_func(criticalCountingWriter, nil, nil)
+            criticalWriterInstalled = true
+        }
+        criticalTestActive = true
+        defer { criticalTestActive = false }
+
+        let window = try Self.makeWindow(
+            appID: "me.spaceinbox.swiftynotes.tests.outline.nocritical"
+        )
+        window.debugLoadInitialNotes()
+        window.debugSetEditorText("# Doc\n\nBody.\n\n## Section\n\nMore body.\n")
+        _ = window.debugPreviewText
+
+        #expect(
+            capturedGtkCriticalCount == 0,
+            "Expected 0 gtk_scrolled_window_get_child CRITICALs during preview render; got \(capturedGtkCriticalCount). Caused by a missing ScrolledWindow.gtkType override making tryCast permissive."
+        )
+    }
+
 }
 #endif

@@ -1,4 +1,5 @@
 import Adwaita
+import CAdwaita
 import Foundation
 
 /// Editor + preview scroll helpers used by the Outline panel, the
@@ -182,11 +183,14 @@ enum OutlinePositions {
                 currentRowIndex += 1
             }
             guard let widget = currentChild else { break }
-            // Call gtk_widget_get_allocation directly on the raw pointer — this
-            // is the hot scroll-spy path and creating a Widget(borrowing:) here
-            // adds g_object_ref + g_object_weak_ref overhead on every heading.
+            // Read the allocation directly on the raw pointer — this is the hot
+            // scroll-spy path and creating a Widget(borrowing:) here adds
+            // g_object_ref + g_object_weak_ref overhead on every heading. Use
+            // the swiftadw_widget_get_allocation shim (not the deprecated
+            // gtk_widget_get_allocation) so this compiles cleanly even with
+            // deprecation-as-error; see swift-adwaita CAdwaita/shim.h.
             var alloc = GtkAllocation()
-            gtk_widget_get_allocation(widget, &alloc)
+            swiftadw_widget_get_allocation(widget, &alloc)
             if alloc.height > 0 {
                 result.append((target.headingID, Double(alloc.y)))
             }

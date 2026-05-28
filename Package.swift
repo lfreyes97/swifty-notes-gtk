@@ -83,7 +83,7 @@ let package = Package(
             // ApplicationWindow.visibleDialog). Bump deliberately when
             // validating a newer upstream rather than via SemVer
             // auto-resolution.
-            revision: "f8bca335baef538a2bdea03e135144862a22b587"
+            revision: "bec114a1d0065ccfc1069a7e76a53f5f86731d64"
         ),
         sourceDependency(
             bundledPath: "flatpak-deps/swift-markdown",
