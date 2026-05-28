@@ -358,8 +358,7 @@ final class CommandPaletteWindow {
     private func scrollHighlightedRowIntoView() {
         guard rowWidgets.indices.contains(highlightIndex) else { return }
         let row = rowWidgets[highlightIndex]
-        var allocation = GtkAllocation()
-        gtk_widget_get_allocation(row.widgetPointer, &allocation)
+        let allocation = row.allocation
         // Pre-layout (first paint), allocation is zeroed — nothing
         // sensible to scroll to yet. The next setHighlight call after
         // GTK has done its sizing pass will succeed.

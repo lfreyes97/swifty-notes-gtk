@@ -294,16 +294,7 @@ public enum SwiftyNotesLauncher {
 
     @MainActor
     private static func installAccelerator(_ accel: String, forAction action: String, on app: Application) {
-        accel.withCString { accelPtr in
-            var arr: [UnsafePointer<CChar>?] = [accelPtr, nil]
-            arr.withUnsafeMutableBufferPointer { buf in
-                gtk_application_set_accels_for_action(
-                    app.gtkApplicationPointer,
-                    action,
-                    buf.baseAddress,
-                )
-            }
-        }
+        app.setAccelerators([accel], for: action)
     }
 
     /// Registers an `app.quit` GAction on the GApplication and binds
@@ -320,19 +311,7 @@ public enum SwiftyNotesLauncher {
         }
         app.addAction(quitAction)
 
-        // `gtk_application_set_accels_for_action` takes a NULL-terminated
-        // C array of accelerator strings. Build it inline so the
-        // CStrings outlive the GTK call.
-        "<Primary>q".withCString { accel in
-            var arr: [UnsafePointer<CChar>?] = [accel, nil]
-            arr.withUnsafeMutableBufferPointer { buf in
-                gtk_application_set_accels_for_action(
-                    app.gtkApplicationPointer,
-                    "app.quit",
-                    buf.baseAddress,
-                )
-            }
-        }
+        app.setAccelerators(["<Primary>q"], for: "app.quit")
     }
 
     /// On macOS, GTK/GLib's resource discovery walks `XDG_DATA_DIRS` to

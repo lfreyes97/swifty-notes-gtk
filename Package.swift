@@ -76,11 +76,14 @@ let package = Package(
             // Label.attributes / scrollChildIntoView work (PangoMarkup,
             // range-aware TextAttributes, Widget tree dump), the
             // SearchEntry stop-search signal (Ctrl+G palette Escape fix),
-            // and the Dialog.enableBackdropClickDismiss helper with
-            // bounded retry + idle-source cleanup on unmap. Bump
-            // deliberately when validating a newer upstream rather than
-            // via SemVer auto-resolution.
-            revision: "1d2f0eaa69198178320cd9565de60fe8a3e2c09b"
+            // the Dialog.enableBackdropClickDismiss helper with bounded
+            // retry + idle-source cleanup on unmap, and the
+            // EventController/Gesture hierarchy (propagationPhase,
+            // setState, Widget.allocation, Application.setAccelerators,
+            // ApplicationWindow.visibleDialog). Bump deliberately when
+            // validating a newer upstream rather than via SemVer
+            // auto-resolution.
+            revision: "012cde30a5d5e6b435a0194de15ce9d6faf8266b"
         ),
         sourceDependency(
             bundledPath: "flatpak-deps/swift-markdown",

@@ -38,8 +38,7 @@ struct MainWindowOutlineTests {
 
     @MainActor
     private static func visibleDialog(of window: ApplicationWindow) -> Dialog? {
-        adw_application_window_get_visible_dialog(window.adwWindowPointer)
-            .map { Dialog(borrowing: UnsafeMutableRawPointer($0)) }
+        window.visibleDialog
     }
 
     @MainActor

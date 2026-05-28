@@ -595,8 +595,7 @@ extension MainWindow {
     ) {
         let click = GestureClick()
         click.button = 1
-        let gesturePtr = click.opaquePointer
-        gtk_event_controller_set_propagation_phase(gesturePtr, GTK_PHASE_CAPTURE)
+        click.propagationPhase = .capture
         row.addController(click)
 
         let motion = EventControllerMotion()
@@ -636,7 +635,7 @@ extension MainWindow {
             onRelease()
         }
 
-        motion.onMotion { [weak row] x, y in
+        motion.onMotion { [weak row, click] x, y in
             guard state.pressed, !state.fired, !state.dragging else { return }
             let dx = x - state.startX
             let dy = y - state.startY
@@ -654,7 +653,7 @@ extension MainWindow {
                 // place this is mostly belt-and-suspenders, but it
                 // does the right thing if GTK ever changes how it
                 // resolves competing controllers.
-                gtk_gesture_set_state(gesturePtr, GTK_EVENT_SEQUENCE_DENIED)
+                click.setState(.denied)
                 MacOSClickWorkaround.debugLog(label: label, widget: row, event: "DRAG-DETECTED dx=\(dx) dy=\(dy) → DENIED")
             }
         }

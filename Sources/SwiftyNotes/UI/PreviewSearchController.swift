@@ -129,8 +129,7 @@ final class PreviewSearchController {
         let children = preview.container.children()
         guard children.indices.contains(rowIndex) else { return }
         let widget = children[rowIndex]
-        var allocation = GtkAllocation()
-        gtk_widget_get_allocation(widget.widgetPointer, &allocation)
+        let allocation = widget.allocation
         // Pre-first-layout the allocation is zeroed; bail rather
         // than scrolling to (0, 0) — the next step call after GTK
         // has laid the rows out will succeed.

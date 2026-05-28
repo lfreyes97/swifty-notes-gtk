@@ -189,12 +189,11 @@ enum MacOSClickWorkaround {
     /// real motion happens.
     ///
     /// The CAPTURE phase is kept so we slot in before the widget's
-    /// own BUBBLE-phase gestures in dispatch order. The opaque
-    /// pointer is captured by value (`let gesturePtr =
-    /// click.opaquePointer`) rather than `[weak click]` so the
-    /// callback stays safe — `widget.addController(click)` transfers
-    /// GTK-side ownership but doesn't retain the Swift wrapper, and
-    /// a weak capture would nil-out before the callback fires.
+    /// own BUBBLE-phase gestures in dispatch order. `click` is
+    /// captured by value in the callbacks so the wrapper stays alive —
+    /// `widget.addController(click)` transfers GTK-side ownership but
+    /// does not retain the Swift wrapper, and a weak capture would
+    /// nil-out before the callback fires.
     ///
     /// The 250 ms watchdog timer remains as defence against a
     /// hypothetical future regression where `released` is genuinely
@@ -213,8 +212,7 @@ enum MacOSClickWorkaround {
     ) {
         let click = GestureClick()
         click.button = 1
-        let gesturePtr = click.opaquePointer
-        gtk_event_controller_set_propagation_phase(gesturePtr, GTK_PHASE_CAPTURE)
+        click.propagationPhase = .capture
         widget.addController(click)
         let pending = PendingClick()
         click.onPressed { [weak widget] _, _, _ in

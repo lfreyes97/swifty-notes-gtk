@@ -182,10 +182,13 @@ enum OutlinePositions {
                 currentRowIndex += 1
             }
             guard let widget = currentChild else { break }
-            var allocation = GtkAllocation()
-            gtk_widget_get_allocation(widget, &allocation)
-            if allocation.height > 0 {
-                result.append((target.headingID, Double(allocation.y)))
+            // Call gtk_widget_get_allocation directly on the raw pointer — this
+            // is the hot scroll-spy path and creating a Widget(borrowing:) here
+            // adds g_object_ref + g_object_weak_ref overhead on every heading.
+            var alloc = GtkAllocation()
+            gtk_widget_get_allocation(widget, &alloc)
+            if alloc.height > 0 {
+                result.append((target.headingID, Double(alloc.y)))
             }
         }
         return result
@@ -227,9 +230,7 @@ enum OutlinePositions {
     }
 
     private static func widgetY(of widget: Widget) -> Double? {
-        let widgetPtr = widget.widgetPointer
-        var allocation = GtkAllocation()
-        gtk_widget_get_allocation(widgetPtr, &allocation)
+        let allocation = widget.allocation
         guard allocation.height > 0 else { return nil }
         return Double(allocation.y)
     }
