@@ -89,8 +89,8 @@ struct PreviewSearchHighlightTests {
     }
 
     @Test @MainActor
-    func `apply skips matches in blocks with no span entry (tables)`() throws {
-        let preview = try Self.makePreview(suffix: "table-skip", markdown: """
+    func `table-only match highlights the matched cell substring`() throws {
+        let preview = try Self.makePreview(suffix: "table-hit", markdown: """
         # Doc
 
         | a | b |
@@ -102,18 +102,121 @@ struct PreviewSearchHighlightTests {
             query: "search",
             options: .init(),
         )
-        // The table cell IS in the engine's match list…
+        // The match lands in a table cell.
         #expect(matches.contains(where: { $0.blockText.contains("search") }))
-        // …but Phase A intentionally leaves tables out of
-        // blockTextSpans, so apply skips them.
+        // A table-only query now lights up the table's Label and the
+        // applied highlight covers exactly the matched cell substring —
+        // not the whole cell, not a neighbouring cell.
         preview.applySearchHighlights(matches: matches, activeIndex: 0)
-        // For a doc with ONLY table matches, no labels light up.
-        let tableOnlyMatches = matches.filter {
-            preview.blockTextSpans[$0.blockIndex] == nil
-        }
-        // The bar can still safely call apply with table-only
-        // matches; no highlights but also no crash.
-        #expect(tableOnlyMatches.count >= 0)
+        #expect(!preview.debugHighlightedLabelPointers.isEmpty)
+        #expect(preview.debugAppliedHighlightTexts.contains("search"))
+        // The active match wears the active style on the right cell too.
+        #expect(preview.debugActiveHighlightTexts == ["search"])
+    }
+
+    @Test @MainActor
+    func `clearing restores a highlighted table label`() throws {
+        let preview = try Self.makePreview(suffix: "table-clear", markdown: """
+        | a | b |
+        |---|---|
+        | search | other |
+        """)
+        let matches = MarkdownSearchEngine.search(
+            blocks: preview.debugLastRenderedBlocks,
+            query: "search",
+            options: .init(),
+        )
+        preview.applySearchHighlights(matches: matches, activeIndex: 0)
+        #expect(!preview.debugHighlightedLabelPointers.isEmpty)
+        preview.clearSearchHighlights()
+        #expect(preview.debugHighlightedLabelPointers.isEmpty)
+        #expect(preview.debugAppliedHighlightTexts.isEmpty)
+    }
+
+    @Test @MainActor
+    func `partial match inside a table cell highlights only the matched substring`() throws {
+        // Cell text is longer than the query — exercises the localOffset /
+        // match-length translation (the whole reason per-cell offset math
+        // exists). A bug that painted the whole cell, or dropped localOffset,
+        // would surface here.
+        let preview = try Self.makePreview(suffix: "table-partial", markdown: """
+        | label | value |
+        |-------|-------|
+        | x | searchable |
+        """)
+        let matches = MarkdownSearchEngine.search(
+            blocks: preview.debugLastRenderedBlocks,
+            query: "search",
+            options: .init(),
+        )
+        #expect(!matches.isEmpty)
+        preview.applySearchHighlights(matches: matches, activeIndex: 0)
+        // "search" is a prefix of cell "searchable" — only those 6 chars,
+        // not the whole cell, must be painted.
+        #expect(preview.debugAppliedHighlightTexts == ["search"])
+    }
+
+    @Test @MainActor
+    func `match in the middle of a table cell highlights at the right offset`() throws {
+        // Query matches NOT at the cell start, so localOffset > 0.
+        let preview = try Self.makePreview(suffix: "table-midcell", markdown: """
+        | label | value |
+        |-------|-------|
+        | x | alpha beta gamma |
+        """)
+        let matches = MarkdownSearchEngine.search(
+            blocks: preview.debugLastRenderedBlocks,
+            query: "beta",
+            options: .init(),
+        )
+        #expect(!matches.isEmpty)
+        preview.applySearchHighlights(matches: matches, activeIndex: 0)
+        #expect(preview.debugAppliedHighlightTexts == ["beta"])
+    }
+
+    @Test @MainActor
+    func `two tables in one document highlight independently`() throws {
+        let preview = try Self.makePreview(suffix: "two-tables", markdown: """
+        | a | b |
+        |---|---|
+        | alpha | x |
+
+        Some prose between.
+
+        | c | d |
+        |---|---|
+        | y | alpha |
+        """)
+        let matches = MarkdownSearchEngine.search(
+            blocks: preview.debugLastRenderedBlocks,
+            query: "alpha",
+            options: .init(),
+        )
+        // One "alpha" in each table.
+        #expect(matches.count == 2)
+        preview.applySearchHighlights(matches: matches, activeIndex: 0)
+        // Two distinct table labels light up, and both painted "alpha".
+        #expect(preview.debugHighlightedLabelPointers.count == 2)
+        #expect(preview.debugAppliedHighlightTexts == ["alpha", "alpha"])
+    }
+
+    @Test @MainActor
+    func `match in a body cell highlights that cell, not the header`() throws {
+        // "Name" appears only as a body value; ensure the highlight lands
+        // on the body cell (post-divider) and reads back as "Name".
+        let preview = try Self.makePreview(suffix: "table-body", markdown: """
+        | col | who |
+        |-----|-----|
+        | x   | Name |
+        """)
+        let matches = MarkdownSearchEngine.search(
+            blocks: preview.debugLastRenderedBlocks,
+            query: "Name",
+            options: .init(),
+        )
+        #expect(!matches.isEmpty)
+        preview.applySearchHighlights(matches: matches, activeIndex: 0)
+        #expect(preview.debugAppliedHighlightTexts == ["Name"])
     }
 
     @Test @MainActor

@@ -305,6 +305,36 @@ final class MarkdownPreview {
     }
     private(set) var blockTextSpans: [Int: BlockTextSpan] = [:]
 
+    /// One table cell's position in two coordinate spaces:
+    /// `searchableOffset` is the cell's start in the flat,
+    /// `"\n"`-joined searchable string the search engine matches
+    /// against (see ``MarkdownSearchEngine/searchableText(for:)``);
+    /// `labelOffset` is the cell body's start (in `Character`s) inside
+    /// the column-aligned monospace `Label.text` the table renders to.
+    /// `labelOffset` is `nil` for a cell with no rendered field — an
+    /// over-long row carrying more cells than there are columns; such a
+    /// cell is searchable but can't be highlighted, so its matches are
+    /// skipped. `length` is the cell's plain-text `Character` count,
+    /// identical in both spaces.
+    struct TableCellGeometry: Equatable {
+        let searchableOffset: Int
+        let length: Int
+        let labelOffset: Int?
+    }
+
+    /// Highlight mapping for a single table block: the rendered card's
+    /// monospace `Label` (filled in by the post-render walk, like
+    /// ``BlockTextSpan/labelPointer``) plus the per-cell geometry that
+    /// translates a match in searchable-space into a range in the
+    /// label's aligned text. Tables need this richer model because one
+    /// block renders to one Label holding N cells across two coordinate
+    /// spaces — ``BlockTextSpan``'s single offset can't represent that.
+    struct TableHighlightSpan: Equatable {
+        var labelPointer: OpaquePointer?
+        let cells: [TableCellGeometry]
+    }
+    private(set) var tableHighlightSpans: [Int: TableHighlightSpan] = [:]
+
     /// `GtkSourceBuffer` behind each rendered code block, keyed by
     /// the block's index in the original `[RenderedBlock]`. The
     /// match-highlight overlay applies tags to these buffers the
@@ -408,6 +438,24 @@ final class MarkdownPreview {
     /// times.
     var debugHighlightedCodeBlockBlockIndexes: Set<Int> {
         Set(highlightedCodeBlockBuffers.keys)
+    }
+
+    /// Test-only: the exact substrings the most recent
+    /// ``applySearchHighlights(matches:activeIndex:)`` painted on
+    /// Label-backed blocks, captured from the live `label.text` at the
+    /// resolved range. Lets tests assert the RIGHT substring got the
+    /// background (not just that *some* label lit up) — essential for
+    /// the table path, where the offset map translates between two
+    /// coordinate spaces.
+    var debugAppliedHighlightTexts: [String] {
+        debugAppliedHighlights.map(\.text)
+    }
+
+    /// Test-only: just the active-match substrings from the most recent
+    /// apply, so tests can confirm the active style lands on the right
+    /// cell.
+    var debugActiveHighlightTexts: [String] {
+        debugAppliedHighlights.filter(\.isActive).map(\.text)
     }
 
     /// Perf-focused debug metric for tests and investigations: how many
@@ -571,6 +619,7 @@ final class MarkdownPreview {
         headingBlockToRowIndex = [:]
         blockToRowIndex = [:]
         blockTextSpans = [:]
+        tableHighlightSpans = [:]
         codeBlockBuffers = [:]
         while index < blocks.count {
             let block = blocks[index]
@@ -636,6 +685,8 @@ final class MarkdownPreview {
             switch block {
             case let .paragraph(text), let .blockquote(text):
                 recordSpansForSingleBlockLabel(blockIndex: index, plainText: text.plainText)
+            case let .table(headers, tableRows, alignments):
+                recordTableSpans(blockIndex: index, headers: headers, rows: tableRows, alignments: alignments)
             default:
                 break
             }
@@ -733,6 +784,19 @@ final class MarkdownPreview {
         }
     }
 
+    /// Records the per-cell highlight geometry for a table block. The
+    /// `labelPointer` fills in later in ``attachWidgetPointersToBlockSpans``
+    /// once the card's monospace Label exists.
+    private func recordTableSpans(
+        blockIndex: Int,
+        headers: [RenderedText],
+        rows: [[RenderedText]],
+        alignments: [RenderedTableAlignment],
+    ) {
+        let layout = Self.tableLayout(headers: headers, rows: rows, alignments: alignments)
+        tableHighlightSpans[blockIndex] = TableHighlightSpan(labelPointer: nil, cells: layout.cells)
+    }
+
     /// Walks the rendered row widgets and writes Label pointers
     /// into the matching ``blockTextSpans`` entries (so the
     /// highlight overlay knows which Label to apply Pango
@@ -765,7 +829,29 @@ final class MarkdownPreview {
                     codeBlockBuffers[blockIndex] = buffer
                 }
             }
+            if case .table = row, let labelPointer = Self.locateTableLabelPointer(in: widget) {
+                for (blockIndex, mappedRow) in blockToRowIndex
+                where mappedRow == rowIndex && tableHighlightSpans[blockIndex] != nil
+                {
+                    tableHighlightSpans[blockIndex]?.labelPointer = labelPointer
+                }
+            }
         }
+    }
+
+    /// The monospace body Label inside a table card. ``makeTable``
+    /// builds `Box(.card) → [Label]` and tags the body with the
+    /// `preview-table-body` CSS class. Select by that class rather than
+    /// by position, so a future caption/footer Label added to the card
+    /// can't be mistaken for the body.
+    private static func locateTableLabelPointer(in widget: Widget) -> OpaquePointer? {
+        guard let box = widget.tryCast(Box.self) else { return nil }
+        for child in box.children() {
+            if let label = child.tryCast(Label.self), label.hasCSSClass("preview-table-body") {
+                return label.opaquePointer
+            }
+        }
+        return nil
     }
 
     private static func locateTargetLabelPointer(in widget: Widget, for row: PreviewRow) -> OpaquePointer? {
@@ -831,6 +917,14 @@ final class MarkdownPreview {
     private var lastAppliedNonEmpty: Bool = false
     private(set) var debugHighlightApplyCount: Int = 0
 
+    /// Substrings painted by the most recent label-highlight pass,
+    /// captured for ``debugAppliedHighlightTexts`` /
+    /// ``debugActiveHighlightTexts``. Always maintained (not behind a
+    /// compilation flag) but only ever read by tests; the cost is an
+    /// array of the painted cell substrings, rebuilt per apply and reset
+    /// on clear, so it never grows unbounded.
+    private var debugAppliedHighlights: [(text: String, isActive: Bool)] = []
+
     /// Apply yellow-background Pango attributes over the rendered
     /// labels for each match, plus a saturated-orange + bold style
     /// for the match at `activeDisplayIndex` (0-based into
@@ -838,10 +932,10 @@ final class MarkdownPreview {
     /// `label.markup = ...` already parsed — no widget rebuilds,
     /// no markup mutation. Reversible via ``clearSearchHighlights``.
     ///
-    /// Matches whose blockIndex is not in `blockTextSpans` are
-    /// silently skipped (tables, task lists, etc — phase A's
-    /// deliberately-omitted blocks). The caller's step navigation
-    /// still scrolls there; we just don't underline.
+    /// Matches whose blockIndex has no Label/table/code mapping are
+    /// silently skipped (task lists, etc — blocks with no single-Label
+    /// surface to paint). The caller's step navigation still scrolls
+    /// there; we just don't underline.
     func applySearchHighlights(matches: [PreviewMatch], activeIndex: Int?) {
         // Memoization: re-running apply with the exact same
         // matches + active index is a no-op visually. Skip the
@@ -864,14 +958,18 @@ final class MarkdownPreview {
         // tag overlay). The dual path is identical in spirit to
         // the editor side — same colours, same active style —
         // applied through the medium that fits each block kind.
-        var labelHits: [OpaquePointer: [(match: PreviewMatch, isActive: Bool)]] = [:]
+        //
+        // Label hits are resolved to Character ranges in the target
+        // Label's text up front, so single-Label blocks (heading,
+        // paragraph, blockquote, list) and table cells share one apply
+        // + clear path — table labels land in `highlightedLabelPointers`
+        // like any other, so the stale-clear below covers them too.
+        var labelHits: [OpaquePointer: [ResolvedLabelHit]] = [:]
         var codeHits: [Int: [(match: PreviewMatch, isActive: Bool)]] = [:]
         for (index, match) in matches.enumerated() {
             let isActive = (index == activeIndex)
-            if let span = blockTextSpans[match.blockIndex],
-               let labelPointer = span.labelPointer
-            {
-                labelHits[labelPointer, default: []].append((match, isActive: isActive))
+            if let resolved = resolveLabelHit(for: match, isActive: isActive) {
+                labelHits[resolved.labelPointer, default: []].append(resolved.hit)
                 continue
             }
             if codeBlockBuffers[match.blockIndex] != nil {
@@ -884,6 +982,7 @@ final class MarkdownPreview {
             Label(borrowing: UnsafeMutableRawPointer(labelPointer)).attributes = nil
         }
         highlightedLabelPointers = newHighlightedLabels
+        debugAppliedHighlights = []
         for (labelPointer, hits) in labelHits {
             applyAttributes(forLabel: labelPointer, hits: hits)
         }
@@ -908,6 +1007,7 @@ final class MarkdownPreview {
             Label(borrowing: UnsafeMutableRawPointer(labelPointer)).attributes = nil
         }
         highlightedLabelPointers = []
+        debugAppliedHighlights = []
         for buffer in highlightedCodeBlockBuffers.values {
             clearTags(on: buffer)
         }
@@ -957,9 +1057,64 @@ final class MarkdownPreview {
     private static let matchForeground = RGBA(red: 0x1E / 255, green: 0x1E / 255, blue: 0x1E / 255)
     private static let activeMatchBackground = RGBA(red: 0xF9 / 255, green: 0xA8 / 255, blue: 0x25 / 255)
 
+    /// A match resolved to a `Character` range in a specific Label's
+    /// plain text — the common currency that lets single-Label blocks
+    /// and table cells flow through one apply path. `charStart`/`charEnd`
+    /// index into `label.text`.
+    private struct ResolvedLabelHit: Equatable {
+        let charStart: Int
+        let charEnd: Int
+        let isActive: Bool
+    }
+
+    /// Translate a match into the Label and `Character` range that should
+    /// carry its highlight, or `nil` if the match has no single-Label
+    /// surface (code blocks, unmapped blocks) or can't be placed (a table
+    /// cell with no rendered field, or a match straddling a cell
+    /// boundary). Offsets are computed as `Character` distances over
+    /// `match.blockText` — never reused as `String.Index` against the
+    /// label's text, which is a different string.
+    private func resolveLabelHit(
+        for match: PreviewMatch,
+        isActive: Bool,
+    ) -> (labelPointer: OpaquePointer, hit: ResolvedLabelHit)? {
+        let blockText = match.blockText
+        let matchStart = blockText.distance(from: blockText.startIndex, to: match.range.lowerBound)
+        let matchEnd = blockText.distance(from: blockText.startIndex, to: match.range.upperBound)
+
+        if let span = blockTextSpans[match.blockIndex], let labelPointer = span.labelPointer {
+            return (labelPointer, ResolvedLabelHit(
+                charStart: span.plainTextOffset + matchStart,
+                charEnd: span.plainTextOffset + matchEnd,
+                isActive: isActive,
+            ))
+        }
+
+        if let table = tableHighlightSpans[match.blockIndex], let labelPointer = table.labelPointer {
+            // The match must lie entirely within one cell that has a
+            // rendered field. A cross-cell match (only reachable via a
+            // regex / newline query, since cells are "\n"-joined) or a
+            // match in an over-long row's extra cell has nowhere valid to
+            // paint, so it's skipped — the step navigation still scrolls.
+            for cell in table.cells {
+                guard let labelOffset = cell.labelOffset else { continue }
+                let cellEnd = cell.searchableOffset + cell.length
+                guard matchStart >= cell.searchableOffset, matchEnd <= cellEnd else { continue }
+                let localOffset = matchStart - cell.searchableOffset
+                return (labelPointer, ResolvedLabelHit(
+                    charStart: labelOffset + localOffset,
+                    charEnd: labelOffset + localOffset + (matchEnd - matchStart),
+                    isActive: isActive,
+                ))
+            }
+        }
+
+        return nil
+    }
+
     private func applyAttributes(
         forLabel labelPointer: OpaquePointer,
-        hits: [(match: PreviewMatch, isActive: Bool)],
+        hits: [ResolvedLabelHit],
     ) {
         // swift-adwaita's `TextAttributes` range helpers take a Swift
         // `Range<String.Index>` over the label's plain text and do the
@@ -967,34 +1122,26 @@ final class MarkdownPreview {
         // internally — so the preview no longer hand-rolls
         // `pango_attr_*_new` + manual `String.utf8.distance` (that
         // boilerplate moved into the library). `label.text` returns
-        // exactly the plain text Pango lays out (markup tags
-        // stripped), which is the coordinate space `blockTextSpans`
-        // offsets live in.
+        // exactly the plain text Pango lays out (markup tags stripped),
+        // which is the coordinate space the resolved char offsets live in.
         let label = Label(borrowing: UnsafeMutableRawPointer(labelPointer))
         let plainText = label.text
         let totalChars = plainText.count
         let attributes = TextAttributes()
 
-        for (match, isActive) in hits {
-            guard let span = blockTextSpans[match.blockIndex] else { continue }
-            let matchStartInBlock = match.blockText.distance(
-                from: match.blockText.startIndex,
-                to: match.range.lowerBound,
-            )
-            let matchEndInBlock = match.blockText.distance(
-                from: match.blockText.startIndex,
-                to: match.range.upperBound,
-            )
-            let charStart = span.plainTextOffset + matchStartInBlock
-            let charEnd = span.plainTextOffset + matchEndInBlock
-            guard charStart >= 0, charEnd <= totalChars, charStart < charEnd else { continue }
-            let startIndex = plainText.index(plainText.startIndex, offsetBy: charStart)
-            let endIndex = plainText.index(plainText.startIndex, offsetBy: charEnd)
+        for hit in hits {
+            // Re-validate every resolved range against the live label text
+            // so any residual offset drift degrades to "no highlight"
+            // rather than an out-of-bounds index crash.
+            guard hit.charStart >= 0, hit.charEnd <= totalChars, hit.charStart < hit.charEnd else { continue }
+            let startIndex = plainText.index(plainText.startIndex, offsetBy: hit.charStart)
+            let endIndex = plainText.index(plainText.startIndex, offsetBy: hit.charEnd)
             let range = startIndex..<endIndex
+            debugAppliedHighlights.append((text: String(plainText[range]), isActive: hit.isActive))
 
             attributes.addBackgroundColor(Self.matchBackground, range: range, in: plainText)
             attributes.addForegroundColor(Self.matchForeground, range: range, in: plainText)
-            if isActive {
+            if hit.isActive {
                 attributes.addBackgroundColor(Self.activeMatchBackground, range: range, in: plainText)
                 attributes.addBold(range: range, in: plainText)
             }
@@ -1913,18 +2060,45 @@ final class MarkdownPreview {
         return wrapper
     }
 
-    /// Build the Pango-markup string for an entire table, rendered in
-    /// monospace so character-count padding aligns the columns.
-    /// Headers are bold, the divider row uses `─` characters with a
-    /// muted alpha. Per-column alignment is honored.
+    /// Build the Pango-markup string for an entire table. Thin wrapper
+    /// over ``tableLayout(headers:rows:alignments:)`` — the layout
+    /// function is the single source of truth for the geometry, shared
+    /// with the search-highlight offset map so the two never drift.
     private func tableMarkup(headers: [RenderedText], rows: [[RenderedText]], alignments: [RenderedTableAlignment]) -> String {
-        let columnCount = headers.count
-        guard columnCount > 0 else { return "" }
+        Self.tableLayout(headers: headers, rows: rows, alignments: alignments).markup
+    }
 
-        // Column widths derive from the longest plain-text cell in
-        // each column — markup glyphs render at the same width as
-        // their plain-text source under <tt>, so the count is
-        // representative.
+    /// Pure geometry for a rendered table. Produces, in one pass and
+    /// from a single set of column widths:
+    ///
+    /// - `markup`: the monospace Pango markup the card's `Label` renders
+    ///   (headers bold, a muted `─` divider line, per-column alignment).
+    /// - `labelPlainText`: exactly what Pango lays out for that markup
+    ///   after stripping tags and unescaping entities — the coordinate
+    ///   space `labelOffset` indexes into. Every line is `totalWidth`
+    ///   `Character`s wide (cells padded to column width, joined by two
+    ///   spaces; the divider is `totalWidth` `─` glyphs), so a line's
+    ///   start is simply `lineIndex * (totalWidth + 1)`.
+    /// - `cells`: per-cell geometry in the SAME order
+    ///   ``MarkdownSearchEngine/searchableText(for:)`` emits cells —
+    ///   all header cells (row-major), then every body cell using each
+    ///   row's REAL cell count (`row` as-is, not padded to
+    ///   `columnCount`) — so a `searchableOffset` lines up with the
+    ///   match ranges the engine returns even for ragged rows.
+    ///
+    /// Offsets are `Character` counts throughout (matching how the
+    /// widths, the search engine, and `TextAttributes` range helpers
+    /// all count), never UTF-8/UTF-16 or markup-string lengths — a cell
+    /// rendered from `<b>x</b>` or `a&amp;b` contributes its *plain*
+    /// length to the label, so the map must too.
+    static func tableLayout(
+        headers: [RenderedText],
+        rows: [[RenderedText]],
+        alignments: [RenderedTableAlignment],
+    ) -> (markup: String, labelPlainText: String, cells: [TableCellGeometry]) {
+        let columnCount = headers.count
+        guard columnCount > 0 else { return ("", "", []) }
+
         var widths = Array(repeating: 0, count: columnCount)
         for (index, cell) in headers.enumerated() {
             widths[index] = max(widths[index], cell.plainText.count)
@@ -1934,42 +2108,105 @@ final class MarkdownPreview {
                 widths[index] = max(widths[index], cell.plainText.count)
             }
         }
+        let totalWidth = widths.reduce(0, +) + max(0, columnCount - 1) * 2
 
-        func renderRow(_ cells: [RenderedText], bold: Bool) -> String {
-            var pieces: [String] = []
-            pieces.reserveCapacity(columnCount)
+        // Leading-pad (number of spaces BEFORE the cell body) for a
+        // column, given the cell's plain length. The single formula that
+        // both the row renderer and the offset map use, so a cell body's
+        // start can never disagree between the two.
+        func leadingPad(column: Int, cellLength: Int) -> Int {
+            let pad = max(0, widths[column] - cellLength)
+            let alignment: RenderedTableAlignment = column < alignments.count ? alignments[column] : .leading
+            switch alignment {
+            case .leading: return 0
+            case .trailing: return pad
+            case .center: return pad / 2
+            }
+        }
+
+        // Character offset of column `column`'s field start within a
+        // line: preceding columns' widths plus the two-space joiner.
+        func columnFieldStart(_ column: Int) -> Int {
+            var start = 0
+            for col in 0..<column {
+                start += widths[col] + 2
+            }
+            return start
+        }
+
+        func renderRow(_ cells: [RenderedText], bold: Bool) -> (markup: String, plain: String) {
+            var markupPieces: [String] = []
+            var plainPieces: [String] = []
+            markupPieces.reserveCapacity(columnCount)
+            plainPieces.reserveCapacity(columnCount)
             for column in 0..<columnCount {
                 let cell = column < cells.count ? cells[column] : RenderedText.plain("")
-                let width = widths[column]
-                let pad = max(0, width - cell.plainText.count)
-                let alignment: RenderedTableAlignment = column < alignments.count ? alignments[column] : .leading
+                let pad = max(0, widths[column] - cell.plainText.count)
+                let left = leadingPad(column: column, cellLength: cell.plainText.count)
+                let right = pad - left
                 let body = bold ? "<b>\(cell.markup)</b>" : cell.markup
-                switch alignment {
-                case .leading:
-                    pieces.append(body + String(repeating: " ", count: pad))
-                case .trailing:
-                    pieces.append(String(repeating: " ", count: pad) + body)
-                case .center:
-                    let left = pad / 2
-                    let right = pad - left
-                    pieces.append(String(repeating: " ", count: left) + body + String(repeating: " ", count: right))
-                }
+                let leftSpaces = String(repeating: " ", count: left)
+                let rightSpaces = String(repeating: " ", count: right)
+                markupPieces.append(leftSpaces + body + rightSpaces)
+                plainPieces.append(leftSpaces + cell.plainText + rightSpaces)
             }
-            return pieces.joined(separator: "  ")
+            return (markupPieces.joined(separator: "  "), plainPieces.joined(separator: "  "))
         }
 
-        var lines: [String] = []
-        lines.reserveCapacity(rows.count + 2)
-        lines.append(renderRow(headers, bold: true))
+        var markupLines: [String] = []
+        var plainLines: [String] = []
+        markupLines.reserveCapacity(rows.count + 2)
+        plainLines.reserveCapacity(rows.count + 2)
 
-        let totalWidth = widths.reduce(0, +) + max(0, columnCount - 1) * 2
-        lines.append("<span alpha=\"45%\">\(String(repeating: "─", count: totalWidth))</span>")
-
+        let header = renderRow(headers, bold: true)
+        markupLines.append(header.markup)
+        plainLines.append(header.plain)
+        markupLines.append("<span alpha=\"45%\">\(String(repeating: "─", count: totalWidth))</span>")
+        plainLines.append(String(repeating: "─", count: totalWidth))
         for row in rows {
-            lines.append(renderRow(row, bold: false))
+            let rendered = renderRow(row, bold: false)
+            markupLines.append(rendered.markup)
+            plainLines.append(rendered.plain)
         }
 
-        return "<tt>\(lines.joined(separator: "\n"))</tt>"
+        let markup = "<tt>\(markupLines.joined(separator: "\n"))</tt>"
+        let labelPlainText = plainLines.joined(separator: "\n")
+
+        // Every line is `totalWidth` chars + one `\n` join, so a line's
+        // start in `labelPlainText` is uniform.
+        func lineStart(_ lineIndex: Int) -> Int { lineIndex * (totalWidth + 1) }
+
+        var cells: [TableCellGeometry] = []
+        var searchableOffset = 0
+
+        func appendCell(_ cell: RenderedText, column: Int, lineIndex: Int) {
+            let length = cell.plainText.count
+            let labelOffset: Int? = column < columnCount
+                ? lineStart(lineIndex) + columnFieldStart(column) + leadingPad(column: column, cellLength: length)
+                : nil
+            cells.append(TableCellGeometry(
+                searchableOffset: searchableOffset,
+                length: length,
+                labelOffset: labelOffset,
+            ))
+            // Searchable string joins every cell — header and body — with
+            // a single "\n"; advance past this cell's text and that join.
+            searchableOffset += length + 1
+        }
+
+        // Header cells occupy label line 0.
+        for column in 0..<headers.count {
+            appendCell(headers[column], column: column, lineIndex: 0)
+        }
+        // Body rows start at line 2 (line 1 is the divider). Iterate each
+        // row's REAL cells so the searchable order matches the engine's.
+        for (rowIndex, row) in rows.enumerated() {
+            for column in 0..<row.count {
+                appendCell(row[column], column: column, lineIndex: 2 + rowIndex)
+            }
+        }
+
+        return (markup, labelPlainText, cells)
     }
 
     private func makeImageBlock(alt: String, source: String?, title: String?, style: ImageBlockStyle) -> Widget {

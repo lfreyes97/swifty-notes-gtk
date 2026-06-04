@@ -185,7 +185,7 @@ struct PreviewBlockTextSpansTests {
     }
 
     @Test @MainActor
-    func `table block is intentionally omitted from blockTextSpans`() throws {
+    func `table block records per-cell highlight geometry with an attached label`() throws {
         let preview = try Self.makePreview(suffix: "table")
         preview.render(blocks: [
             .table(
@@ -194,12 +194,17 @@ struct PreviewBlockTextSpansTests {
                 alignments: [.leading, .leading],
             ),
         ])
-        // Table cells render in one Label but the searchable view
-        // joins cells differently than the rendered layout, so the
-        // overlay couldn't safely apply per-cell attributes. Phase A
-        // skips the table entry; the search controller still scrolls
-        // to it on match, just doesn't underline.
+        // Tables are NOT in blockTextSpans (their single-offset model
+        // can't represent N cells across two coordinate spaces); they
+        // live in tableHighlightSpans instead.
         #expect(preview.blockTextSpans[0] == nil)
+        let table = try #require(preview.tableHighlightSpans[0])
+        // Four cells: Area, Note, A1, B1 — in searchable order.
+        #expect(table.cells.count == 4)
+        // The post-render walk attached the card's monospace Label.
+        #expect(table.labelPointer != nil)
+        // Every cell has a rendered field (no over-long rows here).
+        #expect(table.cells.allSatisfy { $0.labelOffset != nil })
     }
 
     @Test @MainActor

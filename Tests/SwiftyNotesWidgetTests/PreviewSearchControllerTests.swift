@@ -32,6 +32,26 @@ struct PreviewSearchControllerTests {
     }
 
     @Test @MainActor
+    func `typing a query that only hits a table lights up the table highlight`() throws {
+        let rig = try Self.makeRig(
+            suffix: "table-only",
+            markdown: """
+            # Doc
+
+            | area | note |
+            |------|------|
+            | search | other |
+            """,
+        )
+        rig.bar.debugTypeQuery("search")
+        // The only match is inside a table cell — end to end, the
+        // controller must drive the preview to paint that cell.
+        #expect(rig.controller.debugMatchCount >= 1)
+        #expect(!rig.preview.debugHighlightedLabelPointers.isEmpty)
+        #expect(rig.preview.debugAppliedHighlightTexts.contains("search"))
+    }
+
+    @Test @MainActor
     func `typing a query finds matches across multiple block types`() throws {
         let rig = try Self.makeRig(
             suffix: "multi-block",
