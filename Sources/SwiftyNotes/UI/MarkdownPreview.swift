@@ -747,7 +747,7 @@ final class MarkdownPreview {
         let separatorLength = 2 // "\n\n"
         var runningOffset = 0
         for (position, blockIndex) in indices.enumerated() {
-            let plainText = Self.searchablePlainText(for: blocks[blockIndex]) ?? ""
+            let plainText = MarkdownSearchEngine.searchableText(for: blocks[blockIndex]) ?? ""
             blockTextSpans[blockIndex] = BlockTextSpan(
                 labelPointer: nil,
                 plainTextOffset: runningOffset,
@@ -934,6 +934,16 @@ final class MarkdownPreview {
     /// on clear, so it never grows unbounded.
     private var debugAppliedHighlights: [(text: String, isActive: Bool)] = []
 
+    #if DEBUG
+    /// For each forced layout-rebuild in the most recent apply pass,
+    /// records whether the label's markup was observed empty *after* the
+    /// blanking write (read back live from GTK). The stale-highlight fix
+    /// depends on that empty write actually landing — a regression that
+    /// reverts it to a same-string `set_markup` no-op records `false`
+    /// here. Reset at the start of every non-memoized apply pass.
+    private(set) var debugMarkupRebuildBlankReads: [Bool] = []
+    #endif
+
     /// Apply yellow-background Pango attributes over the rendered
     /// labels for each match, plus a saturated-orange + bold style
     /// for the match at `activeDisplayIndex` (0-based into
@@ -961,6 +971,9 @@ final class MarkdownPreview {
         lastAppliedMatches = matches
         lastAppliedActiveIndex = activeIndex
         lastAppliedNonEmpty = !matches.isEmpty
+        #if DEBUG
+        debugMarkupRebuildBlankReads = []
+        #endif
 
         // Group matches into two buckets: Label-backed (Pango
         // attribute overlay) and code-block-backed (SourceBuffer
@@ -988,7 +1001,7 @@ final class MarkdownPreview {
 
         let newHighlightedLabels = Set(labelHits.keys)
         for labelPointer in highlightedLabelPointers where !newHighlightedLabels.contains(labelPointer) {
-            Self.clearLabelOverlay(labelPointer)
+            clearLabelOverlay(labelPointer)
         }
         highlightedLabelPointers = newHighlightedLabels
         debugAppliedHighlights = []
@@ -1013,7 +1026,7 @@ final class MarkdownPreview {
     /// preview's search bar closes.
     func clearSearchHighlights() {
         for labelPointer in highlightedLabelPointers {
-            Self.clearLabelOverlay(labelPointer)
+            clearLabelOverlay(labelPointer)
         }
         highlightedLabelPointers = []
         debugAppliedHighlights = []
@@ -1160,53 +1173,37 @@ final class MarkdownPreview {
         // use-markup GtkLabel, `gtk_label_set_attributes` alone does NOT
         // reliably invalidate the cached PangoLayout — replacing an existing
         // highlight overlay leaves the OLD highlight painted even though the
-        // attribute list is correct. set_markup with the SAME string is a
-        // GTK no-op, so toggle through "" to force a real change and rebuild;
-        // queue_draw / queue_resize alone do not clear the stale overlay.
-        let markup = label.markup
-        label.markup = ""
-        label.markup = markup
+        // attribute list is correct.
+        forceMarkupLayoutRebuild(label)
         label.attributes = attributes
     }
 
     /// Remove any search-highlight overlay from a label, forcing GTK to
     /// repaint. Setting `attributes = nil` is not enough on a use-markup
-    /// label (the stale overlay stays painted), so we round-trip the markup
-    /// to rebuild the layout. Shared by the stale-label sweep in
+    /// label (the stale overlay stays painted), so we rebuild the layout.
+    /// Shared by the stale-label sweep in
     /// ``applySearchHighlights(matches:activeIndex:)`` and by
     /// ``clearSearchHighlights()``.
-    private static func clearLabelOverlay(_ labelPointer: OpaquePointer) {
+    private func clearLabelOverlay(_ labelPointer: OpaquePointer) {
         let label = Label(borrowing: UnsafeMutableRawPointer(labelPointer))
         label.attributes = nil
-        // set_markup with the SAME string is a GTK no-op, so force a real
-        // change ("" then the original) to make GTK rebuild the layout and
-        // drop the stale highlight overlay. Synchronous, so the blank flash
-        // is never visible.
-        let markup = label.markup
-        label.markup = ""
-        label.markup = markup
+        forceMarkupLayoutRebuild(label)
     }
 
-    /// Pure-logic accessor mirroring ``MarkdownSearchEngine.searchableText``
-    /// — kept private here to avoid bringing the engine into the
-    /// preview's import surface. The two implementations must stay
-    /// in sync for the highlight overlay to land on the right
-    /// substring.
-    private static func searchablePlainText(for block: RenderedBlock) -> String? {
-        switch block {
-        case .image, .imageGroup, .thematicBreak:
-            return nil
-        case let .heading(_, text), let .paragraph(text), let .blockquote(text):
-            return text.plainText
-        case let .codeBlock(code, _):
-            return code
-        case let .listItem(text, _, _, _, _):
-            return text.plainText
-        case let .table(headers, rows, _):
-            let headerLine = headers.map(\.plainText).joined(separator: "\n")
-            let cellLines = rows.flatMap { row in row.map(\.plainText) }
-            return ([headerLine] + cellLines).joined(separator: "\n")
-        }
+    /// Force GTK to rebuild a use-markup label's cached PangoLayout by
+    /// toggling its markup through `""` and back. `gtk_label_set_markup`
+    /// with the SAME string is a no-op, so the empty write is what makes
+    /// GTK drop the stale overlay; `queue_draw` / `queue_resize` alone do
+    /// not. Synchronous, so the blank flash is never visible.
+    private func forceMarkupLayoutRebuild(_ label: Label) {
+        let markup = label.markup
+        label.markup = ""
+        #if DEBUG
+        // Read the live value back so a test can prove the label really
+        // blanked — a regression that drops the empty write records `false`.
+        debugMarkupRebuildBlankReads.append(label.markup.isEmpty)
+        #endif
+        label.markup = markup
     }
 
     private func shouldUseVirtualizedRows(_ rows: [PreviewRow]) -> Bool {

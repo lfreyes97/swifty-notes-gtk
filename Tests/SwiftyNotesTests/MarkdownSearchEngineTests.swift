@@ -208,4 +208,42 @@ struct MarkdownSearchEngineTests {
         let result = MarkdownSearchEngine.search(blocks: Self.sample, query: "-", options: .init())
         #expect(result.isEmpty)
     }
+
+    @Test
+    func `searchableText extracts the readable payload per block kind`() {
+        // This is the single source of truth for "what slice of a block
+        // is searchable" — MarkdownPreview's highlight overlay relies on
+        // the exact same offsets, so the behaviour is pinned here before
+        // any consumer reuses it.
+
+        // Nothing to search through → nil.
+        #expect(MarkdownSearchEngine.searchableText(for: .image(alt: "Logo", source: "x.png", title: nil)) == nil)
+        #expect(MarkdownSearchEngine.searchableText(for: .imageGroup(items: [])) == nil)
+        #expect(MarkdownSearchEngine.searchableText(for: .thematicBreak) == nil)
+
+        // Text-bearing blocks expose their plain text.
+        #expect(MarkdownSearchEngine.searchableText(for: .heading(level: 2, text: .plain("Title"))) == "Title")
+        #expect(MarkdownSearchEngine.searchableText(for: .paragraph(.plain("Body text"))) == "Body text")
+        #expect(MarkdownSearchEngine.searchableText(for: .blockquote(.plain("Quoted line"))) == "Quoted line")
+
+        // Code block exposes the raw code, without the language prefix.
+        #expect(
+            MarkdownSearchEngine.searchableText(for: .codeBlock(code: "let x = 1", language: "swift")) == "let x = 1"
+        )
+
+        // List item drops the bullet marker.
+        #expect(
+            MarkdownSearchEngine.searchableText(for: .listItem(text: .plain("Task one"), depth: 0, marker: "- "))
+                == "Task one"
+        )
+
+        // Table joins header + body cells with newlines so the pipe
+        // glyphs between columns are never searchable.
+        let table = RenderedBlock.table(
+            headers: [.plain("H1"), .plain("H2")],
+            rows: [[.plain("a"), .plain("b")], [.plain("c"), .plain("d")]],
+            alignments: [.leading, .leading],
+        )
+        #expect(MarkdownSearchEngine.searchableText(for: table) == "H1\nH2\na\nb\nc\nd")
+    }
 }

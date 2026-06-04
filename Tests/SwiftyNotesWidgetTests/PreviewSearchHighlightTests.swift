@@ -117,6 +117,37 @@ struct PreviewSearchHighlightTests {
     }
 
     @Test @MainActor
+    func `replacing an overlay blanks the label markup so GTK rebuilds the layout`() throws {
+        // Regression guard for the VISUAL half of the stale-highlight bug
+        // that the logical test above (debugAppliedHighlightTexts) can't
+        // catch. gtk_label_set_attributes alone does NOT invalidate a
+        // use-markup label's cached PangoLayout, so replacing one overlay
+        // with another left the OLD highlight painted. The fix toggles the
+        // markup through "" to force a real layout rebuild — and set_markup
+        // with the SAME string is a GTK no-op, so the only way to prove the
+        // rebuild happened is that the label's LIVE markup actually became
+        // empty mid-toggle. This reads that value back from GTK; a
+        // regression that drops the empty write (turning it back into a
+        // same-string no-op) reads back the original markup → fails here.
+        let preview = try Self.makePreview(suffix: "blank-rebuild", markdown: """
+        Why does the dog run today
+        """)
+        let why = MarkdownSearchEngine.search(blocks: preview.debugLastRenderedBlocks, query: "Why", options: .init())
+        preview.applySearchHighlights(matches: why, activeIndex: 0)
+
+        // Switch to a different substring in the SAME paragraph label —
+        // this replaces the existing overlay, the exact path that left a
+        // stale highlight before the layout-rebuild fix.
+        let dog = MarkdownSearchEngine.search(blocks: preview.debugLastRenderedBlocks, query: "dog", options: .init())
+        preview.applySearchHighlights(matches: dog, activeIndex: 0)
+
+        #expect(!preview.debugMarkupRebuildBlankReads.isEmpty)
+        // Every rebuild in the switch pass must have observed an empty
+        // markup at the GTK level — that empty write is the fix.
+        #expect(preview.debugMarkupRebuildBlankReads.allSatisfy { $0 })
+    }
+
+    @Test @MainActor
     func `table-only match highlights the matched cell substring`() throws {
         let preview = try Self.makePreview(suffix: "table-hit", markdown: """
         # Doc
