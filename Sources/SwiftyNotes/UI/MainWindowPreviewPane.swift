@@ -559,9 +559,19 @@ extension MainWindow {
 
     func showPreviewOnlyContent() {
         stopPreviewAnimation()
+        // Install the SAME wrapper (`previewPaneContent`, which holds the
+        // preview-side find bar above `preview.rootScroll`) that split mode
+        // attaches to the Paned — NOT `rootScroll` directly. `rootScroll`
+        // is always a child of `previewPaneContent`, so setting it as the
+        // split content while it's still parented makes
+        // `adw_overlay_split_view_set_content` reject the reparent
+        // (`gtk_widget_get_parent(content) == NULL` fails) and the editor
+        // stays on screen. detachPreviewPane() first frees the wrapper from
+        // the Paned so it's unparented when it becomes the split content,
+        // and the preview-side find bar stays available in preview-only mode.
         detachPreviewPane()
-        guard splitView.content?.opaquePointer != preview.rootScroll.opaquePointer else { return }
-        splitView.content = preview.rootScroll
+        guard splitView.content?.opaquePointer != previewPaneContent.opaquePointer else { return }
+        splitView.content = previewPaneContent
         refreshPreview()
     }
 
