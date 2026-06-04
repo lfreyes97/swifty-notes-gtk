@@ -161,15 +161,23 @@ extension MainWindow {
             setViewMode(.preview, animated: false)
             openFindBar(mode: .find)
             previewFindReplaceBar.debugTypeQuery(query)
-            // Optional second query to exercise the highlight-replacement path
-            // (verifies stale highlights from the first query are cleared).
-            if let thenQuery = ProcessInfo.processInfo.environment["SWIFTY_NOTES_DEBUG_PREVIEW_SEARCH_THEN"]?
-                .trimmingCharacters(in: .whitespacesAndNewlines), !thenQuery.isEmpty
-            {
-                MainContext.delay(for: .milliseconds(300)) { [weak self] in
-                    self?.previewFindReplaceBar.debugTypeQuery(thenQuery)
-                }
-            }
+            // Optional follow-up queries (comma-separated in *_THEN) typed in
+            // sequence to exercise the highlight-replacement path across
+            // multiple query switches.
+            let followUps = (ProcessInfo.processInfo.environment["SWIFTY_NOTES_DEBUG_PREVIEW_SEARCH_THEN"] ?? "")
+                .split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+            typeDebugFollowUpQueries(followUps)
+        }
+    }
+
+    private func typeDebugFollowUpQueries(_ queries: [String]) {
+        guard let next = queries.first else { return }
+        let rest = Array(queries.dropFirst())
+        MainContext.delay(for: .milliseconds(400)) { [weak self] in
+            guard let self else { return }
+            previewFindReplaceBar.debugTypeQuery(next)
+            FileHandle.standardError.write(Data("SwiftyNotes debug preview search follow-up: \(next)\n".utf8))
+            typeDebugFollowUpQueries(rest)
         }
     }
 

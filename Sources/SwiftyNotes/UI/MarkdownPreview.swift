@@ -1156,16 +1156,15 @@ final class MarkdownPreview {
             }
         }
 
-        // Re-set the markup before installing the new attributes. On a
+        // Force a layout rebuild before installing the new attributes. On a
         // use-markup GtkLabel, `gtk_label_set_attributes` alone does NOT
         // reliably invalidate the cached PangoLayout — replacing an existing
-        // highlight overlay (or clearing it) leaves the OLD highlight painted
-        // on screen even though the attribute list is correct. Round-tripping
-        // the markup (set_markup with the same string) forces a clean layout
-        // rebuild, after which the fresh attributes paint correctly. This is
-        // the one reliable invalidation path; queue_draw / queue_resize alone
-        // do not clear the stale overlay.
+        // highlight overlay leaves the OLD highlight painted even though the
+        // attribute list is correct. set_markup with the SAME string is a
+        // GTK no-op, so toggle through "" to force a real change and rebuild;
+        // queue_draw / queue_resize alone do not clear the stale overlay.
         let markup = label.markup
+        label.markup = ""
         label.markup = markup
         label.attributes = attributes
     }
@@ -1179,7 +1178,12 @@ final class MarkdownPreview {
     private static func clearLabelOverlay(_ labelPointer: OpaquePointer) {
         let label = Label(borrowing: UnsafeMutableRawPointer(labelPointer))
         label.attributes = nil
+        // set_markup with the SAME string is a GTK no-op, so force a real
+        // change ("" then the original) to make GTK rebuild the layout and
+        // drop the stale highlight overlay. Synchronous, so the blank flash
+        // is never visible.
         let markup = label.markup
+        label.markup = ""
         label.markup = markup
     }
 
