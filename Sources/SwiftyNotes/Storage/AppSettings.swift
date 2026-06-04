@@ -149,6 +149,10 @@ public struct AppSettings: Codable, Equatable, Sendable {
                 spellCheckEnabled: spellCheckEnabled,
                 spellCheckLanguage: spellCheckLanguage,
                 trashRetention: trashRetention,
+                outlineDensity: outlineDensity,
+                outlineTreeLines: outlineTreeLines,
+                outlineDragHandles: outlineDragHandles,
+                outlineBreadcrumbVisible: outlineBreadcrumbVisible,
             )
         }
         return AppSettings(

@@ -274,6 +274,70 @@ struct SettingsStoreTests {
     }
 
     @Test
+    func `updating notes directory to the default clears the custom path but preserves every other preference`() {
+        let defaultDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("swifty-default-\(UUID().uuidString)", isDirectory: true)
+        let settings = AppSettings(
+            customNotesDirectoryPath: "/tmp/some-custom-location",
+            wrapsEditorLines: false,
+            editorFontSize: 22,
+            editorTabWidth: 8,
+            editorIndentStyle: .tabs,
+            autosaveDelaySeconds: 9,
+            appearanceMode: .dark,
+            spellCheckEnabled: false,
+            spellCheckLanguage: "de_DE",
+            trashRetention: .days(7),
+            outlineDensity: .compact,
+            outlineTreeLines: false,
+            outlineDragHandles: false,
+            outlineBreadcrumbVisible: false,
+        )
+
+        // The equality branch (directory == default) previously rebuilt
+        // AppSettings without the four outline fields, silently resetting
+        // them to their defaults — a settings data-loss regression.
+        let updated = settings.updatingNotesDirectory(defaultDirectory, defaultDirectory: defaultDirectory)
+
+        #expect(updated.customNotesDirectoryPath == nil)
+        #expect(updated.wrapsEditorLines == false)
+        #expect(updated.editorFontSize == 22)
+        #expect(updated.editorTabWidth == 8)
+        #expect(updated.editorIndentStyle == .tabs)
+        #expect(updated.autosaveDelaySeconds == 9)
+        #expect(updated.appearanceMode == .dark)
+        #expect(updated.spellCheckEnabled == false)
+        #expect(updated.spellCheckLanguage == "de_DE")
+        #expect(updated.trashRetention == .days(7))
+        #expect(updated.outlineDensity == .compact)
+        #expect(updated.outlineTreeLines == false)
+        #expect(updated.outlineDragHandles == false)
+        #expect(updated.outlineBreadcrumbVisible == false)
+    }
+
+    @Test
+    func `updating notes directory to a custom location preserves every other preference`() {
+        let defaultDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("swifty-default-\(UUID().uuidString)", isDirectory: true)
+        let custom = FileManager.default.temporaryDirectory
+            .appendingPathComponent("swifty-custom-\(UUID().uuidString)", isDirectory: true)
+        let settings = AppSettings(
+            outlineDensity: .compact,
+            outlineTreeLines: false,
+            outlineDragHandles: false,
+            outlineBreadcrumbVisible: false,
+        )
+
+        let updated = settings.updatingNotesDirectory(custom, defaultDirectory: defaultDirectory)
+
+        #expect(updated.customNotesDirectoryPath == custom.path(percentEncoded: false))
+        #expect(updated.outlineDensity == .compact)
+        #expect(updated.outlineTreeLines == false)
+        #expect(updated.outlineDragHandles == false)
+        #expect(updated.outlineBreadcrumbVisible == false)
+    }
+
+    @Test
     func `notes directory error message rewrites cocoa file write codes into user-friendly text`() {
         let permissionError = NSError(domain: NSCocoaErrorDomain, code: 512)
         let writeNoPermissionError = NSError(domain: NSCocoaErrorDomain, code: 513)
