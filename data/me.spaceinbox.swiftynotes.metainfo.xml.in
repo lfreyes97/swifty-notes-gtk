@@ -44,16 +44,16 @@
   </provides>
   <screenshots>
     <screenshot type="default">
-      <caption>Main window with sidebar, editor, and native Markdown preview.</caption>
-      <image type="source" width="2000" height="1240">@SCREENSHOT_MAIN_URL@</image>
+      <caption>Split view with the sidebar, formatting toolbar, live Markdown preview, and the document outline.</caption>
+      <image type="source" width="2000" height="1442">@SCREENSHOT_MAIN_URL@</image>
     </screenshot>
     <screenshot>
-      <caption>Markdown writing workflow with the formatting toolbar and live native preview.</caption>
-      <image type="source" width="2000" height="1240">@SCREENSHOT_EDITOR_URL@</image>
+      <caption>Native Markdown preview with the document outline for navigating long notes.</caption>
+      <image type="source" width="2000" height="1442">@SCREENSHOT_EDITOR_URL@</image>
     </screenshot>
     <screenshot>
-      <caption>Desktop and CLI workflows share the same notes for automation-friendly editing.</caption>
-      <image type="source" width="2000" height="1240">@SCREENSHOT_CLI_URL@</image>
+      <caption>Full editor with the formatting toolbar; every note is plain Markdown you can also drive from the CLI.</caption>
+      <image type="source" width="2000" height="1442">@SCREENSHOT_CLI_URL@</image>
     </screenshot>
   </screenshots>
   <content_rating type="oars-1.1"/>
