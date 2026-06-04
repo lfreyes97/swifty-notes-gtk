@@ -140,13 +140,14 @@ final class OutlineScrollSpyDriver {
     func debugTick(mode: EditorViewMode) { tick(for: mode) }
     #endif
 
-    deinit {
+    isolated deinit {
         // Disconnect synchronously so the bound closures stop firing
         // before the MainWindow tears down its widgets — otherwise the
-        // callback can land on a dangling self.
-        MainActor.assumeIsolated {
-            editorConnection?.disconnect()
-            previewConnection?.disconnect()
-        }
+        // callback can land on a dangling self. `isolated deinit`
+        // guarantees this body runs on the MainActor, so it replaces the
+        // old `MainActor.assumeIsolated` (which would crash rather than
+        // hop if the final release ever happened off-main).
+        editorConnection?.disconnect()
+        previewConnection?.disconnect()
     }
 }

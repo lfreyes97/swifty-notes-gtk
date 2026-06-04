@@ -496,7 +496,15 @@ struct MainWindowOutlineTests {
             appID: "me.spaceinbox.swiftynotes.tests.outline.nocritical"
         )
         window.debugLoadInitialNotes()
-        window.debugSetEditorText("# Doc\n\nBody.\n\n## Section\n\nMore body.\n")
+        // The fixture MUST contain a fenced code block: the regression only
+        // fires when MarkdownPreview.locateCodeBlockBuffer walks a code-block
+        // row (Overlay → Box → [copy Button, ScrolledWindow → SourceView])
+        // and tryCast(ScrolledWindow.self) matches the copy Button. Without a
+        // code block this test never exercises that path, so the guard would
+        // pass even if the gtkType override regressed.
+        window.debugSetEditorText(
+            "# Doc\n\nBody.\n\n```swift\nlet value = compute()\n```\n\n## Section\n\nMore body.\n"
+        )
         _ = window.debugPreviewText
 
         #expect(
