@@ -341,7 +341,9 @@ final class MainWindow {
         scheduleDebugSelectionSwitchIfRequested()
         scheduleDebugTypingBurstIfRequested()
         scheduleDebugScrollSweepIfRequested()
+        #if DEBUG
         scheduleDebugPreviewSearchIfRequested()
+        #endif
         MainContext.idle { [weak self] in
             self?.refreshPreview()
             self?.applyViewMode(animated: false)

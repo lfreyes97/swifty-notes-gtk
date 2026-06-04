@@ -134,6 +134,11 @@ extension MainWindow {
         }
     }
 
+    // This autopilot drives the preview-highlight path via
+    // `FindReplaceBar.debugTypeQuery`, which is itself `#if DEBUG`-only —
+    // so the whole hook (and its call site in MainWindow) must be gated
+    // too, or the release build fails to compile.
+    #if DEBUG
     /// Debug autopilot: switch to preview-only, open the find bar, and
     /// type a query, so a screenshot can confirm the preview highlight
     /// overlay actually paints. Set
@@ -180,6 +185,7 @@ extension MainWindow {
             typeDebugFollowUpQueries(rest)
         }
     }
+    #endif
 
     func scheduleDebugHeaderSubtitleLogIfRequested() {
         let delayMilliseconds = ProcessInfo.processInfo.environment["SWIFTY_NOTES_DEBUG_LOG_HEADER_SUBTITLE_DELAY_MS"]
