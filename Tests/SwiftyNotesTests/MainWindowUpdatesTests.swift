@@ -60,6 +60,48 @@ struct MainWindowUpdatesTests {
     }
 
     @Test @MainActor
+    func `launch-check network failure hides Check for Updates from the hamburger menu`() throws {
+        // Sandboxed installs (Flatpak/Snap default-deny network) fail the
+        // launch-time check with "could not resolve host"; the manual menu
+        // entry would only ever reproduce that error, so it disappears.
+        // Store installs surface updates through the store itself.
+        let window = try Self.makeWindow(appID: "me.spaceinbox.swiftynotes.tests.update.hidemenu")
+        #expect(window.overflowMenuItemsBySection["Help"]?.contains("Check for Updates…") == true)
+
+        window.handleUpdateCheckResult(.networkUnavailable(message: "Could not resolve host"), manual: false)
+
+        #expect(window.overflowMenuItemsBySection["Help"]?.contains("Check for Updates…") == false)
+        // The rest of the menu survives the rebuild.
+        #expect(window.overflowMenuItemsBySection["Help"]?.contains("About Swifty Notes") == true)
+        #expect(window.overflowMenuItemsBySection["Library"]?.isEmpty == false)
+        // No banner, no toast for a silent launch check.
+        #expect(!window.updateBanner.isVisible)
+    }
+
+    @Test @MainActor
+    func `manual network failure keeps the menu item so a transient outage is retryable`() throws {
+        // A .deb/.rpm user who is merely offline right now should not lose
+        // the entry — only the silent launch probe hides it.
+        let window = try Self.makeWindow(appID: "me.spaceinbox.swiftynotes.tests.update.manualnet")
+
+        window.handleUpdateCheckResult(.networkUnavailable(message: "offline"), manual: true)
+
+        #expect(window.overflowMenuItemsBySection["Help"]?.contains("Check for Updates…") == true)
+        #expect(!window.updateBanner.isVisible)
+    }
+
+    @Test @MainActor
+    func `non-network launch error keeps the menu item`() throws {
+        // GitHub being down (HTTP 5xx) is not proof the install has no
+        // network — the manual entry stays useful.
+        let window = try Self.makeWindow(appID: "me.spaceinbox.swiftynotes.tests.update.httperror")
+
+        window.handleUpdateCheckResult(.error(message: "GitHub returned HTTP 500"), manual: false)
+
+        #expect(window.overflowMenuItemsBySection["Help"]?.contains("Check for Updates…") == true)
+    }
+
+    @Test @MainActor
     func `Update button opens the release URL through the injected opener`() throws {
         let openedURL = URLRecorder()
         let window = try Self.makeWindow(

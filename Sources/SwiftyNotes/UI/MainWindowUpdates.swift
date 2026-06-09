@@ -61,7 +61,28 @@ extension MainWindow {
             if manual {
                 toastOverlay.addToast(Toast(title: "Could not check for updates: \(message)"))
             }
+        case .networkUnavailable:
+            if manual {
+                // A transient outage on a network-capable install: keep the
+                // raw NSURLError soup out of the toast, keep the menu entry
+                // so the user can retry once they're back online.
+                toastOverlay.addToast(Toast(title: "Could not check for updates: no internet connection."))
+            } else {
+                // Silent launch probe failed to reach the network at all —
+                // the tell of a sandboxed (Flatpak/Snap) install where a
+                // manual check could only reproduce the same error. Drop
+                // the menu entry; store installs surface updates in the
+                // store, and .deb/.rpm installs with working network never
+                // hit this branch.
+                hideCheckForUpdatesMenuItem()
+            }
         }
+    }
+
+    func hideCheckForUpdatesMenuItem() {
+        guard !updateCheckMenuItemHidden else { return }
+        updateCheckMenuItemHidden = true
+        rebuildOverflowMenu()
     }
 
     func openPendingUpdateReleasePage() {

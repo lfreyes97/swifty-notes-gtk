@@ -408,6 +408,15 @@ extension MainWindow {
         window.addAction(aboutAction)
         window.addAction(checkForUpdatesAction)
 
+        rebuildOverflowMenu()
+    }
+
+    /// (Re)composes the hamburger menu. Called once from
+    /// ``configureActionsAndMenu()`` and again whenever the menu's
+    /// composition changes at runtime — currently only when the
+    /// launch-time update check proves the network is unreachable and
+    /// "Check for Updates…" gets dropped (see ``handleUpdateCheckResult``).
+    func rebuildOverflowMenu() {
         let libraryItems: [(label: String, action: String)] = [
             ("Settings", "win.settings"),
             ("Open Markdown File…", "win.open-markdown-file"),
@@ -415,10 +424,13 @@ extension MainWindow {
             ("Reload from disk", "win.reload-notes"),
             ("Open notes folder", "win.open-notes-folder"),
         ]
-        let helpItems: [(label: String, action: String)] = [
+        var helpItems: [(label: String, action: String)] = [
             ("Check for Updates…", "win.check-for-updates"),
             ("About Swifty Notes", "win.about"),
         ]
+        if updateCheckMenuItemHidden {
+            helpItems.removeAll { $0.action == "win.check-for-updates" }
+        }
 
         #if os(macOS)
         // Hand-built popover (not GMenu/setMenuModel) so the items
@@ -436,10 +448,13 @@ extension MainWindow {
             ("Reload from disk", { [weak self] in self?.reloadFromDisk(announce: true) }),
             ("Open notes folder", { [weak self] in self?.openNotesFolder() }),
         ]
-        let help: [(label: String, handler: @MainActor () -> Void)] = [
+        var help: [(label: String, handler: @MainActor () -> Void)] = [
             ("Check for Updates…", { [weak self] in self?.checkForUpdates(manual: true) }),
             ("About Swifty Notes", { [weak self] in self?.presentAboutDialog() }),
         ]
+        if updateCheckMenuItemHidden {
+            help.removeAll { $0.label == "Check for Updates…" }
+        }
 
         let popover = Popover()
         popover.hasArrow = true

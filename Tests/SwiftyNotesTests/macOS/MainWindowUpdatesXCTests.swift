@@ -39,6 +39,26 @@ final class MainWindowUpdatesXCTests: XCTestCase {
         XCTAssertNil(window.pendingUpdateReleaseURL)
     }
 
+    @MainActor func test_launch_check_network_failure_hides_check_for_updates_menu_item() throws {
+        let window = try makeWindow(appID: "me.spaceinbox.swiftynotes.tests.update.hidemenu")
+        XCTAssertEqual(window.overflowMenuItemsBySection["Help"]?.contains("Check for Updates…"), true)
+
+        window.handleUpdateCheckResult(.networkUnavailable(message: "Could not resolve host"), manual: false)
+
+        XCTAssertEqual(window.overflowMenuItemsBySection["Help"]?.contains("Check for Updates…"), false)
+        XCTAssertEqual(window.overflowMenuItemsBySection["Help"]?.contains("About Swifty Notes"), true)
+        XCTAssertFalse(window.updateBanner.isVisible)
+    }
+
+    @MainActor func test_manual_network_failure_keeps_menu_item() throws {
+        let window = try makeWindow(appID: "me.spaceinbox.swiftynotes.tests.update.manualnet")
+
+        window.handleUpdateCheckResult(.networkUnavailable(message: "offline"), manual: true)
+
+        XCTAssertEqual(window.overflowMenuItemsBySection["Help"]?.contains("Check for Updates…"), true)
+        XCTAssertFalse(window.updateBanner.isVisible)
+    }
+
     @MainActor func test_update_button_opens_release_url_through_injected_opener() throws {
         let opened = MainActorURLBox()
         let window = try makeWindow(

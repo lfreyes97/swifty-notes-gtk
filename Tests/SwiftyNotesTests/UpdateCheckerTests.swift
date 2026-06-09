@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 @testable import SwiftyNotes
 import Testing
 
@@ -123,6 +126,95 @@ struct UpdateCheckerTests {
         let result = await checker.check()
         guard case .error = result else {
             Issue.record("Expected error for unparseable current version, got \(result)")
+            return
+        }
+    }
+
+    @Test
+    func `unresolvable host is classified as networkUnavailable`() async {
+        // The exact failure a sandboxed (Flatpak/Snap) install produces:
+        // NSURLErrorDomain Code=-1003 "Could not resolve host".
+        let checker = UpdateChecker(
+            currentVersion: "1.0.0",
+            forceUpdateAvailable: false,
+            fetchLatestRelease: { throw URLError(.cannotFindHost) },
+        )
+        let result = await checker.check()
+        guard case .networkUnavailable = result else {
+            Issue.record("Expected networkUnavailable for cannotFindHost, got \(result)")
+            return
+        }
+    }
+
+    @Test
+    func `offline and connection failures are classified as networkUnavailable`() async {
+        let codes: [URLError.Code] = [.notConnectedToInternet, .cannotConnectToHost, .networkConnectionLost, .dnsLookupFailed]
+        for code in codes {
+            let checker = UpdateChecker(
+                currentVersion: "1.0.0",
+                forceUpdateAvailable: false,
+                fetchLatestRelease: { throw URLError(code) },
+            )
+            let result = await checker.check()
+            guard case .networkUnavailable = result else {
+                Issue.record("Expected networkUnavailable for \(code), got \(result)")
+                return
+            }
+        }
+    }
+
+    @Test
+    func `a bridged NSError with the URL error domain is classified as networkUnavailable`() async {
+        // Matches the production error shape from the bug report:
+        // Error Domain=NSURLErrorDomain Code=-1003.
+        let underlying = NSError(domain: URLError.errorDomain, code: URLError.Code.cannotFindHost.rawValue)
+        let checker = UpdateChecker(
+            currentVersion: "1.0.0",
+            forceUpdateAvailable: false,
+            fetchLatestRelease: { throw underlying },
+        )
+        let result = await checker.check()
+        guard case .networkUnavailable = result else {
+            Issue.record("Expected networkUnavailable for bridged NSError -1003, got \(result)")
+            return
+        }
+    }
+
+    @Test
+    func `an HTTP error stays a plain error, not networkUnavailable`() async {
+        // The network IS reachable — GitHub answered with a 500. The
+        // manual re-check stays useful, so this must not be classified
+        // as unreachable.
+        let checker = UpdateChecker(
+            currentVersion: "1.0.0",
+            forceUpdateAvailable: false,
+            fetchLatestRelease: {
+                throw NSError(
+                    domain: "UpdateChecker",
+                    code: 500,
+                    userInfo: [NSLocalizedDescriptionKey: "GitHub returned HTTP 500"],
+                )
+            },
+        )
+        let result = await checker.check()
+        guard case .error = result else {
+            Issue.record("Expected plain error for HTTP 500, got \(result)")
+            return
+        }
+    }
+
+    @Test
+    func `a timeout stays a plain error so a slow network does not hide the menu item`() async {
+        // Timeouts are ambiguous (slow GitHub vs no network); treat them
+        // as transient errors, never as proof the install has no network.
+        let checker = UpdateChecker(
+            currentVersion: "1.0.0",
+            forceUpdateAvailable: false,
+            fetchLatestRelease: { throw URLError(.timedOut) },
+        )
+        let result = await checker.check()
+        guard case .error = result else {
+            Issue.record("Expected plain error for timedOut, got \(result)")
             return
         }
     }

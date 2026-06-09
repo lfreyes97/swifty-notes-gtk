@@ -36,6 +36,13 @@ enum UpdateCheckResult: Sendable, Equatable {
     case upToDate
     case updateAvailable(version: String, releaseURL: URL)
     case error(message: String)
+    /// The request never reached GitHub — host unresolvable, connection
+    /// refused, or no route. This is what a sandboxed install (Flatpak /
+    /// Snap without network permission) produces on every check, so
+    /// callers may hide manual re-check affordances on this outcome.
+    /// Distinct from ``error`` (GitHub answered badly / parse failure /
+    /// timeout), where a retry remains meaningful.
+    case networkUnavailable(message: String)
 }
 
 /// Pure logic that turns a current version + a release-fetcher closure into
@@ -52,7 +59,10 @@ struct UpdateChecker: Sendable {
         do {
             release = try await fetchLatestRelease()
         } catch {
-            return .error(message: String(describing: error))
+            let message = String(describing: error)
+            return Self.isNetworkUnavailable(error)
+                ? .networkUnavailable(message: message)
+                : .error(message: message)
         }
         guard let remote = SemanticVersion(release.tagName) else {
             return .error(message: "Could not parse remote version \"\(release.tagName)\"")
@@ -65,6 +75,28 @@ struct UpdateChecker: Sendable {
             return .updateAvailable(version: normalized, releaseURL: release.htmlURL)
         }
         return .upToDate
+    }
+
+    /// True when the error means the network itself was unreachable —
+    /// the failure mode of a sandboxed install with no network permission
+    /// (e.g. `NSURLErrorDomain Code=-1003` "Could not resolve host").
+    /// Deliberately excludes `.timedOut`: a timeout is ambiguous (slow
+    /// GitHub vs no network) and must not hide the re-check menu entry
+    /// for users on flaky connections.
+    static func isNetworkUnavailable(_ error: Error) -> Bool {
+        let nsError = error as NSError
+        guard nsError.domain == URLError.errorDomain else { return false }
+        switch URLError.Code(rawValue: nsError.code) {
+        case .notConnectedToInternet,
+             .cannotFindHost,
+             .cannotConnectToHost,
+             .networkConnectionLost,
+             .dnsLookupFailed,
+             .dataNotAllowed:
+            return true
+        default:
+            return false
+        }
     }
 
     private static func normalizedVersionString(_ raw: String) -> String {

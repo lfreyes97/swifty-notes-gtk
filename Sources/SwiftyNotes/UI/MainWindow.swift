@@ -266,6 +266,13 @@ final class MainWindow {
     var activeSettingsWindow: SettingsWindow?
     var overflowMenuSectionTitles: [String] = []
     var overflowMenuItemsBySection: [String: [String]] = [:]
+    /// True once a silent launch-time update check failed because the
+    /// network was unreachable — the tell of a sandboxed install
+    /// (Flatpak/Snap without network permission). While set, the
+    /// hamburger menu omits "Check for Updates…": a manual check could
+    /// only reproduce the same error, and store installs get update
+    /// notifications from the store itself.
+    var updateCheckMenuItemHidden = false
     var noteContextMenuLabels: [String] = []
     var lastCopiedNoteID: String?
     var hasScheduledDebugLaunchEdit = false
