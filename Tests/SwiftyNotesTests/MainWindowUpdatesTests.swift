@@ -9,6 +9,7 @@ struct MainWindowUpdatesTests {
     private static func makeWindow(
         appID: String,
         forceUpdateAvailable: Bool = false,
+        isSandboxedInstall: Bool = false,
         directoryOpener: @escaping (URL) throws -> Void = { _ in },
     ) throws -> MainWindow {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -24,6 +25,7 @@ struct MainWindowUpdatesTests {
             renderer: MarkdownRenderer(),
             autosave: AutosaveCoordinator(),
             forceUpdateAvailable: forceUpdateAvailable,
+            isSandboxedInstall: isSandboxedInstall,
             directoryOpener: directoryOpener,
         )
     }
@@ -60,12 +62,15 @@ struct MainWindowUpdatesTests {
     }
 
     @Test @MainActor
-    func `launch-check network failure hides Check for Updates from the hamburger menu`() throws {
+    func `sandboxed launch-check network failure hides Check for Updates from the hamburger menu`() throws {
         // Sandboxed installs (Flatpak/Snap default-deny network) fail the
         // launch-time check with "could not resolve host"; the manual menu
         // entry would only ever reproduce that error, so it disappears.
         // Store installs surface updates through the store itself.
-        let window = try Self.makeWindow(appID: "me.spaceinbox.swiftynotes.tests.update.hidemenu")
+        let window = try Self.makeWindow(
+            appID: "me.spaceinbox.swiftynotes.tests.update.hidemenu",
+            isSandboxedInstall: true,
+        )
         #expect(window.overflowMenuItemsBySection["Help"]?.contains("Check for Updates…") == true)
 
         window.handleUpdateCheckResult(.networkUnavailable(message: "Could not resolve host"), manual: false)
@@ -74,15 +79,38 @@ struct MainWindowUpdatesTests {
         // The rest of the menu survives the rebuild.
         #expect(window.overflowMenuItemsBySection["Help"]?.contains("About Swifty Notes") == true)
         #expect(window.overflowMenuItemsBySection["Library"]?.isEmpty == false)
+        // The underlying GAction is disabled so future surfaces grey out.
+        #expect(window.checkForUpdatesAction.enabled == false)
         // No banner, no toast for a silent launch check.
         #expect(!window.updateBanner.isVisible)
     }
 
     @Test @MainActor
+    func `launch-check network failure on a host install keeps the menu item`() throws {
+        // A .deb/.rpm/macOS user who happens to be offline at launch (plane
+        // mode) is NOT a sandbox — the entry must survive, because for
+        // those installs this menu is the only update channel and the
+        // network may come back any minute.
+        let window = try Self.makeWindow(
+            appID: "me.spaceinbox.swiftynotes.tests.update.hostoffline",
+            isSandboxedInstall: false,
+        )
+
+        window.handleUpdateCheckResult(.networkUnavailable(message: "offline at launch"), manual: false)
+
+        #expect(window.overflowMenuItemsBySection["Help"]?.contains("Check for Updates…") == true)
+        #expect(window.checkForUpdatesAction.enabled == true)
+        #expect(!window.updateBanner.isVisible)
+    }
+
+    @Test @MainActor
     func `manual network failure keeps the menu item so a transient outage is retryable`() throws {
-        // A .deb/.rpm user who is merely offline right now should not lose
-        // the entry — only the silent launch probe hides it.
-        let window = try Self.makeWindow(appID: "me.spaceinbox.swiftynotes.tests.update.manualnet")
+        // Even in a sandbox, a manual click that fails offline only shows
+        // a toast — hiding is reserved for the silent launch probe.
+        let window = try Self.makeWindow(
+            appID: "me.spaceinbox.swiftynotes.tests.update.manualnet",
+            isSandboxedInstall: true,
+        )
 
         window.handleUpdateCheckResult(.networkUnavailable(message: "offline"), manual: true)
 
@@ -91,10 +119,14 @@ struct MainWindowUpdatesTests {
     }
 
     @Test @MainActor
-    func `non-network launch error keeps the menu item`() throws {
-        // GitHub being down (HTTP 5xx) is not proof the install has no
-        // network — the manual entry stays useful.
-        let window = try Self.makeWindow(appID: "me.spaceinbox.swiftynotes.tests.update.httperror")
+    func `non-network launch error keeps the menu item even in a sandbox`() throws {
+        // GitHub being down (HTTP 5xx) means the network IS reachable —
+        // even inside a sandbox with network permission granted, the
+        // manual entry stays useful.
+        let window = try Self.makeWindow(
+            appID: "me.spaceinbox.swiftynotes.tests.update.httperror",
+            isSandboxedInstall: true,
+        )
 
         window.handleUpdateCheckResult(.error(message: "GitHub returned HTTP 500"), manual: false)
 

@@ -80,9 +80,11 @@ struct UpdateChecker: Sendable {
     /// True when the error means the network itself was unreachable —
     /// the failure mode of a sandboxed install with no network permission
     /// (e.g. `NSURLErrorDomain Code=-1003` "Could not resolve host").
-    /// Deliberately excludes `.timedOut`: a timeout is ambiguous (slow
-    /// GitHub vs no network) and must not hide the re-check menu entry
-    /// for users on flaky connections.
+    /// Deliberately excludes the ambiguous codes: `.timedOut` (slow GitHub
+    /// vs no network) and `.networkConnectionLost` (the connection DID
+    /// establish and dropped mid-transfer — flaky Wi-Fi, not a sandbox,
+    /// which can never connect at all). Neither may hide the re-check
+    /// menu entry.
     static func isNetworkUnavailable(_ error: Error) -> Bool {
         let nsError = error as NSError
         guard nsError.domain == URLError.errorDomain else { return false }
@@ -90,7 +92,6 @@ struct UpdateChecker: Sendable {
         case .notConnectedToInternet,
              .cannotFindHost,
              .cannotConnectToHost,
-             .networkConnectionLost,
              .dnsLookupFailed,
              .dataNotAllowed:
             return true

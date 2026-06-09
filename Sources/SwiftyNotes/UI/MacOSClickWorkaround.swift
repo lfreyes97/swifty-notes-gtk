@@ -258,12 +258,14 @@ enum MacOSClickWorkaround {
     /// would have arrived a few ms later.
     private static let clickWatchdogDelay = 0.250
 
-    /// Per-button last-fire timestamp keyed by `ObjectIdentifier`. The
-    /// entry persists for the lifetime of the button (which is the
-    /// lifetime of the app for toolbar / banner / menu buttons), so
-    /// the map stays bounded by the widget count. Read/written only
-    /// from the main thread under `@MainActor` isolation, so no
-    /// locking is needed.
+    /// Per-button last-fire timestamp keyed by `ObjectIdentifier`. Most
+    /// buttons live for the app's lifetime, so the map stays bounded by
+    /// the widget count; the one exception is `rebuildOverflowMenu()`,
+    /// which recreates the hamburger items at most once per window and
+    /// orphans a handful of entries — bounded, so still no eviction
+    /// needed. (A future caller that rebuilds buttons repeatedly should
+    /// add cleanup here first.) Read/written only from the main thread
+    /// under `@MainActor` isolation, so no locking is needed.
     private static var lastClickFire: [ObjectIdentifier: ContinuousClock.Instant] = [:]
     private static let clickDedupWindow: Duration = .milliseconds(200)
 

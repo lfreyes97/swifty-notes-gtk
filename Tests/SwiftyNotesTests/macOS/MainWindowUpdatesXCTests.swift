@@ -39,24 +39,54 @@ final class MainWindowUpdatesXCTests: XCTestCase {
         XCTAssertNil(window.pendingUpdateReleaseURL)
     }
 
-    @MainActor func test_launch_check_network_failure_hides_check_for_updates_menu_item() throws {
-        let window = try makeWindow(appID: "me.spaceinbox.swiftynotes.tests.update.hidemenu")
+    @MainActor func test_sandboxed_launch_check_network_failure_hides_check_for_updates_menu_item() throws {
+        let window = try makeWindow(
+            appID: "me.spaceinbox.swiftynotes.tests.update.hidemenu",
+            isSandboxedInstall: true,
+        )
         XCTAssertEqual(window.overflowMenuItemsBySection["Help"]?.contains("Check for Updates…"), true)
 
         window.handleUpdateCheckResult(.networkUnavailable(message: "Could not resolve host"), manual: false)
 
         XCTAssertEqual(window.overflowMenuItemsBySection["Help"]?.contains("Check for Updates…"), false)
         XCTAssertEqual(window.overflowMenuItemsBySection["Help"]?.contains("About Swifty Notes"), true)
+        XCTAssertFalse(window.checkForUpdatesAction.enabled)
         XCTAssertFalse(window.updateBanner.isVisible)
     }
 
+    @MainActor func test_launch_check_network_failure_on_host_install_keeps_menu_item() throws {
+        let window = try makeWindow(
+            appID: "me.spaceinbox.swiftynotes.tests.update.hostoffline",
+            isSandboxedInstall: false,
+        )
+
+        window.handleUpdateCheckResult(.networkUnavailable(message: "offline at launch"), manual: false)
+
+        XCTAssertEqual(window.overflowMenuItemsBySection["Help"]?.contains("Check for Updates…"), true)
+        XCTAssertTrue(window.checkForUpdatesAction.enabled)
+    }
+
     @MainActor func test_manual_network_failure_keeps_menu_item() throws {
-        let window = try makeWindow(appID: "me.spaceinbox.swiftynotes.tests.update.manualnet")
+        let window = try makeWindow(
+            appID: "me.spaceinbox.swiftynotes.tests.update.manualnet",
+            isSandboxedInstall: true,
+        )
 
         window.handleUpdateCheckResult(.networkUnavailable(message: "offline"), manual: true)
 
         XCTAssertEqual(window.overflowMenuItemsBySection["Help"]?.contains("Check for Updates…"), true)
         XCTAssertFalse(window.updateBanner.isVisible)
+    }
+
+    @MainActor func test_non_network_launch_error_keeps_menu_item_even_in_sandbox() throws {
+        let window = try makeWindow(
+            appID: "me.spaceinbox.swiftynotes.tests.update.httperror",
+            isSandboxedInstall: true,
+        )
+
+        window.handleUpdateCheckResult(.error(message: "GitHub returned HTTP 500"), manual: false)
+
+        XCTAssertEqual(window.overflowMenuItemsBySection["Help"]?.contains("Check for Updates…"), true)
     }
 
     @MainActor func test_update_button_opens_release_url_through_injected_opener() throws {
@@ -101,6 +131,7 @@ final class MainWindowUpdatesXCTests: XCTestCase {
     @MainActor private func makeWindow(
         appID: String,
         forceUpdateAvailable: Bool = false,
+        isSandboxedInstall: Bool = false,
         directoryOpener: @escaping (URL) throws -> Void = { _ in },
     ) throws -> MainWindow {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -116,6 +147,7 @@ final class MainWindowUpdatesXCTests: XCTestCase {
             renderer: MarkdownRenderer(),
             autosave: AutosaveCoordinator(),
             forceUpdateAvailable: forceUpdateAvailable,
+            isSandboxedInstall: isSandboxedInstall,
             directoryOpener: directoryOpener,
         )
     }

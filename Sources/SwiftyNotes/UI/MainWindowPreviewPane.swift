@@ -411,6 +411,10 @@ extension MainWindow {
         rebuildOverflowMenu()
     }
 
+    /// Single source for the menu label so the Linux GMenu entry, the
+    /// macOS popover button, and the hide filter can never drift apart.
+    static let checkForUpdatesMenuLabel = "Check for Updates…"
+
     /// (Re)composes the hamburger menu. Called once from
     /// ``configureActionsAndMenu()`` and again whenever the menu's
     /// composition changes at runtime — currently only when the
@@ -424,14 +428,6 @@ extension MainWindow {
             ("Reload from disk", "win.reload-notes"),
             ("Open notes folder", "win.open-notes-folder"),
         ]
-        var helpItems: [(label: String, action: String)] = [
-            ("Check for Updates…", "win.check-for-updates"),
-            ("About Swifty Notes", "win.about"),
-        ]
-        if updateCheckMenuItemHidden {
-            helpItems.removeAll { $0.action == "win.check-for-updates" }
-        }
-
         #if os(macOS)
         // Hand-built popover (not GMenu/setMenuModel) so the items
         // themselves are explicit `Button`s routed through
@@ -448,13 +444,11 @@ extension MainWindow {
             ("Reload from disk", { [weak self] in self?.reloadFromDisk(announce: true) }),
             ("Open notes folder", { [weak self] in self?.openNotesFolder() }),
         ]
-        var help: [(label: String, handler: @MainActor () -> Void)] = [
-            ("Check for Updates…", { [weak self] in self?.checkForUpdates(manual: true) }),
-            ("About Swifty Notes", { [weak self] in self?.presentAboutDialog() }),
-        ]
-        if updateCheckMenuItemHidden {
-            help.removeAll { $0.label == "Check for Updates…" }
+        var help: [(label: String, handler: @MainActor () -> Void)] = []
+        if !updateCheckMenuItemHidden {
+            help.append((Self.checkForUpdatesMenuLabel, { [weak self] in self?.checkForUpdates(manual: true) }))
         }
+        help.append(("About Swifty Notes", { [weak self] in self?.presentAboutDialog() }))
 
         let popover = Popover()
         popover.hasArrow = true
@@ -471,7 +465,17 @@ extension MainWindow {
         }
         popover.child = content
         menuButton.setPopover(popover)
+        // Derive the introspection surface from the SAME list the popover
+        // was built from, so a test failure is impossible to fake by
+        // filtering only the bookkeeping array.
+        let helpLabels = help.map(\.label)
         #else
+        var helpItems: [(label: String, action: String)] = []
+        if !updateCheckMenuItemHidden {
+            helpItems.append((Self.checkForUpdatesMenuLabel, "win.check-for-updates"))
+        }
+        helpItems.append(("About Swifty Notes", "win.about"))
+
         let librarySection = GMenuRef()
         for item in libraryItems {
             librarySection.append(item.label, action: item.action)
@@ -484,12 +488,13 @@ extension MainWindow {
         menu.appendSection("Library", section: librarySection)
         menu.appendSection("Help", section: helpSection)
         menuButton.setMenuModel(menu)
+        let helpLabels = helpItems.map(\.label)
         #endif
 
         overflowMenuSectionTitles = ["Library", "Help"]
         overflowMenuItemsBySection = [
             "Library": libraryItems.map(\.label),
-            "Help": helpItems.map(\.label),
+            "Help": helpLabels,
         ]
         updateActionAvailability()
     }

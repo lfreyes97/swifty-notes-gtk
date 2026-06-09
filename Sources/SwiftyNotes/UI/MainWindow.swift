@@ -142,6 +142,10 @@ final class MainWindow {
     /// affordance so we can verify the banner without shipping a new
     /// release first.
     let forceUpdateAvailable: Bool
+    /// Whether this process runs inside a Flatpak/Snap sandbox (see
+    /// ``AppSandbox``). Injected so tests can exercise both halves of the
+    /// "hide Check for Updates when the sandbox has no network" decision.
+    let isSandboxedInstall: Bool
     let autosaveDelayOverride: Duration?
     var autosaveDelay: Duration
     let openExternalDocumentHandler: (URL) throws -> Void
@@ -297,6 +301,7 @@ final class MainWindow {
         appSettings: AppSettings = .default,
         autosaveDelay: Duration? = nil,
         forceUpdateAvailable: Bool = false,
+        isSandboxedInstall: Bool = AppSandbox.isSandboxed,
         openExternalDocumentHandler: @escaping (URL) throws -> Void = { _ in },
         directoryOpener: @escaping (URL) throws -> Void = MainWindow.openDirectoryInSystemFileManager,
         deferredUIActionScheduler: @escaping (@escaping @MainActor () -> Void) -> Void = { action in
@@ -313,6 +318,7 @@ final class MainWindow {
         autosaveDelayOverride = autosaveDelay
         self.autosaveDelay = autosaveDelay ?? .seconds(appSettings.autosaveDelaySeconds)
         self.forceUpdateAvailable = forceUpdateAvailable
+        self.isSandboxedInstall = isSandboxedInstall
         self.openExternalDocumentHandler = openExternalDocumentHandler
         self.directoryOpener = directoryOpener
         self.deferredUIActionScheduler = deferredUIActionScheduler

@@ -67,13 +67,15 @@ extension MainWindow {
                 // raw NSURLError soup out of the toast, keep the menu entry
                 // so the user can retry once they're back online.
                 toastOverlay.addToast(Toast(title: "Could not check for updates: no internet connection."))
-            } else {
-                // Silent launch probe failed to reach the network at all —
-                // the tell of a sandboxed (Flatpak/Snap) install where a
-                // manual check could only reproduce the same error. Drop
-                // the menu entry; store installs surface updates in the
-                // store, and .deb/.rpm installs with working network never
-                // hit this branch.
+            } else if isSandboxedInstall {
+                // The silent launch probe couldn't reach the network AND we
+                // are provably inside a Flatpak/Snap sandbox — the combination
+                // that means a manual check could only ever reproduce the
+                // same error (our store builds ship without network
+                // permission). Drop the menu entry; the store surfaces
+                // updates itself. The sandbox gate keeps a merely-offline
+                // .deb/.rpm/macOS launch (plane mode) from losing the entry
+                // for the whole session.
                 hideCheckForUpdatesMenuItem()
             }
         }
@@ -82,6 +84,10 @@ extension MainWindow {
     func hideCheckForUpdatesMenuItem() {
         guard !updateCheckMenuItemHidden else { return }
         updateCheckMenuItemHidden = true
+        // Disable the underlying GAction too, so any future surface that
+        // binds `win.check-for-updates` without knowing about this flag
+        // shows it greyed-out instead of raising the unreachable error.
+        checkForUpdatesAction.enabled = false
         rebuildOverflowMenu()
     }
 

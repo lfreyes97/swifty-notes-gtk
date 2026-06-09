@@ -148,7 +148,7 @@ struct UpdateCheckerTests {
 
     @Test
     func `offline and connection failures are classified as networkUnavailable`() async {
-        let codes: [URLError.Code] = [.notConnectedToInternet, .cannotConnectToHost, .networkConnectionLost, .dnsLookupFailed]
+        let codes: [URLError.Code] = [.notConnectedToInternet, .cannotConnectToHost, .dnsLookupFailed, .dataNotAllowed]
         for code in codes {
             let checker = UpdateChecker(
                 currentVersion: "1.0.0",
@@ -158,7 +158,7 @@ struct UpdateCheckerTests {
             let result = await checker.check()
             guard case .networkUnavailable = result else {
                 Issue.record("Expected networkUnavailable for \(code), got \(result)")
-                return
+                continue
             }
         }
     }
@@ -204,18 +204,23 @@ struct UpdateCheckerTests {
     }
 
     @Test
-    func `a timeout stays a plain error so a slow network does not hide the menu item`() async {
-        // Timeouts are ambiguous (slow GitHub vs no network); treat them
-        // as transient errors, never as proof the install has no network.
-        let checker = UpdateChecker(
-            currentVersion: "1.0.0",
-            forceUpdateAvailable: false,
-            fetchLatestRelease: { throw URLError(.timedOut) },
-        )
-        let result = await checker.check()
-        guard case .error = result else {
-            Issue.record("Expected plain error for timedOut, got \(result)")
-            return
+    func `ambiguous network errors stay plain errors so flaky links do not hide the menu item`() async {
+        // .timedOut: slow GitHub vs no network — unknowable. .networkConnectionLost:
+        // the connection DID establish and dropped mid-transfer, which a
+        // sandbox (never connects at all) cannot produce. Neither is proof
+        // the install has no network, so neither may hide the entry.
+        let codes: [URLError.Code] = [.timedOut, .networkConnectionLost]
+        for code in codes {
+            let checker = UpdateChecker(
+                currentVersion: "1.0.0",
+                forceUpdateAvailable: false,
+                fetchLatestRelease: { throw URLError(code) },
+            )
+            let result = await checker.check()
+            guard case .error = result else {
+                Issue.record("Expected plain error for \(code), got \(result)")
+                continue
+            }
         }
     }
 
