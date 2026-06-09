@@ -116,8 +116,8 @@ struct PreviewSearchHighlightTests {
         #expect(preview.debugAppliedHighlightTexts.allSatisfy { $0.lowercased() == "d" })
     }
 
-    @Test @MainActor
-    func `replacing an overlay blanks the label markup so GTK rebuilds the layout`() throws {
+    @Test("Replacing an overlay blanks the label markup so GTK rebuilds the layout") @MainActor
+    func replacingOverlayBlanksLabelMarkup() throws {
         // Regression guard for the VISUAL half of the stale-highlight bug
         // that the logical test above (debugAppliedHighlightTexts) can't
         // catch. gtk_label_set_attributes alone does NOT invalidate a
@@ -147,8 +147,8 @@ struct PreviewSearchHighlightTests {
         #expect(preview.debugMarkupRebuildBlankReads.allSatisfy { $0 })
     }
 
-    @Test @MainActor
-    func `search highlight lands correctly after an emoji shortcode in the block`() throws {
+    @Test("Search highlight lands correctly after an emoji shortcode in the block") @MainActor
+    func highlightLandsCorrectlyAfterEmojiShortcode() throws {
         // Offset-alignment guard for #28 × #27: a shortcode like
         // :white_check_mark: (19 source characters) collapses to ✅ (one
         // Character) in the rendered text. The highlight overlay computes
@@ -168,8 +168,8 @@ struct PreviewSearchHighlightTests {
         #expect(preview.debugAppliedHighlightTexts == ["findme"])
     }
 
-    @Test @MainActor
-    func `search highlight aligns after a multi-scalar flag emoji shortcode`() throws {
+    @Test("Search highlight aligns after a multi-scalar flag emoji shortcode") @MainActor
+    func highlightAlignsAfterMultiScalarFlagEmoji() throws {
         // Hardens the offset guard against scalar-vs-Character bugs: :de: → 🇩🇪
         // is ONE Swift Character but two Unicode scalars / eight UTF-8 bytes.
         // If the highlight offsets were ever computed in scalars or bytes

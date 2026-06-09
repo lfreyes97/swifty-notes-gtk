@@ -209,8 +209,8 @@ struct MarkdownSearchEngineTests {
         #expect(result.isEmpty)
     }
 
-    @Test
-    func `searchableText extracts the readable payload per block kind`() {
+    @Test("searchableText extracts the readable payload per block kind")
+    func searchableTextExtractsReadablePayload() {
         // This is the single source of truth for "what slice of a block
         // is searchable" — MarkdownPreview's highlight overlay relies on
         // the exact same offsets, so the behaviour is pinned here before

@@ -277,8 +277,8 @@ struct SettingsStoreTests {
         #expect(normalized == settings)
     }
 
-    @Test
-    func `updating notes directory to the default clears the custom path but preserves every other preference`() {
+    @Test("Updating notes directory to the default clears the custom path but preserves every other preference")
+    func updatingNotesDirectoryToDefaultPreservesPreferences() {
         let defaultDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent("swifty-default-\(UUID().uuidString)", isDirectory: true)
         let settings = AppSettings(
@@ -321,8 +321,8 @@ struct SettingsStoreTests {
         #expect(updated.renderEmojiShortcodes == false)
     }
 
-    @Test
-    func `updating notes directory to a custom location preserves every other preference`() {
+    @Test("Updating notes directory to a custom location preserves every other preference")
+    func updatingNotesDirectoryToCustomPreservesPreferences() {
         let defaultDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent("swifty-default-\(UUID().uuidString)", isDirectory: true)
         let custom = FileManager.default.temporaryDirectory

@@ -130,8 +130,8 @@ struct UpdateCheckerTests {
         }
     }
 
-    @Test
-    func `unresolvable host is classified as networkUnavailable`() async {
+    @Test("Unresolvable host is classified as networkUnavailable")
+    func unresolvableHostIsNetworkUnavailable() async {
         // The exact failure a sandboxed (Flatpak/Snap) install produces:
         // NSURLErrorDomain Code=-1003 "Could not resolve host".
         let checker = UpdateChecker(
@@ -146,8 +146,8 @@ struct UpdateCheckerTests {
         }
     }
 
-    @Test
-    func `offline and connection failures are classified as networkUnavailable`() async {
+    @Test("Offline and connection failures are classified as networkUnavailable")
+    func offlineFailuresAreNetworkUnavailable() async {
         let codes: [URLError.Code] = [.notConnectedToInternet, .cannotConnectToHost, .dnsLookupFailed, .dataNotAllowed]
         for code in codes {
             let checker = UpdateChecker(
@@ -163,8 +163,8 @@ struct UpdateCheckerTests {
         }
     }
 
-    @Test
-    func `a bridged NSError with the URL error domain is classified as networkUnavailable`() async {
+    @Test("A bridged NSError with the URL error domain is classified as networkUnavailable")
+    func bridgedNSErrorIsNetworkUnavailable() async {
         // Matches the production error shape from the bug report:
         // Error Domain=NSURLErrorDomain Code=-1003.
         let underlying = NSError(domain: URLError.errorDomain, code: URLError.Code.cannotFindHost.rawValue)
@@ -180,8 +180,8 @@ struct UpdateCheckerTests {
         }
     }
 
-    @Test
-    func `an HTTP error stays a plain error, not networkUnavailable`() async {
+    @Test("An HTTP error stays a plain error, not networkUnavailable")
+    func httpErrorStaysPlainError() async {
         // The network IS reachable — GitHub answered with a 500. The
         // manual re-check stays useful, so this must not be classified
         // as unreachable.
@@ -203,8 +203,8 @@ struct UpdateCheckerTests {
         }
     }
 
-    @Test
-    func `ambiguous network errors stay plain errors so flaky links do not hide the menu item`() async {
+    @Test("Ambiguous network errors stay plain errors so flaky links do not hide the menu item")
+    func ambiguousNetworkErrorsStayPlainErrors() async {
         // .timedOut: slow GitHub vs no network — unknowable. .networkConnectionLost:
         // the connection DID establish and dropped mid-transfer, which a
         // sandbox (never connects at all) cannot produce. Neither is proof
