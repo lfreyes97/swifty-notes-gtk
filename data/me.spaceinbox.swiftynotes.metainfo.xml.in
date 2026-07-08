@@ -63,6 +63,17 @@
   <releases>
     <release version="@VERSION@" date="@DATE@">
       <description>
+        <p>This update brings the full navigation and search toolkit to Markdown files you open directly — no notes library required.</p>
+        <ul>
+          <li>The document Outline (F9) now works when you open a Markdown file straight from your file manager: every heading at a glance, click to jump, and the panel follows along as you scroll. Ctrl+G opens the quick-jump palette there too.</li>
+          <li>Find &amp; Replace also arrives in directly opened files: Ctrl+F searches the editor or the preview, Ctrl+H replaces in the editor — exactly like in the notes library.</li>
+          <li>Collapsing a section in the Outline now folds it in the editor of a directly opened file as well, and your Outline preferences from Settings apply there too.</li>
+          <li>Fixed a subtle issue where pressing Ctrl+F with text selected could prefill the search field with the wrong characters when the document contained emoji or flags before the selection.</li>
+        </ul>
+      </description>
+    </release>
+    <release version="1.3.0" date="2026-06-10">
+      <description>
         <p>This update brings your Markdown emoji to life and tidies up the update checker.</p>
         <ul>
           <li>Emoji shortcodes like <code>:white_check_mark:</code> and <code>:rocket:</code> now render as real emoji in the preview — in headings, lists, quotes, tables, and link labels. Your Markdown source stays untouched, and anything inside code stays literal. Around 1,900 GitHub-style shortcodes are supported, and a new switch in Settings → Preview turns the substitution off if you prefer the raw text.</li>
