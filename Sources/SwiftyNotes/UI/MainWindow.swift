@@ -49,38 +49,20 @@ final class MainWindow {
     /// a rendered view doesn't make sense.
     let previewFindReplaceBar = FindReplaceBar()
 
-    /// Controller that drives ``findReplaceBar`` against the editor
-    /// buffer. Built in `wireSignals` (deferred so the bar + editor
-    /// widgets are constructed first). Held strongly so the
-    /// controller's callbacks survive across user interactions —
-    /// same lifetime rule we hit on `activeCommandPalette`.
-    var editorSearchController: EditorSearchController?
-
-    /// Controller that drives ``previewFindReplaceBar`` against the
-    /// preview's rendered blocks. Lazily built on the first
-    /// `openFindBar(.find)` that lands on the preview pane.
-    var previewSearchController: PreviewSearchController?
-
-    /// Which pane was last focused — used by `openFindBar` to pick
-    /// the right bar in split mode. Updated on `focus-in` events on
-    /// the editor view and the preview's root scroll. Defaults to
-    /// `.editor` so Ctrl+F on a fresh window opens the editor bar.
-    var lastFocusedPane: FocusedPane = .editor
-
-    enum FocusedPane {
-        case editor
-        case preview
-    }
-
-    /// Last non-empty query the user typed into either find bar.
-    /// Survives bar close so re-opening Ctrl+F restores it (unless
-    /// the editor has a selection, which takes precedence — GNOME
-    /// convention). Reset when the user clears the field manually.
-    var lastFindQuery: String = ""
-
-    /// One-shot guard for ``wirePaneFocusTracking`` so the focus
-    /// controllers are only attached once.
-    var paneFocusTrackingWired: Bool = false
+    /// Shared find/replace plumbing (controllers, query memory, pane
+    /// routing) — the same coordinator ``ExternalDocumentWindow``
+    /// uses, so the two windows can never drift.
+    lazy var findReplace = FindReplaceCoordinator(
+        editorBar: findReplaceBar,
+        previewBar: previewFindReplaceBar,
+        editor: editor,
+        preview: preview,
+        keyCaptureWindow: window,
+        viewMode: { [weak self] in self?.state.viewMode ?? .split },
+        presentToast: { [weak self] message in
+            self?.toastOverlay.addToast(Toast(title: message))
+        },
+    )
     /// Built lazily in `wireSignals` (deferred so the editor / preview
     /// widget trees are constructed before we connect signals to them).
     var outlineScrollSpyDriver: OutlineScrollSpyDriver?
@@ -593,7 +575,9 @@ final class MainWindow {
         // editor / preview widget trees are fully constructed before
         // we wire signals to their adjustments.
         if outlineScrollSpyDriver == nil {
-            outlineScrollSpyDriver = makeOutlineScrollSpyDriver()
+            outlineScrollSpyDriver = makeOutlineScrollSpyDriver(onActive: { [weak self] activeID in
+                self?.handleOutlineActiveHeadingChange(activeID)
+            })
         }
         outlineScrollSpyDriver?.rebind(mode: state.viewMode)
 

@@ -72,18 +72,11 @@ let package = Package(
             bundledPath: "flatpak-deps/swift-adwaita",
             overridePath: localSwiftAdwaitaPath,
             remoteURL: "https://github.com/makoni/swift-adwaita.git",
-            // Pinned past the 1.3.0 release to the markup-safety /
-            // Label.attributes / scrollChildIntoView work (PangoMarkup,
-            // range-aware TextAttributes, Widget tree dump), the
-            // SearchEntry stop-search signal (Ctrl+G palette Escape fix),
-            // the Dialog.enableBackdropClickDismiss helper with bounded
-            // retry + idle-source cleanup on unmap, and the
-            // EventController/Gesture hierarchy (propagationPhase,
-            // setState, Widget.allocation, Application.setAccelerators,
-            // ApplicationWindow.visibleDialog). Bump deliberately when
-            // validating a newer upstream rather than via SemVer
-            // auto-resolution.
-            revision: "fccac15277fdf38aaf68d2e088caeb01f64f8945"
+            // Pinned past the 1.5.0 release to pick up Window.isActive
+            // (routing app-level accelerators to the focused external
+            // document window). Bump deliberately when validating a newer
+            // upstream rather than via SemVer auto-resolution.
+            revision: "e725f39c4308138da251a8181beb0a40d86efea9"
         ),
         sourceDependency(
             bundledPath: "flatpak-deps/swift-markdown",

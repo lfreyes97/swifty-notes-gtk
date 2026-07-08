@@ -40,6 +40,42 @@ struct SwiftyNotesLauncherTests {
         ])
     }
 
+    @Test("App-level shortcuts route to the focused external window, else the main window") @MainActor
+    func shortcutsRouteToFocusedExternalWindow() throws {
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: temp) }
+        try FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
+        let fileURL = temp.appendingPathComponent("doc.md", isDirectory: false)
+        try "# Doc\n".write(to: fileURL, atomically: true, encoding: .utf8)
+
+        let app = Application(id: "me.spaceinbox.swiftynotes.tests.shortcutrouting")
+        try app.register()
+        let controller = AppController(
+            stateStore: WorkspaceStateStore(
+                stateFileURL: temp.appendingPathComponent("workspace.json", isDirectory: false),
+            ),
+            appSettingsStore: AppSettingsStore(
+                settingsFileURL: temp
+                    .appendingPathComponent("config", isDirectory: true)
+                    .appendingPathComponent("settings.json", isDirectory: false),
+            ),
+            allowsWindowPresentation: false,
+        )
+        controller.openDocuments(at: [fileURL], application: app)
+
+        // gtk_window_is_active needs a real window manager, so headless
+        // runs inject the probe: focused → the external window wins.
+        controller.windowActivityProbe = { _ in true }
+        #expect(controller.activeShortcutHost === controller.focusedExternalDocumentWindow)
+        #expect(controller.focusedExternalDocumentWindow != nil)
+
+        // Nothing focused → fall back to the main window (nil here,
+        // since a file-open launch never created one).
+        controller.windowActivityProbe = { _ in false }
+        #expect(controller.focusedExternalDocumentWindow == nil)
+        #expect(controller.activeShortcutHost == nil)
+    }
+
     @Test("Application id falls back to AppIdentity outside override")
     func applicationIdFallsBackToAppIdentityOutsideOverride() {
         let resolved = SwiftyNotesLauncher.resolveApplicationID(

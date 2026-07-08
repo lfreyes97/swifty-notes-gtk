@@ -95,6 +95,41 @@ final class ExternalDocumentWindow {
     let editorPreviewPane = Paned(orientation: .horizontal)
     let editorScroll = ScrolledWindow()
 
+    /// Whether this window is the focused toplevel — the launcher's
+    /// app-level actions (F9 / Ctrl+F / …) route here when true.
+    var isWindowActive: Bool {
+        window.isActive
+    }
+
+    // Outline panel
+    let outlineSidebar = OutlineSidebar()
+    let outlineToggleButton = MainWindow.iconButton(named: "view-list-bullet-symbolic")
+    let quickJumpButton = MainWindow.iconButton(named: "system-search-symbolic")
+    let outlineSplitView = OverlaySplitView()
+    var currentHeadings: [Heading] = []
+    var isOutlineVisible = false
+    var outlineScrollSpyDriver: OutlineScrollSpyDriver?
+    var outlineRecentJumps = RecentJumps()
+    var activeCommandPalette: CommandPaletteWindow?
+
+    // Find / Replace
+    let findReplaceBar = FindReplaceBar()
+    let previewFindReplaceBar = FindReplaceBar()
+    let previewPaneContent = Box(orientation: .vertical, spacing: 0)
+    /// Shared find/replace plumbing — the same coordinator
+    /// ``MainWindow`` uses, so the two windows can never drift.
+    lazy var findReplace = FindReplaceCoordinator(
+        editorBar: findReplaceBar,
+        previewBar: previewFindReplaceBar,
+        editor: editor,
+        preview: preview,
+        keyCaptureWindow: window,
+        viewMode: { [weak self] in self?.viewMode ?? .split },
+        presentToast: { [weak self] message in
+            self?.toastOverlay.addToast(Toast(title: message))
+        },
+    )
+
     lazy var saveAsAction = SimpleAction(name: "save-document-as") { [weak self] in
         self?.saveDocumentAs()
     }
@@ -119,7 +154,7 @@ final class ExternalDocumentWindow {
     private var activeFileDialog: FileDialog?
     private lazy var previewRefreshScheduler = PreviewRefreshScheduler(
         render: { [weak self] blocks, baseDirectory in
-            self?.preview.render(blocks: blocks, baseDirectory: baseDirectory)
+            self?.renderPreviewNow(blocks: blocks, baseDirectory: baseDirectory)
         },
         fallbackBaseDirectory: { [weak self] in
             self?.fileURL.deletingLastPathComponent() ?? FileManager.default.temporaryDirectory
@@ -142,7 +177,11 @@ final class ExternalDocumentWindow {
     private var suppressEditorChange = false
     private var suppressViewModeToggleChange = false
     private var hasPresented = false
-    private var viewMode: EditorViewMode = .split
+    // Internal getter for the find/replace routing; setting must go
+    // through the view-mode transition (see `applyViewMode`) so the
+    // pane reparenting, toggle state, and scroll-spy rebind stay in
+    // sync — hence private(set).
+    private(set) var viewMode: EditorViewMode = .split
     private var preferredPreviewWidth = WorkspaceState.defaultPreviewWidth
     private var editorFormattingButtons: [MarkdownFormattingAction: Button] {
         editorFormattingToolbar.buttons
@@ -244,7 +283,16 @@ private extension ExternalDocumentWindow {
         header.titleWidget = headerTitle
         header.packStart(saveButton)
         header.packEnd(menuButton)
+        header.packEnd(outlineToggleButton)
+        header.packEnd(quickJumpButton)
         header.packEnd(viewModeSwitcher)
+
+        outlineToggleButton.addCSSClass(.flat)
+        outlineToggleButton.setAccessibleLabel("Toggle Outline")
+        outlineToggleButton.tooltipText = "Show outline (F9)"
+        quickJumpButton.addCSSClass(.flat)
+        quickJumpButton.setAccessibleLabel("Quick Jump")
+        quickJumpButton.tooltipText = "Quick jump… (Ctrl+G)"
 
         editorScroll.child = editor.view
         editorScroll.setPolicy(horizontal: .automatic, vertical: .automatic)
@@ -261,7 +309,15 @@ private extension ExternalDocumentWindow {
 
         editorContent.append(editorFormattingToolbar.scrolled)
         editorContent.append(Separator())
+        editorContent.append(findReplaceBar.root)
         editorContent.append(editorScroll)
+
+        previewFindReplaceBar.isReadOnly = true
+        previewPaneContent.hexpand = true
+        previewPaneContent.vexpand = true
+        previewPaneContent.append(previewFindReplaceBar.root)
+        previewPaneContent.append(preview.rootScroll)
+
         editorPreviewPane.startChild = editorContent
         editorPreviewPane.resizeStartChild = true
         editorPreviewPane.resizeEndChild = false
@@ -272,7 +328,19 @@ private extension ExternalDocumentWindow {
 
         let toolbar = ToolbarView()
         toolbar.addTopBar(header)
-        toolbar.content = contentHost
+
+        outlineSplitView.pinSidebar = true
+        outlineSplitView.sidebarPosition = .end
+        outlineSplitView.enableShowGesture = false
+        outlineSplitView.enableHideGesture = false
+        outlineSplitView.minSidebarWidth = 220
+        outlineSplitView.maxSidebarWidth = 320
+        outlineSplitView.sidebarWidthFraction = 0.18
+        outlineSplitView.sidebar = outlineSidebar.root
+        outlineSplitView.content = contentHost
+        outlineSplitView.showSidebar = false
+
+        toolbar.content = outlineSplitView
 
         toastOverlay.child = toolbar
         window.setContent(toastOverlay)
@@ -347,10 +415,53 @@ private extension ExternalDocumentWindow {
             self?.reloadFromDisk(announce: true)
             return true
         }
-        window.addKeyboardShortcut("F9") { [weak self] in
+        // F9 / Ctrl+F / Ctrl+H / Ctrl+G are NOT wired here: they are
+        // application-level actions (see SwiftyNotesLauncher's
+        // installOutlineActions) that route to the focused external
+        // window via AppController.focusedExternalDocumentWindow.
+        // Registering them per-window too would duplicate the app
+        // accelerators. F10 stays per-window because Editor↔Split is a
+        // single-window concern, mirroring MainWindow.
+        window.addKeyboardShortcut("F10") { [weak self] in
             self?.toggleEditorAndSplitModes()
             return true
         }
+
+        outlineSidebar.onInsertHeadingRequest { [weak self] in
+            self?.insertStarterHeadingIntoEditor()
+        }
+        outlineSidebar.list.onRowActivated { [weak self] row in
+            guard let self else { return }
+            let index = Int(row.index)
+            guard let heading = outlineSidebar.heading(at: index) else { return }
+            scrollToHeading(heading)
+        }
+        outlineSidebar.searchEntry.onSearchChanged { [weak self] in
+            guard let self else { return }
+            outlineSidebar.setQuery(outlineSidebar.searchEntry.text)
+        }
+        outlineSidebar.onToggleCollapsed { [weak self] id in
+            guard let self else { return }
+            outlineSidebar.toggleCollapsed(id)
+            applyEditorFolding()
+        }
+        outlineSidebar.onDropReorder { [weak self] droppedID, targetID in
+            self?.reorderOutlineSection(movingID: droppedID, beforeTargetID: targetID)
+        }
+
+        MacOSClickWorkaround.onClick(outlineToggleButton) { [weak self] in
+            self?.toggleOutlineVisibility()
+        }
+        MacOSClickWorkaround.onClick(quickJumpButton) { [weak self] in
+            self?.openCommandPalette()
+        }
+
+        if outlineScrollSpyDriver == nil {
+            outlineScrollSpyDriver = makeOutlineScrollSpyDriver(onActive: { [weak self] activeID in
+                self?.outlineSidebar.setActiveHeading(activeID)
+            })
+        }
+        outlineScrollSpyDriver?.rebind(mode: viewMode)
     }
 
     func configureActionsAndMenu() {
@@ -395,19 +506,6 @@ private extension ExternalDocumentWindow {
         updateViewModeToggleState()
     }
 
-    func applyRuntimeSettings(_ settings: AppSettings, shouldRefreshPreview: Bool = true) {
-        editor.applySettings(settings)
-        renderEmojiShortcodes = settings.renderEmojiShortcodes
-        autosaveDelay = autosaveDelayOverride ?? .seconds(settings.autosaveDelaySeconds)
-
-        let styleManager = StyleManager.default
-        styleManager.colorScheme = settings.appearanceMode.externalDocumentColorScheme
-        editor.applyAutomaticStyleScheme(styleManager: styleManager)
-
-        guard shouldRefreshPreview else { return }
-        refreshPreview()
-    }
-
     func updateWindowIdentity() {
         window.title = fileURL.lastPathComponent
         headerTitle.title = fileURL.lastPathComponent
@@ -442,13 +540,48 @@ private extension ExternalDocumentWindow {
 }
 
 @MainActor
+extension ExternalDocumentWindow {
+    // Internal (not fileprivate like most window plumbing): mirrors
+    // MainWindow.applyRuntimeSettings so a future settings fan-out can
+    // push live changes into open standalone windows, and tests can
+    // exercise the outline-tweaks path.
+    func applyRuntimeSettings(_ settings: AppSettings, shouldRefreshPreview: Bool = true) {
+        editor.applySettings(settings)
+        renderEmojiShortcodes = settings.renderEmojiShortcodes
+        outlineSidebar.applyTweaks(
+            density: settings.outlineDensity,
+            treeLines: settings.outlineTreeLines,
+            dragHandles: settings.outlineDragHandles,
+        )
+        autosaveDelay = autosaveDelayOverride ?? .seconds(settings.autosaveDelaySeconds)
+
+        let styleManager = StyleManager.default
+        styleManager.colorScheme = settings.appearanceMode.externalDocumentColorScheme
+        editor.applyAutomaticStyleScheme(styleManager: styleManager)
+
+        guard shouldRefreshPreview else { return }
+        refreshPreview()
+    }
+}
+
+@MainActor
 private extension ExternalDocumentWindow {
+    /// Single immediate-render path: every preview paint — scheduled or
+    /// direct — must also refresh the outline and the preview-search
+    /// overlay, or the sidebar shows stale (or, on first load, no)
+    /// headings until the next edit.
+    func renderPreviewNow(blocks: [RenderedBlock], baseDirectory: URL) {
+        preview.render(blocks: blocks, baseDirectory: baseDirectory)
+        refreshOutline(markdown: editor.buffer.text, blocks: blocks)
+        refreshPreviewSearchAfterRerender()
+    }
+
     func refreshPreview() {
         let blocks = buildPreviewBlocks(for: editor.buffer.text)
         let baseDirectory = fileURL.deletingLastPathComponent()
         guard preview.rootScroll.root != nil else {
             previewRefreshScheduler.cancel()
-            preview.render(blocks: blocks, baseDirectory: baseDirectory)
+            renderPreviewNow(blocks: blocks, baseDirectory: baseDirectory)
             return
         }
         schedulePreviewRefresh(blocks: blocks, baseDirectory: baseDirectory)
@@ -457,11 +590,10 @@ private extension ExternalDocumentWindow {
     func scheduleTypingPreviewRefresh() {
         let text = editor.buffer.text
         let baseDirectory = fileURL.deletingLastPathComponent()
-        guard preview.rootScroll.root != nil else {
-            previewRefreshScheduler.cancel()
-            preview.render(blocks: buildPreviewBlocks(for: text), baseDirectory: baseDirectory)
-            return
-        }
+        // Always debounce through the scheduler — even in editor-only
+        // mode (preview unmounted), because the render closure also
+        // re-extracts the outline, and doing that synchronously per
+        // keystroke is user-visible typing work. Mirrors MainWindow.
         previewRefreshScheduler.scheduleDeferred(baseDirectory: baseDirectory) { [weak self] in
             self?.buildPreviewBlocks(for: text) ?? []
         }
@@ -547,6 +679,7 @@ private extension ExternalDocumentWindow {
             showPreviewOnlyContent()
         }
         refreshEditorFormattingToolbarLayout()
+        outlineScrollSpyDriver?.rebind(mode: viewMode)
     }
 
     func showEditorContent() {
@@ -560,11 +693,11 @@ private extension ExternalDocumentWindow {
     func showPreviewOnlyContent() {
         stopPreviewAnimation()
         detachPreviewPane()
-        guard contentHost.children().first?.opaquePointer != preview.rootScroll.opaquePointer else { return }
+        guard contentHost.children().first?.opaquePointer != previewPaneContent.opaquePointer else { return }
         if let currentChild = contentHost.children().first {
             contentHost.remove(currentChild)
         }
-        contentHost.append(preview.rootScroll)
+        contentHost.append(previewPaneContent)
         refreshPreview()
     }
 
@@ -609,7 +742,7 @@ private extension ExternalDocumentWindow {
 
     func attachPreviewPane() {
         guard !isPreviewPaneAttached else { return }
-        editorPreviewPane.endChild = preview.rootScroll
+        editorPreviewPane.endChild = previewPaneContent
         isPreviewPaneAttached = true
     }
 
@@ -994,6 +1127,13 @@ private extension ExternalDocumentWindow {
             viewMode
         }
 
+        /// Routes through the real transition (`setViewMode`) so tests
+        /// exercise pane reparenting, toggle sync, and the scroll-spy
+        /// rebind — never the raw stored property.
+        func debugSetViewMode(_ mode: EditorViewMode) {
+            setViewMode(mode, animated: false)
+        }
+
         var debugEditorText: String {
             editor.buffer.text
         }
@@ -1015,7 +1155,7 @@ private extension ExternalDocumentWindow {
             previewRefreshScheduler.cancel()
             if preview.debugTopLevelWidgetCount == 0 {
                 let blocks = buildPreviewBlocks(for: editor.buffer.text)
-                preview.render(blocks: blocks, baseDirectory: fileURL.deletingLastPathComponent())
+                renderPreviewNow(blocks: blocks, baseDirectory: fileURL.deletingLastPathComponent())
             }
             return preview.plainText
         }

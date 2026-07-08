@@ -2,11 +2,11 @@ import Adwaita
 import Foundation
 
 // The find/replace implementation lives in ``FindReplaceCoordinator``
-// (shared with ``ExternalDocumentWindow``); this file only forwards the
-// window-level entry points and exposes the coordinator's state under
-// the names the launcher, the preview pipeline, and the tests use.
+// (shared with ``MainWindow``); this file only forwards the
+// window-level entry points used by the launcher's app-level actions
+// and the preview pipeline.
 @MainActor
-extension MainWindow {
+extension ExternalDocumentWindow {
     func openFindBar(mode: FindReplaceBar.Mode) {
         findReplace.openFindBar(mode: mode)
     }
@@ -23,15 +23,5 @@ extension MainWindow {
 
     var previewSearchController: PreviewSearchController? {
         findReplace.previewSearchController
-    }
-
-    var lastFocusedPane: FindReplaceCoordinator.FocusedPane {
-        get { findReplace.lastFocusedPane }
-        set { findReplace.lastFocusedPane = newValue }
-    }
-
-    var lastFindQuery: String {
-        get { findReplace.lastFindQuery }
-        set { findReplace.lastFindQuery = newValue }
     }
 }

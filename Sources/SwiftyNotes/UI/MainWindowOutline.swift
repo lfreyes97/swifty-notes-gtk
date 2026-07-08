@@ -1,6 +1,12 @@
 import Adwaita
 import Foundation
 
+// Shared navigation (scroll-to-heading, scroll-spy plumbing, reorder,
+// folding, starter heading) comes from ``OutlineHosting``; this file
+// keeps the MainWindow-only layers — persisted visibility, per-note
+// collapse/recents hydration, and the breadcrumb.
+extension MainWindow: OutlineHosting, GlobalShortcutHost {}
+
 extension MainWindow {
     /// F9 + headerbar handler. Mirrors ``toggleSidebarVisibility`` in
     /// shape so the persisted state, the AppState mirror, and the GTK
@@ -86,62 +92,11 @@ extension MainWindow {
         applyEditorFolding()
     }
 
-    /// Mirror the outline's collapsed-set into the editor as
-    /// invisible-tag ranges so a folded section in the panel also
-    /// disappears in the source view. Called from `refreshOutline`
-    /// (lines may have shifted) and from the chevron-toggle handler
-    /// (the set itself changed).
-    func applyEditorFolding() {
-        OutlineEditorFolding.apply(
-            buffer: editor.buffer,
-            collapsed: outlineSidebar.collapsedSections,
-            headings: currentHeadings,
-        )
-    }
-
     private func persistOutgoingOutlineState() {
         guard let noteID = currentOutlineNoteID else { return }
         state.collapsedOutlineSections[noteID] = outlineSidebar.collapsedSections
         state.recentOutlineJumps[noteID] = outlineRecentJumps.ids
         persistStateBestEffort()
-    }
-
-    /// Drag-to-reorder handler. Rewrites the source markdown through
-    /// `OutlineReorder.movedMarkdown` and pushes the result into the
-    /// editor buffer; the typing-refresh path then re-extracts the
-    /// outline and the panel snaps to the new shape.
-    func reorderOutlineSection(movingID: String, beforeTargetID: String) {
-        let currentMarkdown = editor.buffer.text
-        guard let rewritten = OutlineReorder.movedMarkdown(
-            currentMarkdown,
-            movingID: movingID,
-            beforeTargetID: beforeTargetID,
-            headings: currentHeadings,
-        ) else {
-            return
-        }
-        editor.buffer.text = rewritten
-    }
-
-    /// Inserts a starter `## Heading` at the cursor in the editor and
-    /// focuses the editor. Wired to the empty-state "Add `## Heading`"
-    /// link in the outline panel — clicking it scaffolds the section
-    /// the panel is asking for and drops the user into the right
-    /// place to keep typing.
-    func insertStarterHeadingIntoEditor() {
-        // Pad the heading line so it doesn't jam against whatever is
-        // before / after the cursor. The trailing `\n\n` leaves the
-        // editor focused on the line *after* the heading where prose
-        // typically goes.
-        let snippet: String
-        let bufferText = editor.buffer.text
-        if bufferText.isEmpty {
-            snippet = "## Heading\n\n"
-        } else {
-            snippet = "\n\n## Heading\n\n"
-        }
-        editor.buffer.insertAtCursor(snippet)
-        editor.focus()
     }
 
     /// Same shape as ``persistOutgoingOutlineState`` but for the
@@ -180,68 +135,15 @@ extension MainWindow {
         )
     }
 
-    /// Lazy-built scroll-spy driver. Hooked once in `wireSignals` and
-    /// rebound from `applyViewMode` whenever the view mode flips so the
-    /// driver follows the visually dominant scroll target.
-    func makeOutlineScrollSpyDriver() -> OutlineScrollSpyDriver {
-        OutlineScrollSpyDriver(
-            editorScroll: editorScroll,
-            previewScroll: preview.rootScroll,
-            resolveHeadings: { [weak self] in self?.currentHeadings ?? [] },
-            previewPositions: { [weak self] headings in
-                guard let self else { return [] }
-                return OutlinePositions.previewPositions(for: headings, in: preview)
-            },
-            editorPositions: { [weak self] headings in
-                guard let self else { return [] }
-                return OutlinePositions.editorPositions(
-                    for: headings,
-                    view: editor.view,
-                    buffer: editor.buffer,
-                    scroll: editorScroll,
-                )
-            },
-            onActive: { [weak self] activeID in
-                guard let self else { return }
-                // Hot path: scroll-spy fires this ~60/s during a
-                // kinetic scroll. Both branches early-exit on
-                // unchanged active id — `setActiveHeading` toggles
-                // CSS only when the id moves, and the breadcrumb
-                // skip avoids 3 Pango layout invalidations per tick
-                // even when the scroll-spy is reporting the same
-                // section over and over.
-                let changed = outlineSidebar.activeHeadingID != activeID
-                outlineSidebar.setActiveHeading(activeID)
-                if changed { refreshBreadcrumb() }
-            },
-        )
-    }
-
-    /// Click / Ctrl+G handler. Scrolls both the editor and the preview
-    /// to the heading and records it as the current scroll-spy anchor
-    /// so the outline highlight matches the click immediately (without
-    /// waiting for the next scroll-spy tick).
-    func scrollToHeading(_ heading: Heading) {
-        // Park the scroll-spy for the duration of the smooth-scroll
-        // animation plus a small buffer. Otherwise the resolver fires
-        // on intermediate scrollTop values, sees we haven't reached
-        // the target heading yet, picks the previous one (it's still
-        // above the anchor line), and overwrites the click's explicit
-        // active-id selection — that's what produced the "click
-        // Highlights, but the first heading stays selected" bug.
-        outlineScrollSpyDriver?.suppress(for: .milliseconds(OutlineNavigation.smoothScrollDurationMs + 120))
-        OutlineNavigation.scrollEditor(
-            view: editor.view,
-            buffer: editor.buffer,
-            scroll: editorScroll,
-            toLine: heading.line,
-        )
-        OutlineNavigation.scrollPreview(
-            heading: heading,
-            preview: preview,
-            editorScroll: editorScroll,
-        )
-        outlineSidebar.setActiveHeading(heading.id)
+    /// The scroll-spy hook layered on top of the shared driver
+    /// plumbing: highlight the sidebar row AND refresh the breadcrumb.
+    /// Hot path (fires ~60/s during a kinetic scroll) — both branches
+    /// early-exit on an unchanged active id, and the breadcrumb skip
+    /// avoids 3 Pango layout invalidations per tick.
+    func handleOutlineActiveHeadingChange(_ activeID: String?) {
+        let changed = outlineSidebar.activeHeadingID != activeID
+        outlineSidebar.setActiveHeading(activeID)
+        if changed { refreshBreadcrumb() }
     }
 }
 

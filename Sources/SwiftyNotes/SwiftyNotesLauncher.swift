@@ -27,6 +27,24 @@ final class AppController {
     fileprivate(set) var mainWindow: MainWindow?
     private var externalDocumentWindows: [ObjectIdentifier: ExternalDocumentWindow] = [:]
 
+    /// Activity probe, injectable so tests can simulate a focused
+    /// window — `gtk_window_is_active` needs a real window manager and
+    /// is always false under headless test runs.
+    var windowActivityProbe: (ExternalDocumentWindow) -> Bool = { $0.isWindowActive }
+
+    /// GTK guarantees at most one active toplevel per display, so this
+    /// matches at most one window regardless of dictionary order.
+    var focusedExternalDocumentWindow: ExternalDocumentWindow? {
+        externalDocumentWindows.values.first { [windowActivityProbe] in windowActivityProbe($0) }
+    }
+
+    /// The window that should receive app-level outline / find
+    /// shortcuts: the focused standalone document window if any,
+    /// otherwise the notes-library window.
+    var activeShortcutHost: GlobalShortcutHost? {
+        focusedExternalDocumentWindow ?? mainWindow
+    }
+
     init(
         stateStore: WorkspaceStateStore = WorkspaceStateStore(),
         appSettingsStore: AppSettingsStore = AppSettingsStore(),
@@ -261,32 +279,32 @@ public enum SwiftyNotesLauncher {
     /// window + external document windows + Settings) without each
     /// having to wire them up locally.
     @MainActor
+    // Outline + find/replace live on the GApplication action map (not
+    // per-window shortcuts) so they light up the standard Cocoa Edit
+    // menu items on macOS and fire from any pane focus on Linux. Each
+    // action routes to `activeShortcutHost` — the focused standalone
+    // document window when one is in front, else the library window.
     private static func installOutlineActions(on app: Application, controller: AppController) {
         let toggle = SimpleAction(name: "toggle-outline") { [weak controller] in
-            controller?.mainWindow?.toggleOutlineVisibility()
+            controller?.activeShortcutHost?.toggleOutlineVisibility()
         }
         app.addAction(toggle)
         installAccelerator("F9", forAction: "app.toggle-outline", on: app)
 
         let quickJump = SimpleAction(name: "quick-jump") { [weak controller] in
-            controller?.mainWindow?.openCommandPalette()
+            controller?.activeShortcutHost?.openCommandPalette()
         }
         app.addAction(quickJump)
         installAccelerator("<Primary>g", forAction: "app.quick-jump", on: app)
 
-        // Find + Find/Replace bars (in-document search, #26).
-        // Lifting these to the GApplication action map means they
-        // light up the standard Cocoa Edit menu items on macOS and
-        // they fire from any pane focus on Linux without per-window
-        // keyboard wiring.
         let find = SimpleAction(name: "find") { [weak controller] in
-            controller?.mainWindow?.openFindBar(mode: .find)
+            controller?.activeShortcutHost?.openFindBar(mode: .find)
         }
         app.addAction(find)
         installAccelerator("<Primary>f", forAction: "app.find", on: app)
 
         let findReplace = SimpleAction(name: "find-replace") { [weak controller] in
-            controller?.mainWindow?.openFindBar(mode: .replace)
+            controller?.activeShortcutHost?.openFindBar(mode: .replace)
         }
         app.addAction(findReplace)
         installAccelerator("<Primary>h", forAction: "app.find-replace", on: app)
